@@ -19,6 +19,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
     "./http": "./src/http/index.ts",
     "./http/*": "./src/http/*.ts",
     "./view": "./src/view/index.ts",

@@ -12,6 +12,15 @@ import { vueSfcPlugin } from './vue_plugin.ts'
 import ViewEngine from '../engine.ts'
 import type { BunPlugin } from 'bun'
 
+// Router type for route injection (optional dependency)
+interface Router {
+  getAllRoutes(): readonly {
+    name?: string
+    method: string
+    pattern: string
+  }[]
+}
+
 export interface CssOptions {
   /** Sass entry file path. e.g. 'resources/css/app.scss' */
   entry: string
@@ -62,6 +71,7 @@ export class IslandBuilder {
   private _manifest: IslandManifest | null = null
   private cssOpts: { entry: string; outFile: string; outDir: string; basePath: string } | null = null
   private _cssVersion: string | null = null
+  private router: Router | null = null
 
   constructor(options: IslandBuilderOptions = {}) {
     this.islandsDir = resolve(options.islandsDir ?? './resources/islands')
@@ -137,6 +147,25 @@ export class IslandBuilder {
     const lines: string[] = []
 
     lines.push(`import { createApp, defineComponent, h, Teleport } from 'vue';`)
+
+    // Auto-inject route definitions if router is available
+    if (this.router) {
+      const routeDefinitions = this.extractRouteDefinitions()
+      const routeCount = Object.keys(routeDefinitions).length
+
+      if (routeCount > 0) {
+        lines.push(`import { registerRoutes } from '@strav/view/client';`)
+        lines.push('')
+        lines.push(`// Auto-injected route definitions (${routeCount} routes)`)
+        lines.push(`registerRoutes(${JSON.stringify(routeDefinitions, null, 2)});`)
+        console.log(`[islands] ✅ Auto-injecting ${routeCount} route definitions:`, Object.keys(routeDefinitions))
+      } else {
+        console.log(`[islands] ⚠️ Router provided but no named routes found - skipping route auto-injection`)
+      }
+    } else {
+      console.log(`[islands] ❌ No router provided - skipping route auto-injection. Use buildWithRoutes(router) for auto-injection.`)
+    }
+
     lines.push('')
 
     if (setupPath) {
@@ -295,6 +324,35 @@ export class IslandBuilder {
     console.log(
       `[css] Built ${entryName} → ${this.cssOpts.outFile} (${sizeKB}kB${gzKB}${brKB}) v=${this._cssVersion}`
     )
+  }
+
+  /** Extract route definitions for client-side registration. */
+  private extractRouteDefinitions(): Record<string, { method: string; pattern: string }> {
+    if (!this.router) return {}
+
+    const routeMap: Record<string, { method: string; pattern: string }> = {}
+
+    for (const route of this.router.getAllRoutes()) {
+      if (route.name) {  // Only include named routes
+        routeMap[route.name] = {
+          method: route.method,
+          pattern: route.pattern
+        }
+      }
+    }
+
+    return routeMap
+  }
+
+  /**
+   * Build the islands bundle with route auto-injection.
+   * @param router - Router instance containing routes to inject
+   */
+  async buildWithRoutes(router: Router): Promise<boolean> {
+    this.router = router  // Set the router for this build
+    const result = await this.build()  // Use existing build method
+    this.router = null    // Clear router reference after build
+    return result
   }
 
   /** Build the islands bundle. Returns true if islands were found and built. */

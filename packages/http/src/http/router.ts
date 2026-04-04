@@ -447,6 +447,17 @@ export default class Router {
   }
 
   /**
+   * Get all registered routes.
+   *
+   * @example
+   * const routes = router.getAllRoutes()
+   * // Returns array of all route definitions
+   */
+  getAllRoutes(): readonly RouteDefinition[] {
+    return this.routes
+  }
+
+  /**
    * Generate a URL for a named route with optional parameters.
    *
    * @example

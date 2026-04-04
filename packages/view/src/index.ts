@@ -10,8 +10,12 @@ export { defineRoutes } from './route_types.ts'
 export { spaRoutes } from './spa_routes.ts'
 export { default as ViewProvider } from './providers/view_provider.ts'
 
+// Client-side route helpers (browser-safe)
+export { route, routeUrl, registerRoutes } from './client/route_helper.ts'
+
 export type { Token, TokenType, VueAttr } from './tokenizer.ts'
 export type { CompilationResult } from './compiler.ts'
 export type { CacheEntry, RenderFunction, IncludeFn, RenderResult } from './cache.ts'
 export type { CssOptions, IslandBuilderOptions, IslandManifest } from './islands/island_builder.ts'
 export type { SpaRouteDefinition } from './route_types.ts'
+export type { RouteOptions } from './client/route_helper.ts'
