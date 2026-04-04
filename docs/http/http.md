@@ -5,7 +5,7 @@ The HTTP module provides routing, middleware, request/response helpers, and a Bu
 ## Quick start
 
 ```typescript
-import { router } from '@strav/core/http'
+import { router } from '@strav/http'
 
 router.get('/health', (ctx) => ctx.json({ status: 'ok' }))
 
@@ -16,7 +16,7 @@ router.group({ prefix: '/api' }, (r) => {
 })
 ```
 
-The `router` is a singleton resolved from the DI container — import it directly from `'@strav/core/http'`.
+The `router` is a singleton resolved from the DI container — import it directly from `'@strav/http'`.
 
 ## Context
 
@@ -316,6 +316,200 @@ This is useful when a controller's routes don't follow the standard resource pat
 router.get('/users/:id', showUser).as('users.show')
 ```
 
+Named routes can be used with the route helper functions for transparent route invocation.
+
+## Route Helpers
+
+The HTTP module provides `route()` and `routeUrl()` helper functions that enable transparent route invocation using named routes. These helpers eliminate hardcoded URLs and provide automatic method detection, smart header defaults, and type safety.
+
+### Invoking named routes with `route()`
+
+The `route()` function makes HTTP requests to named routes with automatic configuration:
+
+```typescript
+import { route } from '@strav/http'
+
+// Simple POST with JSON body (auto-detected)
+const response = await route('api.v1.auth.register', {
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  password: 'secure_password',
+  terms_accepted: true
+})
+
+// GET request with URL parameters
+const response = await route('users.show', {
+  params: { id: 123 }
+})
+
+// PUT request with params and body
+const response = await route('users.update', {
+  params: { id: 123 },
+  body: { name: 'Updated Name', email: 'new@example.com' }
+})
+
+// File upload with FormData
+const formData = new FormData()
+formData.append('file', fileInput.files[0])
+formData.append('description', 'Profile photo')
+
+const response = await route('api.upload', formData)
+
+// Custom headers and options
+const response = await route('api.data', {
+  headers: {
+    'Authorization': 'Bearer token',
+    'X-Custom-Header': 'value'
+  },
+  cache: 'no-cache',
+  credentials: 'include'
+})
+```
+
+#### Automatic defaults
+
+The `route()` function provides smart defaults:
+
+- **Method detection**: Automatically uses the HTTP method from the route definition
+- **Headers**:
+  - `Accept: application/json` by default
+  - `Content-Type: application/json` for object bodies
+  - `Content-Type: multipart/form-data` for FormData (set by browser)
+  - No Content-Type header for Blob/ArrayBuffer/URLSearchParams
+- **Credentials**: `same-origin` by default
+
+All defaults can be overridden by passing custom options.
+
+### Generating URLs with `routeUrl()`
+
+The `routeUrl()` function generates URLs from named routes:
+
+```typescript
+import { routeUrl } from '@strav/http'
+
+// Generate simple URL
+const homeUrl = routeUrl('public.home')  // '/'
+
+// Generate URL with parameters
+const profileUrl = routeUrl('users.show', { id: 456 })  // '/users/456'
+
+// Generate URL with query parameters
+const searchUrl = routeUrl('api.search', {
+  q: 'typescript',    // Added as query param
+  page: 2            // Added as query param
+})  // '/api/search?q=typescript&page=2'
+
+// Mixed route params and query params
+const filteredUserUrl = routeUrl('users.posts', {
+  id: 123,           // Route param (replaces :id)
+  category: 'tech',  // Query param
+  sort: 'recent'     // Query param
+})  // '/users/123/posts?category=tech&sort=recent'
+```
+
+### Working with hierarchical group aliases
+
+Route helpers work seamlessly with the group alias system:
+
+```typescript
+// Define routes with hierarchical aliases
+router.group({ prefix: '/api' }, (r) => {
+  r.group({ prefix: '/v1' }, (r) => {
+    r.group({ prefix: '/auth' }, (r) => {
+      r.post('/register', registerHandler).as('register')
+      r.post('/login', loginHandler).as('login')
+      r.post('/logout', logoutHandler).as('logout')
+    }).as('auth')
+
+    r.group({ prefix: '/users' }, (r) => {
+      r.get('', listUsers).as('index')
+      r.get('/:id', showUser).as('show')
+      r.put('/:id', updateUser).as('update')
+      r.delete('/:id', deleteUser).as('delete')
+    }).as('users')
+  }).as('v1')
+}).as('api')
+
+// Use the full hierarchical names
+await route('api.v1.auth.register', userData)
+await route('api.v1.users.show', { params: { id: 123 } })
+const url = routeUrl('api.v1.users.index')  // '/api/v1/users'
+```
+
+### Error handling
+
+Route helpers provide clear error messages:
+
+```typescript
+try {
+  // Throws if route doesn't exist
+  await route('non.existent.route', {})
+} catch (error) {
+  console.error(error.message)  // "Route 'non.existent.route' not found"
+}
+
+try {
+  // Throws if required parameter is missing
+  routeUrl('users.show')  // Missing 'id' parameter
+} catch (error) {
+  console.error(error.message)  // "Missing required parameter 'id' for route 'users.show'"
+}
+```
+
+### Advanced usage
+
+```typescript
+// Override the detected method
+await route('users.index', { method: 'HEAD' })
+
+// Send plain text instead of JSON
+await route('api.message', {
+  body: 'Plain text message',
+  headers: { 'Content-Type': 'text/plain' }
+})
+
+// Use with async/await error handling
+const result = await route('api.data', {})
+  .then(res => res.json())
+  .catch(err => console.error('Request failed:', err))
+
+// Check response status
+const response = await route('users.create', userData)
+if (!response.ok) {
+  const error = await response.json()
+  console.error('Creation failed:', error)
+}
+```
+
+### TypeScript support
+
+The route helpers are fully typed:
+
+```typescript
+import type { RouteOptions } from '@strav/http'
+
+// Type-safe options
+const options: RouteOptions = {
+  params: { id: 123 },
+  headers: { 'X-Custom': 'value' },
+  cache: 'no-store'
+}
+
+const response = await route('users.show', options)
+```
+
+### Benefits
+
+Using route helpers provides several advantages:
+
+1. **No hardcoded URLs**: All URLs are generated from route definitions
+2. **Automatic configuration**: Method, headers, and body handling are automatic
+3. **Centralized routing**: Route changes only need to be made in one place
+4. **Refactoring-friendly**: Rename routes without breaking client code
+5. **Type safety**: Routes are validated at runtime (with TypeScript support)
+6. **Clean API**: Simple, intuitive syntax for all HTTP operations
+7. **Framework integration**: Works seamlessly with groups, aliases, and middleware
+
 ### Global middleware
 
 ```typescript
@@ -335,7 +529,7 @@ type Middleware = (ctx: Context, next: Next) => Response | Promise<Response>
 ### Writing middleware
 
 ```typescript
-import type { Middleware } from '@strav/core/http'
+import type { Middleware } from '@strav/http'
 
 const logger: Middleware = async (ctx, next) => {
   const start = performance.now()
@@ -388,7 +582,7 @@ The `Server` class is `@inject`-able and reads from `config/http.ts`:
 
 ```typescript
 // config/http.ts
-import { ApiRouting } from '@strav/core/generators'
+import { ApiRouting } from '@strav/generators'
 
 export default {
   host: env('HTTP_HOST', '0.0.0.0'),
@@ -406,7 +600,7 @@ export default {
 ### Using a service provider (recommended)
 
 ```typescript
-import { HttpProvider } from '@strav/core/providers'
+import { HttpProvider } from '@strav/providers'
 
 app.use(new HttpProvider())
 ```
@@ -429,7 +623,7 @@ The `domain` setting is used for subdomain extraction from the `Host` header. Th
 Low-level cookie utilities are available for building custom cookie logic:
 
 ```typescript
-import { serializeCookie, parseCookies, withCookie, clearCookie } from '@strav/core/http'
+import { serializeCookie, parseCookies, withCookie, clearCookie } from '@strav/http'
 
 // Serialize a Set-Cookie header string
 const header = serializeCookie('theme', 'dark', {
@@ -516,7 +710,7 @@ Rate limiting is a standard middleware — it runs in the normal pipeline after 
 ### Quick start
 
 ```typescript
-import { rateLimit } from '@strav/core/http'
+import { rateLimit } from '@strav/http'
 
 // Global: 100 requests per minute
 router.use(rateLimit({ max: 100, window: 60_000 }))
@@ -582,7 +776,7 @@ Retry-After: 42
 The default `MemoryStore` uses fixed time windows with lazy cleanup — suitable for single-process deployments. For distributed setups, implement the `RateLimitStore` interface:
 
 ```typescript
-import type { RateLimitStore, RateLimitInfo } from '@strav/core/http'
+import type { RateLimitStore, RateLimitInfo } from '@strav/http'
 
 class RedisRateLimitStore implements RateLimitStore {
   async increment(key: string, window: number, max: number): Promise<RateLimitInfo> {
@@ -605,7 +799,7 @@ Resources are lightweight serializers that control the shape of JSON responses. 
 Extend `Resource<T>` and implement `define()`:
 
 ```typescript
-import { Resource } from '@strav/core/http'
+import { Resource } from '@strav/http'
 
 class UserResource extends Resource<User> {
   define(user: User) {

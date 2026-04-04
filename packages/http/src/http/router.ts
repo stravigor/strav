@@ -19,7 +19,7 @@ export type ControllerAction = [Constructor, string]
 /** Accepted as a route handler: a function or a `[Controller, 'method']` tuple. */
 export type HandlerInput = Handler | ControllerAction
 
-interface RouteDefinition {
+export interface RouteDefinition {
   method: string
   pattern: string
   regex: RegExp
@@ -431,6 +431,62 @@ export default class Router {
    */
   subdomain(pattern: string, callback: (router: Router) => void): GroupRef {
     return this.group({ subdomain: pattern }, callback)
+  }
+
+  // ---- Route lookup and URL generation ------------------------------------
+
+  /**
+   * Get a route definition by its name.
+   *
+   * @example
+   * const route = router.getRouteByName('users.show')
+   * // Returns route with pattern '/users/:id', method 'GET', etc.
+   */
+  getRouteByName(name: string): RouteDefinition | undefined {
+    return this.routes.find(route => route.name === name)
+  }
+
+  /**
+   * Generate a URL for a named route with optional parameters.
+   *
+   * @example
+   * router.generateUrl('users.show', { id: 123 })
+   * // Returns '/users/123'
+   *
+   * router.generateUrl('api.search', { q: 'test', page: 2 })
+   * // Returns '/api/search?q=test&page=2'
+   */
+  generateUrl(name: string, params?: Record<string, any>): string {
+    const route = this.getRouteByName(name)
+    if (!route) {
+      throw new Error(`Route '${name}' not found`)
+    }
+
+    let url = route.pattern
+    const usedParams = new Set<string>()
+
+    // Replace route parameters
+    for (const paramName of route.paramNames) {
+      if (params?.[paramName] !== undefined) {
+        url = url.replace(`:${paramName}`, String(params[paramName]))
+        usedParams.add(paramName)
+      } else {
+        throw new Error(`Missing required parameter '${paramName}' for route '${name}'`)
+      }
+    }
+
+    // Add remaining params as query string
+    if (params) {
+      const queryParams = Object.entries(params)
+        .filter(([key]) => !usedParams.has(key))
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+
+      if (queryParams.length > 0) {
+        url += '?' + queryParams.join('&')
+      }
+    }
+
+    return url
   }
 
   // ---- Dispatch ------------------------------------------------------------
