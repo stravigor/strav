@@ -101,6 +101,14 @@ import { env } from '@strav/core/helpers'
 export default {
   enabled: env('DEVTOOLS_ENABLED', 'true').bool(),
 
+  routes: {
+    aliases: {
+      dashboard: 'devtools.dashboard',  // Dashboard routes
+      api: 'devtools.api'              // API routes
+    },
+    subdomain: undefined               // Optional subdomain
+  },
+
   storage: {
     pruneAfter: 24, // hours
   },
@@ -121,6 +129,18 @@ export default {
 ```
 
 Set `DEVTOOLS_ENABLED=false` in production to disable all collection with zero overhead.
+
+### Configuration reference
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `true` | Whether to enable all devtools collection |
+| `routes.aliases.dashboard` | `'devtools.dashboard'` | Route alias prefix for dashboard routes |
+| `routes.aliases.api` | `'devtools.api'` | Route alias prefix for API routes |
+| `routes.subdomain` | `undefined` | Optional subdomain for devtools routes |
+| `storage.pruneAfter` | `24` | Hours after which to delete old entries |
+| `collectors.*` | varies | Collector-specific configuration |
+| `recorders.*` | varies | Recorder-specific configuration |
 
 ## Collectors
 
@@ -349,20 +369,105 @@ bun strav devtools:prune --hours 48
 **Options:**
 - `--hours <hours>` — Delete data older than this many hours (default: `24`).
 
-## Dashboard API
+## Dashboard routes and API
+
+The dashboard includes both frontend routes and a REST API, organized with configurable route aliases for easy programmatic access.
+
+### Dashboard routes (`devtools.dashboard` alias)
+
+| Path | Route Name | Description |
+|------|-----------|-------------|
+| `/_devtools` | `devtools.dashboard.home` | Main dashboard SPA |
+
+### API routes (`devtools.api` alias)
 
 The dashboard mounts a REST API under `/_devtools/api/`:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/entries` | List entries. Query: `type`, `limit`, `offset` |
-| GET | `/api/entries/:uuid` | Single entry by UUID |
-| GET | `/api/entries/:uuid/batch` | All entries in the same batch |
-| GET | `/api/entries/tag/:tag` | Entries by tag. Query: `limit` |
-| GET | `/api/metrics/:type` | Time-series aggregates. Query: `period`, `aggregate`, `limit` |
-| GET | `/api/metrics/:type/top` | Top keys by value. Query: `period`, `aggregate`, `limit` |
-| GET | `/api/stats` | Entry counts by type |
-| DELETE | `/api/entries` | Prune old data. Query: `hours` |
+| Method | Path | Route Name | Description |
+|--------|------|-----------|-------------|
+| GET | `/api/entries` | `devtools.api.entries` | List entries. Query: `type`, `limit`, `offset` |
+| GET | `/api/entries/:uuid` | `devtools.api.entry` | Single entry by UUID |
+| GET | `/api/entries/:uuid/batch` | `devtools.api.entry_batch` | All entries in the same batch |
+| GET | `/api/entries/tag/:tag` | `devtools.api.entries_by_tag` | Entries by tag. Query: `limit` |
+| GET | `/api/metrics/:type` | `devtools.api.metrics` | Time-series aggregates. Query: `period`, `aggregate`, `limit` |
+| GET | `/api/metrics/:type/top` | `devtools.api.metrics_top` | Top keys by value. Query: `period`, `aggregate`, `limit` |
+| GET | `/api/stats` | `devtools.api.stats` | Entry counts by type |
+| DELETE | `/api/entries` | `devtools.api.prune_entries` | Prune old data. Query: `hours` |
+
+### Using named routes
+
+With route aliases configured, you can access the devtools API programmatically:
+
+```typescript
+import { route, routeUrl } from '@strav/http'
+
+// Get recent entries
+const entries = await route('devtools.api.entries', {
+  params: { type: 'request', limit: 50 }
+})
+
+// Get a specific entry
+const entry = await route('devtools.api.entry', {
+  params: { uuid: '550e8400-e29b-41d4-a716-446655440000' }
+})
+
+// Get all entries in a batch
+const batchEntries = await route('devtools.api.entry_batch', {
+  params: { uuid: entry.uuid }
+})
+
+// Get entries by tag
+const slowEntries = await route('devtools.api.entries_by_tag', {
+  params: { tag: 'slow' }
+})
+
+// Get metrics data
+const metrics = await route('devtools.api.metrics', {
+  params: { type: 'slow_request' },
+  query: { period: '3600', aggregate: 'count', limit: '24' }
+})
+
+// Get top performers
+const topQueries = await route('devtools.api.metrics_top', {
+  params: { type: 'slow_query' },
+  query: { period: '3600', aggregate: 'count', limit: '10' }
+})
+
+// Get stats
+const stats = await route('devtools.api.stats')
+
+// Prune old data
+await route('devtools.api.prune_entries', {
+  method: 'DELETE',
+  query: { hours: '48' }
+})
+
+// Generate dashboard URL
+const dashboardUrl = routeUrl('devtools.dashboard.home')
+```
+
+### Custom route aliases
+
+You can customize the route aliases in your devtools configuration:
+
+```typescript
+// config/devtools.ts
+export default {
+  routes: {
+    aliases: {
+      dashboard: 'debug.dashboard',  // Routes: debug.dashboard.home
+      api: 'debug.api'              // Routes: debug.api.entries, etc.
+    }
+  }
+}
+
+// Or mount on a subdomain
+export default {
+  routes: {
+    subdomain: 'devtools'  // Accessible at devtools.example.com
+  }
+}
+```
 
 ## Entry types
 

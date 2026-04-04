@@ -28,6 +28,11 @@ const DEFAULTS: JinaConfig = {
   features: ['registration', 'login', 'logout', 'password-reset'],
   prefix: '',
   mode: 'session',
+  routes: {
+    aliases: {
+      auth: 'jina.auth'
+    }
+  },
   rateLimit: {
     login: { max: 5, window: 60 },
     register: { max: 3, window: 60 },
@@ -135,61 +140,68 @@ export default class JinaManager {
       return true
     }
 
-    const prefix = JinaManager._config.prefix
+    const config = JinaManager._config
+    const prefix = config.prefix
+    const authAlias = config.routes.aliases.auth
+    const subdomain = config.routes.subdomain
 
-    const middleware = JinaManager._config.mode === 'session' ? [session()] : []
+    const middleware = config.mode === 'session' ? [session()] : []
 
-    router.group({ prefix, middleware }, r => {
+    router.group({ prefix, middleware, subdomain }, r => {
+      r.group({}, authRoutes).as(authAlias)
+    })
+
+    function authRoutes(r: Router): void {
       if (enabled('registration')) {
-        r.post('/register', withMiddleware([guest(), JinaManager.rl('register')], registerHandler))
+        r.post('/register', withMiddleware([guest(), JinaManager.rl('register')], registerHandler)).as('register')
       }
 
       if (enabled('login')) {
-        r.post('/login', withMiddleware([guest(), JinaManager.rl('login')], loginHandler))
+        r.post('/login', withMiddleware([guest(), JinaManager.rl('login')], loginHandler)).as('login')
       }
 
       if (enabled('logout')) {
-        r.post('/logout', withMiddleware([auth()], logoutHandler))
+        r.post('/logout', withMiddleware([auth()], logoutHandler)).as('logout')
       }
 
       if (enabled('password-reset')) {
         r.post(
           '/forgot-password',
           withMiddleware([guest(), JinaManager.rl('forgotPassword')], forgotPasswordHandler)
-        )
-        r.post('/reset-password', withMiddleware([guest()], resetPasswordHandler))
+        ).as('forgot_password')
+        r.post('/reset-password', withMiddleware([guest()], resetPasswordHandler)).as('reset_password')
       }
 
       if (enabled('email-verification')) {
         r.post(
           '/email/send',
           withMiddleware([auth(), JinaManager.rl('verifyEmail')], sendVerificationHandler)
-        )
-        r.get('/email/verify/:token', verifyEmailHandler)
+        ).as('send_verification')
+        r.get('/email/verify/:token', verifyEmailHandler).as('verify_email')
       }
 
       if (enabled('two-factor')) {
-        r.post('/two-factor/enable', withMiddleware([auth(), confirmed()], enableTwoFactorHandler))
-        r.post('/two-factor/confirm', withMiddleware([auth()], confirmTwoFactorHandler))
-        r.delete('/two-factor', withMiddleware([auth(), confirmed()], disableTwoFactorHandler))
+        r.post('/two-factor/enable', withMiddleware([auth(), confirmed()], enableTwoFactorHandler)).as('enable_two_factor')
+        r.post('/two-factor/confirm', withMiddleware([auth()], confirmTwoFactorHandler)).as('confirm_two_factor')
+        r.delete('/two-factor', withMiddleware([auth(), confirmed()], disableTwoFactorHandler)).as('disable_two_factor')
         r.post(
           '/two-factor/challenge',
           withMiddleware([JinaManager.rl('twoFactor')], twoFactorChallengeHandler)
-        )
+        ).as('two_factor_challenge')
       }
 
       if (enabled('password-confirmation')) {
-        r.post('/confirm-password', withMiddleware([auth()], confirmPasswordHandler))
+        r.post('/confirm-password', withMiddleware([auth()], confirmPasswordHandler)).as('confirm_password')
       }
 
       if (enabled('update-password')) {
-        r.put('/password', withMiddleware([auth()], updatePasswordHandler))
+        r.put('/password', withMiddleware([auth()], updatePasswordHandler)).as('update_password')
       }
 
       if (enabled('update-profile')) {
-        r.put('/profile', withMiddleware([auth()], updateProfileHandler))
+        r.put('/profile', withMiddleware([auth()], updateProfileHandler)).as('update_profile')
       }
-    })
+    }
   }
 
   /** Clear all state. For testing. */

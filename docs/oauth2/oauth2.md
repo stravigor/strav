@@ -140,6 +140,9 @@ export default {
 | `authCodeLifetime` | `10` | Authorization code lifetime in minutes. |
 | `personalAccessTokenLifetime` | `525600` | Personal access token lifetime in minutes (1 year). |
 | `prefix` | `'/oauth'` | Route prefix for all OAuth2 endpoints. |
+| `routes.aliases.api` | `'oauth2.api'` | Route alias prefix for OAuth2 API endpoints. |
+| `routes.aliases.admin` | `'oauth2.admin'` | Route alias prefix for client management endpoints. |
+| `routes.subdomain` | `undefined` | Optional subdomain for routing (e.g., `'oauth'` for oauth.example.com). |
 | `scopes` | `{}` | Available scopes as `{ name: description }` pairs. |
 | `defaultScopes` | `[]` | Scopes granted when the client requests none. |
 | `personalAccessClient` | `null` | Client ID for personal access tokens. Created by `oauth2:setup`. |
@@ -149,21 +152,134 @@ export default {
 
 ## Routes
 
-All routes are registered automatically by `OAuth2Provider`. They are prefixed with `config.prefix` (`/oauth` by default).
+All routes are registered automatically by `OAuth2Provider`. They are prefixed with `config.prefix` (`/oauth` by default) and organized into two groups with configurable aliases for easy route invocation.
 
-| Method | Path | Middleware | Description |
-|--------|------|-----------|-------------|
-| GET | `/oauth/authorize` | `auth()`, rate limit | Start authorization code flow |
-| POST | `/oauth/authorize` | `auth()`, `csrf()` | Approve or deny authorization |
-| POST | `/oauth/token` | rate limit | Exchange grant for tokens |
-| POST | `/oauth/revoke` | — | Revoke a token (RFC 7009) |
-| POST | `/oauth/introspect` | — | Introspect a token (RFC 7662) |
-| GET | `/oauth/clients` | `auth()` | List clients |
-| POST | `/oauth/clients` | `auth()` | Create a client |
-| DELETE | `/oauth/clients/:id` | `auth()` | Delete a client |
-| POST | `/oauth/personal-tokens` | `auth()` | Create a personal access token |
-| GET | `/oauth/personal-tokens` | `auth()` | List personal access tokens |
-| DELETE | `/oauth/personal-tokens/:id` | `auth()` | Revoke a personal access token |
+### OAuth2 API routes (`oauth2.api` alias)
+
+| Method | Path | Middleware | Route Name | Description |
+|--------|------|-----------|-----------|-------------|
+| GET | `/oauth/authorize` | `auth()`, rate limit | `{api}.authorize` | Start authorization code flow |
+| POST | `/oauth/approve` | `auth()`, `csrf()` | `{api}.approve` | Approve or deny authorization |
+| POST | `/oauth/token` | rate limit | `{api}.token` | Exchange grant for tokens |
+| POST | `/oauth/revoke` | — | `{api}.revoke` | Revoke a token (RFC 7009) |
+| POST | `/oauth/introspect` | — | `{api}.introspect` | Introspect a token (RFC 7662) |
+
+### Client management routes (`oauth2.admin` alias)
+
+| Method | Path | Middleware | Route Name | Description |
+|--------|------|-----------|-----------|-------------|
+| GET | `/oauth/clients` | `auth()` | `{admin}.clients` | List clients |
+| POST | `/oauth/clients` | `auth()` | `{admin}.create_client` | Create a client |
+| DELETE | `/oauth/clients/:id` | `auth()` | `{admin}.delete_client` | Delete a client |
+| POST | `/oauth/personal-tokens` | `auth()` | `{admin}.create_personal_token` | Create a personal access token |
+| GET | `/oauth/personal-tokens` | `auth()` | `{admin}.personal_tokens` | List personal access tokens |
+| DELETE | `/oauth/personal-tokens/:id` | `auth()` | `{admin}.revoke_personal_token` | Revoke a personal access token |
+
+Where `{api}` defaults to `oauth2.api` and `{admin}` defaults to `oauth2.admin`, but both can be customized in the configuration.
+
+### Route configuration
+
+Configure route prefixes, aliases, and subdomains in your OAuth2 config:
+
+```typescript
+// config/oauth2.ts
+export default {
+  prefix: '/oauth',
+  routes: {
+    aliases: {
+      api: 'oauth2.api',     // OAuth2 API endpoints
+      admin: 'oauth2.admin'  // Client management endpoints
+    },
+    subdomain: 'oauth'       // Optional: mount on oauth.example.com
+  }
+}
+```
+
+#### Custom route aliases
+
+Customize the route aliases to match your application's naming:
+
+```typescript
+// config/oauth2.ts
+export default {
+  routes: {
+    aliases: {
+      api: 'oauth',          // Routes named: oauth.authorize, oauth.token, etc.
+      admin: 'oauth.admin'   // Routes named: oauth.admin.clients, etc.
+    }
+  }
+}
+
+// Or for a multi-tenant app
+export default {
+  routes: {
+    aliases: {
+      api: 'api.oauth',      // Routes named: api.oauth.authorize, etc.
+      admin: 'admin.oauth'   // Routes named: admin.oauth.clients, etc.
+    }
+  }
+}
+```
+
+### Using named routes
+
+With route aliases configured, you can use OAuth2 endpoints with the route helpers:
+
+```typescript
+import { route, routeUrl } from '@strav/http'
+
+// OAuth2 API calls
+const tokenResponse = await route('oauth2.api.token', {
+  grant_type: 'authorization_code',
+  code: 'auth_code_here',
+  redirect_uri: 'https://app.com/callback',
+  client_id: 'client_id',
+  client_secret: 'client_secret'
+})
+
+// Revoke a token
+await route('oauth2.api.revoke', { token: 'token_to_revoke' })
+
+// Introspect a token
+const introspection = await route('oauth2.api.introspect', {
+  token: 'token_to_check'
+})
+
+// Client management
+const clients = await route('oauth2.admin.clients')
+
+const newClient = await route('oauth2.admin.create_client', {
+  name: 'My Application',
+  redirect_uris: ['https://app.com/callback'],
+  scopes: ['read', 'write']
+})
+
+await route('oauth2.admin.delete_client', {
+  params: { id: 'client_id' }
+})
+
+// Personal access tokens
+const pat = await route('oauth2.admin.create_personal_token', {
+  name: 'CLI Tool',
+  scopes: ['read']
+})
+
+await route('oauth2.admin.revoke_personal_token', {
+  params: { id: 'token_id' }
+})
+
+// Generate URLs for OAuth2 flows
+const authUrl = routeUrl('oauth2.api.authorize', {
+  client_id: 'client123',
+  redirect_uri: 'https://app.com/callback',
+  scope: 'read write',
+  state: 'csrf_token',
+  code_challenge: 'challenge',
+  code_challenge_method: 'S256'
+})
+```
+
+This eliminates hardcoded URLs and provides type-safe, refactorable route references throughout your OAuth2 integrations.
 
 ## Grant flows
 

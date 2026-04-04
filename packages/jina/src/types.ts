@@ -88,6 +88,14 @@ export interface JinaConfig {
   features: Feature[]
   prefix: string
   mode: 'session' | 'token'
+  routes: {
+    /** Route group alias for authentication endpoints (e.g., 'jina.auth' or 'auth') */
+    aliases: {
+      auth: string
+    }
+    /** Optional subdomain for authentication routes */
+    subdomain?: string
+  }
   rateLimit: {
     login: RateLimitConfig
     register: RateLimitConfig

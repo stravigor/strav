@@ -107,6 +107,17 @@ export interface OAuth2Config {
   authCodeLifetime: number // minutes
   personalAccessTokenLifetime: number // minutes
   prefix: string
+  routes: {
+    /** Route group aliases for different OAuth2 endpoint types */
+    aliases: {
+      /** OAuth2 API endpoints (authorize, token, revoke, introspect) */
+      api: string
+      /** Admin/management endpoints (clients, personal tokens) */
+      admin: string
+    }
+    /** Optional subdomain for OAuth2 routes */
+    subdomain?: string
+  }
   scopes: Record<string, string>
   defaultScopes: string[]
   personalAccessClient: string | null

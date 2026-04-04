@@ -7,7 +7,7 @@ import { PERIODS } from '../storage/aggregate_store.ts'
 /**
  * Register the devtools dashboard routes on a router.
  *
- * Mounts the API under `/_devtools` and serves the SPA dashboard.
+ * Uses route aliases from the devtools configuration for named routes.
  *
  * @example
  * import { registerDashboard } from '@strav/devtools/dashboard/routes'
@@ -15,31 +15,49 @@ import { PERIODS } from '../storage/aggregate_store.ts'
  *
  * // With custom auth guard
  * registerDashboard(router, (ctx) => ctx.get('user')?.isAdmin)
+ *
+ * // After registration, use named routes:
+ * const dashboardUrl = routeUrl('devtools.dashboard.home')
+ * const apiResponse = await route('devtools.api.entries', { params: { limit: 50 } })
  */
 export function registerDashboard(
   router: Router,
   guard?: (ctx: Context) => boolean | Promise<boolean>
 ): void {
-  router.group({ prefix: '/_devtools', middleware: [dashboardAuth(guard)] }, r => {
-    // ---- SPA entry point ----
-    r.get('', serveDashboard)
+  const config = DevtoolsManager.config
+  const dashboardAlias = config.routes.aliases.dashboard
+  const apiAlias = config.routes.aliases.api
+  const subdomain = config.routes.subdomain
 
-    // ---- API: Entries (Inspector) ----
-    r.get('/api/entries', listEntries)
-    r.get('/api/entries/:uuid', showEntry)
-    r.get('/api/entries/:uuid/batch', showBatch)
-    r.get('/api/entries/tag/:tag', entriesByTag)
+  router.group({ prefix: '/_devtools', middleware: [dashboardAuth(guard)], subdomain }, r => {
+    // ---- Dashboard routes ----
+    r.group({}, dashboardRoutes).as(dashboardAlias)
 
-    // ---- API: Aggregates (Metrics) ----
-    r.get('/api/metrics/:type', queryMetrics)
-    r.get('/api/metrics/:type/top', topKeys)
-
-    // ---- API: Stats ----
-    r.get('/api/stats', stats)
-
-    // ---- API: Prune ----
-    r.delete('/api/entries', pruneEntries)
+    // ---- API routes ----
+    r.group({ prefix: '/api' }, apiRoutes).as(apiAlias)
   })
+
+  function dashboardRoutes(r: Router): void {
+    r.get('', serveDashboard).as('home')
+  }
+
+  function apiRoutes(r: Router): void {
+    // ---- Entries (Inspector) ----
+    r.get('/entries', listEntries).as('entries')
+    r.get('/entries/:uuid', showEntry).as('entry')
+    r.get('/entries/:uuid/batch', showBatch).as('entry_batch')
+    r.get('/entries/tag/:tag', entriesByTag).as('entries_by_tag')
+
+    // ---- Aggregates (Metrics) ----
+    r.get('/metrics/:type', queryMetrics).as('metrics')
+    r.get('/metrics/:type/top', topKeys).as('metrics_top')
+
+    // ---- Stats ----
+    r.get('/stats', stats).as('stats')
+
+    // ---- Prune ----
+    r.delete('/entries', pruneEntries).as('prune_entries')
+  }
 }
 
 // ---------------------------------------------------------------------------

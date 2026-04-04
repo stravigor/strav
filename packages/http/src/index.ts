@@ -5,3 +5,6 @@ export * from './validation/index.ts'
 export * from './policy/index.ts'
 export * from './auth/index.ts'
 export * from './providers/index.ts'
+
+// Route helpers for named route invocation
+export { route, routeUrl } from './http/route_helper.ts'

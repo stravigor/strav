@@ -25,6 +25,12 @@ const DEFAULTS: OAuth2Config = {
   authCodeLifetime: 10,
   personalAccessTokenLifetime: 525_600,
   prefix: '/oauth',
+  routes: {
+    aliases: {
+      api: 'oauth2.api',
+      admin: 'oauth2.admin'
+    }
+  },
   scopes: {},
   defaultScopes: [],
   personalAccessClient: null,
@@ -173,32 +179,46 @@ export default class OAuth2Manager {
    * Register all OAuth2 routes on the given router.
    */
   static routes(router: Router): void {
-    const prefix = OAuth2Manager._config.prefix
+    const config = OAuth2Manager._config
+    const prefix = config.prefix
+    const apiAlias = config.routes.aliases.api
+    const adminAlias = config.routes.aliases.admin
+    const subdomain = config.routes.subdomain
 
-    router.group({ prefix }, r => {
+    router.group({ prefix, subdomain }, r => {
+      // OAuth2 API routes
+      r.group({}, apiRoutes).as(apiAlias)
+
+      // Admin/management routes
+      r.group({}, adminRoutes).as(adminAlias)
+    })
+
+    function apiRoutes(r: Router): void {
       // Authorization code flow
-      r.get('/authorize', withMiddleware([auth(), OAuth2Manager.rl('authorize')], authorizeHandler))
-      r.post('/authorize', withMiddleware([auth(), csrf()], approveHandler))
+      r.get('/authorize', withMiddleware([auth(), OAuth2Manager.rl('authorize')], authorizeHandler)).as('authorize')
+      r.post('/approve', withMiddleware([auth(), csrf()], approveHandler)).as('approve')
 
       // Token endpoint (all grant types)
-      r.post('/token', withMiddleware([OAuth2Manager.rl('token')], tokenHandler))
+      r.post('/token', withMiddleware([OAuth2Manager.rl('token')], tokenHandler)).as('token')
 
       // Revocation (RFC 7009)
-      r.post('/revoke', revokeHandler)
+      r.post('/revoke', revokeHandler).as('revoke')
 
       // Introspection (RFC 7662)
-      r.post('/introspect', introspectHandler)
+      r.post('/introspect', introspectHandler).as('introspect')
+    }
 
+    function adminRoutes(r: Router): void {
       // Client management
-      r.get('/clients', withMiddleware([auth()], listClientsHandler))
-      r.post('/clients', withMiddleware([auth()], createClientHandler))
-      r.delete('/clients/:id', withMiddleware([auth()], deleteClientHandler))
+      r.get('/clients', withMiddleware([auth()], listClientsHandler)).as('clients')
+      r.post('/clients', withMiddleware([auth()], createClientHandler)).as('create_client')
+      r.delete('/clients/:id', withMiddleware([auth()], deleteClientHandler)).as('delete_client')
 
       // Personal access tokens
-      r.post('/personal-tokens', withMiddleware([auth()], createPersonalTokenHandler))
-      r.get('/personal-tokens', withMiddleware([auth()], listPersonalTokensHandler))
-      r.delete('/personal-tokens/:id', withMiddleware([auth()], revokePersonalTokenHandler))
-    })
+      r.post('/personal-tokens', withMiddleware([auth()], createPersonalTokenHandler)).as('create_personal_token')
+      r.get('/personal-tokens', withMiddleware([auth()], listPersonalTokensHandler)).as('personal_tokens')
+      r.delete('/personal-tokens/:id', withMiddleware([auth()], revokePersonalTokenHandler)).as('revoke_personal_token')
+    }
   }
 
   /** Clear all state. For testing. */

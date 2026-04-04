@@ -47,6 +47,13 @@ export default class DevtoolsManager {
 
     DevtoolsManager._config = {
       enabled: config.get('devtools.enabled', true) as boolean,
+      routes: {
+        aliases: {
+          dashboard: config.get('devtools.routes.aliases.dashboard', 'devtools.dashboard') as string,
+          api: config.get('devtools.routes.aliases.api', 'devtools.api') as string,
+        },
+        subdomain: config.get('devtools.routes.subdomain') as string | undefined,
+      },
       storage: {
         pruneAfter: config.get('devtools.storage.pruneAfter', 24) as number,
       },

@@ -51,6 +51,17 @@ export interface AggregateRecord {
 /** Configuration shape for the devtools package. */
 export interface DevtoolsConfig {
   enabled: boolean
+  routes: {
+    /** Route group aliases for devtools endpoints */
+    aliases: {
+      /** Dashboard frontend routes */
+      dashboard: string
+      /** API endpoints for dashboard data */
+      api: string
+    }
+    /** Optional subdomain for devtools routes */
+    subdomain?: string
+  }
   storage: {
     pruneAfter: number
   }

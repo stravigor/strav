@@ -131,6 +131,8 @@ export default {
 | `features` | `['registration', 'login', 'logout', 'password-reset']` | Enabled features. Uncomment to add more. |
 | `prefix` | `''` | Route prefix. Set `'/auth'` to mount at `/auth/login`, etc. |
 | `mode` | `'session'` | `'session'` (cookie-based) or `'token'` (access tokens). |
+| `routes.aliases.auth` | `'jina.auth'` | Route alias prefix for named routes. |
+| `routes.subdomain` | `undefined` | Optional subdomain for routing (e.g., `'auth'` for auth.example.com). |
 | `rateLimit.*` | varies | `{ max, window }` per flow. `window` is in seconds. |
 | `passwords.expiration` | `60` | Password reset link lifetime in minutes. |
 | `verification.expiration` | `60` | Email verification link lifetime in minutes. |
@@ -185,24 +187,26 @@ The `JinaActions<TUser>` interface defines how Jina interacts with your User mod
 
 ## Routes
 
-All routes are registered automatically by `JinaProvider`. They are prefixed with `config.prefix` (empty by default).
+All routes are registered automatically by `JinaProvider`. They are prefixed with `config.prefix` (empty by default) and grouped under a configurable alias for easy route invocation.
 
-| Method | Path | Middleware | Feature | Description |
-|--------|------|-----------|---------|-------------|
-| POST | `/register` | `guest()`, rate limit | `registration` | Create a new user |
-| POST | `/login` | `guest()`, rate limit | `login` | Authenticate |
-| POST | `/logout` | `auth()` | `logout` | End session or discard token |
-| POST | `/forgot-password` | `guest()`, rate limit | `password-reset` | Send reset email |
-| POST | `/reset-password` | `guest()` | `password-reset` | Reset password with token |
-| POST | `/email/send` | `auth()`, rate limit | `email-verification` | Resend verification email |
-| GET | `/email/verify/:token` | — | `email-verification` | Verify email |
-| POST | `/two-factor/enable` | `auth()`, `confirmed()` | `two-factor` | Generate TOTP secret |
-| POST | `/two-factor/confirm` | `auth()` | `two-factor` | Confirm 2FA setup with code |
-| DELETE | `/two-factor` | `auth()`, `confirmed()` | `two-factor` | Disable 2FA |
-| POST | `/two-factor/challenge` | rate limit | `two-factor` | Complete 2FA during login |
-| POST | `/confirm-password` | `auth()` | `password-confirmation` | Re-enter password |
-| PUT | `/password` | `auth()` | `update-password` | Change password |
-| PUT | `/profile` | `auth()` | `update-profile` | Update profile |
+| Method | Path | Middleware | Feature | Route Name | Description |
+|--------|------|-----------|---------|-----------|-------------|
+| POST | `/register` | `guest()`, rate limit | `registration` | `{alias}.register` | Create a new user |
+| POST | `/login` | `guest()`, rate limit | `login` | `{alias}.login` | Authenticate |
+| POST | `/logout` | `auth()` | `logout` | `{alias}.logout` | End session or discard token |
+| POST | `/forgot-password` | `guest()`, rate limit | `password-reset` | `{alias}.forgot_password` | Send reset email |
+| POST | `/reset-password` | `guest()` | `password-reset` | `{alias}.reset_password` | Reset password with token |
+| POST | `/email/send` | `auth()`, rate limit | `email-verification` | `{alias}.send_verification` | Resend verification email |
+| GET | `/email/verify/:token` | — | `email-verification` | `{alias}.verify_email` | Verify email |
+| POST | `/two-factor/enable` | `auth()`, `confirmed()` | `two-factor` | `{alias}.enable_two_factor` | Generate TOTP secret |
+| POST | `/two-factor/confirm` | `auth()` | `two-factor` | `{alias}.confirm_two_factor` | Confirm 2FA setup with code |
+| DELETE | `/two-factor` | `auth()`, `confirmed()` | `two-factor` | `{alias}.disable_two_factor` | Disable 2FA |
+| POST | `/two-factor/challenge` | rate limit | `two-factor` | `{alias}.two_factor_challenge` | Complete 2FA during login |
+| POST | `/confirm-password` | `auth()` | `password-confirmation` | `{alias}.confirm_password` | Re-enter password |
+| PUT | `/password` | `auth()` | `update-password` | `{alias}.update_password` | Change password |
+| PUT | `/profile` | `auth()` | `update-profile` | `{alias}.update_profile` | Update profile |
+
+Where `{alias}` defaults to `jina.auth` but can be customized in the configuration.
 
 ### Selective route registration
 
@@ -218,17 +222,114 @@ JinaManager.routes(router, { except: ['update-profile'] })
 
 When using `JinaProvider`, routes are registered for all enabled features. Use `only`/`except` when you need manual control — call `JinaManager.routes()` yourself instead.
 
-### Route prefix
+### Route configuration
 
-Set `prefix` in the config to namespace all Jina routes:
+Configure route prefixes, aliases, and subdomains in your Jina config:
 
 ```typescript
 // config/jina.ts
 export default {
   prefix: '/auth',
+  routes: {
+    aliases: {
+      auth: 'jina.auth'  // Default route alias
+    },
+    subdomain: 'api'     // Optional: mount on api.example.com
+  },
   // Routes become: POST /auth/login, POST /auth/register, etc.
+  // Named routes: jina.auth.login, jina.auth.register, etc.
 }
 ```
+
+#### Custom route aliases
+
+Customize the route alias to match your application's naming:
+
+```typescript
+// config/jina.ts
+export default {
+  routes: {
+    aliases: {
+      auth: 'auth'  // Routes named: auth.login, auth.register, etc.
+    }
+  }
+}
+
+// Or for a multi-tenant app
+export default {
+  routes: {
+    aliases: {
+      auth: 'tenant.auth'  // Routes named: tenant.auth.login, etc.
+    }
+  }
+}
+```
+
+#### Subdomain routing
+
+Mount Jina routes on a specific subdomain:
+
+```typescript
+// config/jina.ts
+export default {
+  routes: {
+    subdomain: 'auth'  // Routes accessible at auth.example.com
+  }
+}
+```
+
+### Using named routes
+
+With route aliases configured, you can use Jina's authentication endpoints with the route helpers:
+
+```typescript
+import { route, routeUrl } from '@strav/http'
+
+// Register a new user
+const response = await route('jina.auth.register', {
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+  password: 'secure_password',
+  password_confirmation: 'secure_password'
+})
+
+// Login
+await route('jina.auth.login', {
+  email: 'alice@example.com',
+  password: 'secure_password'
+})
+
+// Logout
+await route('jina.auth.logout')
+
+// Generate URLs for frontend links
+const loginUrl = routeUrl('jina.auth.login')
+const registerUrl = routeUrl('jina.auth.register')
+const resetUrl = routeUrl('jina.auth.reset_password', {
+  token: 'reset_token_here'
+})
+
+// Two-factor authentication
+await route('jina.auth.enable_two_factor')
+await route('jina.auth.confirm_two_factor', { code: '123456' })
+await route('jina.auth.two_factor_challenge', { code: '789012' })
+
+// Password management
+await route('jina.auth.forgot_password', { email: 'alice@example.com' })
+await route('jina.auth.update_password', {
+  current_password: 'old_password',
+  password: 'new_password',
+  password_confirmation: 'new_password'
+})
+
+// Profile updates
+await route('jina.auth.update_profile', {
+  name: 'Alice Smith',
+  timezone: 'America/New_York'
+})
+```
+
+This eliminates hardcoded URLs and provides type-safe, refactorable route references throughout your application.
 
 ## Authentication flows
 
