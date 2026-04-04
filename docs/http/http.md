@@ -322,12 +322,75 @@ Named routes can be used with the route helper functions for transparent route i
 
 The HTTP module provides `route()` and `routeUrl()` helper functions that enable transparent route invocation using named routes. These helpers eliminate hardcoded URLs and provide automatic method detection, smart header defaults, and type safety.
 
+### Browser-safe imports
+
+For client-side usage (browser bundles), import from `@strav/view` to avoid Node.js dependencies:
+
+```typescript
+// ✅ Browser-safe import (avoids Node.js modules)
+import { route, routeUrl, registerRoutes } from '@strav/view'
+
+// ❌ Server import (includes Node.js dependencies that break browser bundlers)
+import { route, routeUrl } from '@strav/http'
+```
+
+The `@strav/view` package provides browser-safe route helpers that work independently of the server-side router instance.
+
+#### Automatic route injection during build
+
+Route definitions are **automatically injected** when you build islands using the `buildWithRoutes()` method:
+
+```typescript
+import { router } from '@strav/http'
+import { IslandBuilder } from '@strav/view'
+
+const builder = new IslandBuilder({
+  islandsDir: './resources/islands',
+  outDir: './public/builds',
+  // CSS and other options work normally
+  css: { entry: 'resources/scss/index.scss' }
+})
+
+await builder.buildWithRoutes(router)  // Routes automatically injected!
+```
+
+Then in your templates, just use the `@islands()` directive as normal:
+
+```html
+<!-- In your .strav template -->
+@islands()  <!-- Islands bundle now includes route definitions! -->
+```
+
+Now client-side code can use route helpers without any setup:
+
+```typescript
+import { route, routeUrl } from '@strav/view'
+
+// Route definitions are already available - no registerRoutes() needed!
+const userUrl = routeUrl('users.show', { id: 123 })  // '/users/123'
+const response = await route('users.create', { name: 'John', email: 'john@example.com' })
+```
+
+#### Manual route registration (optional)
+
+For cases where you're not using islands or need custom route definitions:
+
+```typescript
+import { registerRoutes, route, routeUrl } from '@strav/view'
+
+// Only needed if not using @islands() directive
+registerRoutes({
+  'users.show': { method: 'GET', pattern: '/users/:id' },
+  'users.create': { method: 'POST', pattern: '/users' }
+})
+```
+
 ### Invoking named routes with `route()`
 
 The `route()` function makes HTTP requests to named routes with automatic configuration:
 
 ```typescript
-import { route } from '@strav/http'
+import { route } from '@strav/view'  // Browser-safe client import
 
 // Simple POST with JSON body (auto-detected)
 const response = await route('api.v1.auth.register', {
@@ -385,7 +448,7 @@ All defaults can be overridden by passing custom options.
 The `routeUrl()` function generates URLs from named routes:
 
 ```typescript
-import { routeUrl } from '@strav/http'
+import { routeUrl } from '@strav/view'  // Browser-safe client import
 
 // Generate simple URL
 const homeUrl = routeUrl('public.home')  // '/'

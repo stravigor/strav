@@ -27,7 +27,7 @@ export function guest(redirectTo?: string): Middleware {
 
     if (guardName === 'session') {
       const session = ctx.get<Session>('session')
-      isAuthenticated = session !== null && session.isAuthenticated && !session.isExpired()
+      isAuthenticated = session && session.isAuthenticated && !session.isExpired()
     } else if (guardName === 'token') {
       const header = ctx.header('authorization')
       if (header?.startsWith('Bearer ')) {
