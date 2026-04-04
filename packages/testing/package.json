@@ -1,6 +1,6 @@
 {
   "name": "@strav/testing",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "Testing utilities for the Strav framework",
   "license": "MIT",
