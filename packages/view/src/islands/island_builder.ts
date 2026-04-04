@@ -163,7 +163,7 @@ export class IslandBuilder {
         console.log(`[islands] ⚠️ Router provided but no named routes found - skipping route auto-injection`)
       }
     } else {
-      console.log(`[islands] ❌ No router provided - skipping route auto-injection. Use buildWithRoutes(router) for auto-injection.`)
+      // Silent: No router provided - skipping route auto-injection
     }
 
     lines.push('')
