@@ -64,6 +64,8 @@ interface GroupState {
   middleware: Middleware[]
   subdomain?: string
   subdomainParamName?: string
+  alias?: string
+  ref?: GroupRef  // Reference to the GroupRef for deferred alias assignment
 }
 
 // ---------------------------------------------------------------------------
@@ -102,12 +104,68 @@ function parseSubdomain(pattern: string): { value: string; paramName?: string } 
 // ---------------------------------------------------------------------------
 
 class RouteRef {
-  constructor(private route: RouteDefinition) {}
+  private groupRefs: (GroupRef | undefined)[]
+  private routeName?: string
+
+  constructor(private route: RouteDefinition, private router: Router) {
+    // Capture references to the GroupRefs from the current stack
+    this.groupRefs = router.groupStack.map(state => state.ref)
+  }
 
   /** Assign a name to this route (for future URL generation). */
   as(name: string): this {
-    this.route.name = name
+    this.routeName = name
+
+    // Define a getter that builds the full name lazily
+    Object.defineProperty(this.route, 'name', {
+      get: () => {
+        const aliases = this.groupRefs
+          .map(ref => ref?.getAlias())
+          .filter(alias => alias)
+
+        const groupAlias = aliases.join('.')
+        return groupAlias ? `${groupAlias}.${this.routeName}` : this.routeName
+      },
+      configurable: true
+    })
+
     return this
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GroupRef — returned by group methods for chaining (.as)
+// ---------------------------------------------------------------------------
+
+class GroupRef {
+  private alias?: string
+
+  constructor(
+    private router: Router,
+    private groupState: GroupState,
+    private callback: (router: Router) => void
+  ) {
+    // Store reference to this GroupRef in the state
+    this.groupState.ref = this
+  }
+
+  /** Assign an alias to this group (for hierarchical route naming). */
+  as(alias: string): this {
+    this.alias = alias
+    this.groupState.alias = alias
+    return this
+  }
+
+  /** @internal Get the alias assigned to this group */
+  getAlias(): string | undefined {
+    return this.alias
+  }
+
+  /** @internal Execute the group callback with the current state */
+  execute(): void {
+    this.router.groupStack.push(this.groupState)
+    this.callback(this.router)
+    this.router.groupStack.pop()
   }
 }
 
@@ -321,8 +379,13 @@ export default class Router {
    * router.group({ prefix: '/api', middleware: [auth] }, (r) => {
    *   r.get('/users', listUsers)
    * })
+   *
+   * @example With group aliasing:
+   * router.group({ prefix: '/api' }, (r) => {
+   *   r.get('/users', listUsers).as('index')
+   * }).as('api')
    */
-  group(options: GroupOptions, callback: (router: Router) => void): void {
+  group(options: GroupOptions, callback: (router: Router) => void): GroupRef {
     const parent = this.currentGroup()
     const prefix = (parent?.prefix ?? '') + (options.prefix ?? '')
     const middleware = [...(parent?.middleware ?? []), ...(options.middleware ?? [])]
@@ -336,9 +399,21 @@ export default class Router {
       subdomainParamName = parsed.paramName
     }
 
-    this.groupStack.push({ prefix, middleware, subdomain, subdomainParamName })
-    callback(this)
-    this.groupStack.pop()
+    const groupState: GroupState = {
+      prefix,
+      middleware,
+      subdomain,
+      subdomainParamName,
+      alias: undefined
+    }
+
+    const ref = new GroupRef(this, groupState, callback)
+
+    // Execute immediately for backward compatibility
+    // The group can still be chained with .as() but routes are registered immediately
+    ref.execute()
+
+    return ref
   }
 
   /**
@@ -354,8 +429,8 @@ export default class Router {
    *                                 // ctx.params.tenant === 'acme'
    * })
    */
-  subdomain(pattern: string, callback: (router: Router) => void): void {
-    this.group({ subdomain: pattern }, callback)
+  subdomain(pattern: string, callback: (router: Router) => void): GroupRef {
+    return this.group({ subdomain: pattern }, callback)
   }
 
   // ---- Dispatch ------------------------------------------------------------
@@ -496,6 +571,14 @@ export default class Router {
     return this.currentGroup()?.prefix ?? ''
   }
 
+  /** @internal Get the concatenated alias chain from all parent groups */
+  getCurrentGroupAlias(): string {
+    const aliases = this.groupStack
+      .filter(group => group.alias)
+      .map(group => group.alias)
+    return aliases.join('.')
+  }
+
   /** Resolve a `[Controller, 'method']` tuple into a Handler. */
   private toHandler(input: HandlerInput): Handler {
     if (Array.isArray(input)) {
@@ -523,7 +606,7 @@ export default class Router {
     }
 
     this.routes.push(route)
-    return new RouteRef(route)
+    return new RouteRef(route, this)
   }
 
   private extractSubdomain(request: Request): string {

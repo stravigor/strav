@@ -164,6 +164,42 @@ router.group({ prefix: '/api/v1', middleware: [auth] }, (r) => {
 
 Group middleware does not leak to routes outside the group. Nested groups accumulate middleware — inner middleware runs after outer middleware.
 
+#### Group aliases
+
+Groups can be assigned aliases for hierarchical route naming. When groups have aliases, routes inside them automatically inherit the full alias chain:
+
+```typescript
+router.group({ prefix: '/api' }, (r) => {
+  router.group({ prefix: '/users' }, (r) => {
+    r.get('', listUsers).as('index')       // Route name: 'api.users.index'
+    r.post('', createUser).as('create')    // Route name: 'api.users.create'
+    r.get('/:id', showUser).as('show')     // Route name: 'api.users.show'
+  }).as('users')
+
+  router.group({ prefix: '/posts' }, (r) => {
+    r.get('', listPosts).as('index')       // Route name: 'api.posts.index'
+    r.post('', createPost).as('create')    // Route name: 'api.posts.create'
+  }).as('posts')
+}).as('api')
+```
+
+The group alias is optional and backward compatible. Groups without aliases work as before, and you can mix aliased and non-aliased groups:
+
+```typescript
+router.group({ prefix: '/v1' }, (r) => {
+  // This group has no alias
+  router.group({ prefix: '/public' }, (r) => {
+    r.get('/info', info).as('info')        // Route name: 'v1.info'
+  })
+
+  // This group has an alias
+  router.group({ prefix: '/auth' }, (r) => {
+    r.post('/login', login).as('login')    // Route name: 'v1.auth.login'
+    r.post('/logout', logout).as('logout') // Route name: 'v1.auth.logout'
+  }).as('auth')
+}).as('v1')
+```
+
 ### Subdomain routing
 
 ```typescript
