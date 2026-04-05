@@ -1,6 +1,6 @@
 {
   "name": "@strav/stripe",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "type": "module",
   "description": "Stripe billing for the Strav framework",
   "license": "MIT",
