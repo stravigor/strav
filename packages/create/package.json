@@ -1,6 +1,6 @@
 {
   "name": "@strav/create",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "type": "module",
   "description": "Scaffold a new Strav application",
   "license": "MIT",
