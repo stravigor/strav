@@ -1,7 +1,7 @@
 import MailManager from './mail_manager.ts'
 import { ViewEngine } from '@strav/view'
 import { inlineCss } from './css_inliner.ts'
-import Queue from '@strav/queue/queue/queue'
+import { Queue } from '@strav/queue'
 import type { MailMessage, MailResult, MailAttachment } from './types.ts'
 
 /**

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { ExternalServiceError } from '@strav/kernel/exceptions/errors'
+import { ExternalServiceError } from '@strav/kernel'
 import type { MailTransport, MailMessage, MailResult, AlibabaConfig } from '../types.ts'
 
 /**

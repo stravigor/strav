@@ -1,5 +1,5 @@
-import ServiceProvider from '@strav/kernel/core/service_provider'
-import type Application from '@strav/kernel/core/application'
+import { ServiceProvider } from '@strav/kernel'
+import type { Application } from '@strav/kernel'
 import NotificationManager from '../notification/notification_manager.ts'
 
 export interface NotificationProviderOptions {

@@ -11,7 +11,7 @@ export type { BroadcastOptions } from './client.ts'
 
 import BroadcastManager from './broadcast_manager.ts'
 import type { AuthorizeCallback, ChannelConfig, BootOptions } from './broadcast_manager.ts'
-import type Router from '@strav/http/http/router'
+import type { Router } from '@strav/http'
 
 /**
  * Broadcast helper — convenience object that delegates to `BroadcastManager`.

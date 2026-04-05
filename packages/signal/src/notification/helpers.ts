@@ -1,9 +1,9 @@
 import NotificationManager from './notification_manager.ts'
 import type { BaseNotification } from './base_notification.ts'
 import type { Notifiable, NotificationRecord } from './types.ts'
-import Queue from '@strav/queue/queue/queue'
-import Emitter from '@strav/kernel/events/emitter'
-import Database from '@strav/database/database/database'
+import { Queue } from '@strav/queue'
+import { Emitter } from '@strav/kernel'
+import { Database } from '@strav/database'
 
 /**
  * Send a notification to one or more recipients.

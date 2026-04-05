@@ -1,4 +1,4 @@
-import { ExternalServiceError } from '@strav/kernel/exceptions/errors'
+import { ExternalServiceError } from '@strav/kernel'
 import type { MailTransport, MailMessage, MailResult, MailgunConfig } from '../types.ts'
 
 /**
