@@ -1,5 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test'
-import { router, route, routeUrl } from '../src/http/index.ts'
+import { router, route, routeUrl, routeFullUrl, Context } from '../src/http/index.ts'
+import { app } from '@strav/kernel/core/application'
+import Configuration from '@strav/kernel/config/configuration'
 
 describe('Route Helper', () => {
   let server: ReturnType<typeof Bun.serve> | null = null
@@ -7,6 +9,11 @@ describe('Route Helper', () => {
   beforeEach(() => {
     // Clear router for clean test environment
     router['routes'] = []
+
+    // Register Configuration if not already registered
+    if (!app.has(Configuration)) {
+      app.singleton(Configuration)
+    }
   })
 
   describe('URL Generation', () => {
@@ -220,6 +227,86 @@ describe('Route Helper', () => {
         globalThis.fetch = originalFetch
         server?.stop()
       }
+    })
+  })
+
+  describe('Full URL Generation', () => {
+    test('generates full URLs with APP_URL config', () => {
+      router.get('/users/:id', () => new Response('user')).as('users.show')
+      router.get('/auth/reset', () => new Response('reset')).as('auth.reset')
+
+      // Mock the config
+      const config = app.resolve(Configuration)
+      config.set('http.app_url', 'https://example.com')
+
+      expect(routeFullUrl('users.show', { id: 123 })).toBe('https://example.com/users/123')
+      expect(routeFullUrl('auth.reset', { token: 'abc123' })).toBe('https://example.com/auth/reset?token=abc123')
+
+      // Clean up
+      config.set('http.app_url', undefined)
+    })
+
+    test('generates full URLs from request context', () => {
+      router.get('/api/data', () => new Response('data')).as('api.data')
+
+      const mockRequest = new Request('http://api.example.com/test')
+      const ctx = new Context(mockRequest)
+
+      expect(routeFullUrl('api.data', { page: 2 }, ctx)).toBe('http://api.example.com/api/data?page=2')
+    })
+
+    test('handles X-Forwarded-Proto header', () => {
+      router.get('/secure', () => new Response('secure')).as('secure.route')
+
+      const headers = new Headers({
+        'host': 'example.com',
+        'x-forwarded-proto': 'https'
+      })
+      const mockRequest = new Request('http://example.com/test', { headers })
+      const ctx = new Context(mockRequest)
+
+      expect(routeFullUrl('secure.route', {}, ctx)).toBe('https://example.com/secure')
+    })
+
+    test('allows overriding base URL', () => {
+      router.get('/api/v2/users', () => new Response('users')).as('api.v2.users')
+
+      expect(routeFullUrl('api.v2.users', { limit: 10 }, null, 'https://api.myapp.com'))
+        .toBe('https://api.myapp.com/api/v2/users?limit=10')
+    })
+
+    test('falls back to http config when no context or APP_URL', () => {
+      router.get('/fallback', () => new Response('fallback')).as('fallback.route')
+
+      const config = app.resolve(Configuration)
+      config.set('http.domain', 'myapp.local')
+      config.set('http.port', 8080)
+      config.set('http.secure', false)
+      config.set('http.app_url', undefined)
+
+      expect(routeFullUrl('fallback.route')).toBe('http://myapp.local:8080/fallback')
+
+      // Test with HTTPS and standard port
+      config.set('http.secure', true)
+      config.set('http.port', 443)
+      expect(routeFullUrl('fallback.route')).toBe('https://myapp.local/fallback')
+
+      // Clean up
+      config.set('http.domain', 'localhost')
+      config.set('http.port', 3000)
+      config.set('http.secure', false)
+    })
+
+    test('strips trailing slash from base URL', () => {
+      router.get('/path', () => new Response('path')).as('test.path')
+
+      expect(routeFullUrl('test.path', {}, null, 'https://example.com/'))
+        .toBe('https://example.com/path')
+
+      const config = app.resolve(Configuration)
+      config.set('http.app_url', 'https://myapp.com/')
+      expect(routeFullUrl('test.path')).toBe('https://myapp.com/path')
+      config.set('http.app_url', undefined)
     })
   })
 

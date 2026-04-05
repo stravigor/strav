@@ -177,14 +177,14 @@ async function handleErrors() {
     // This will throw an error if the route doesn't exist
     await route('non.existent.route', {})
   } catch (error) {
-    console.error('Route not found:', error.message)
+    console.error('Route not found:', error instanceof Error ? error.message : error)
   }
 
   try {
     // This will throw an error if required parameters are missing
     routeUrl('api.v1.users.show')
   } catch (error) {
-    console.error('Missing parameter:', error.message)
+    console.error('Missing parameter:', error instanceof Error ? error.message : error)
   }
 }
 

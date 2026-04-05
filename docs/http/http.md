@@ -470,6 +470,82 @@ const filteredUserUrl = routeUrl('users.posts', {
 })  // '/users/123/posts?category=tech&sort=recent'
 ```
 
+### Generating full URLs with `routeFullUrl()`
+
+The `routeFullUrl()` function generates complete URLs with protocol and domain:
+
+```typescript
+import { routeFullUrl } from '@strav/http'  // Server-side import
+
+// With APP_URL environment variable set
+const resetUrl = routeFullUrl('auth.password.reset', { token: 'abc123' })
+// Returns 'https://example.com/auth/password-reset?token=abc123'
+
+// Using request context (auto-detects origin)
+router.get('/share', (ctx) => {
+  const shareUrl = routeFullUrl('posts.show', { id: 42 }, ctx)
+  // Returns 'https://myapp.com/posts/42' based on request origin
+
+  return ctx.json({ share_url: shareUrl })
+})
+
+// Override with custom base URL
+const apiUrl = routeFullUrl('api.webhook', {}, null, 'https://api.external.com')
+// Returns 'https://api.external.com/api/webhook'
+```
+
+#### Configuration
+
+Set the `APP_URL` in your environment or configure it in `config/http.ts`:
+
+```typescript
+// config/http.ts
+export default {
+  // ... other config
+  app_url: env('APP_URL', 'https://myapp.com'),
+}
+```
+
+Or let it be constructed automatically from your HTTP config:
+
+```typescript
+// .env
+DOMAIN=myapp.com
+PORT=443
+SECURE=true  // or configure http.secure in config
+```
+
+#### Context origin detection
+
+The `Context` class provides a `getOrigin()` method that intelligently detects the request origin:
+
+```typescript
+router.get('/api/info', (ctx) => {
+  const origin = ctx.getOrigin()
+  // Returns 'https://api.myapp.com' (from Host header and X-Forwarded-Proto)
+
+  return ctx.json({
+    origin,
+    callback_url: routeFullUrl('api.callback', {}, ctx)
+  })
+})
+```
+
+The method handles:
+- `X-Forwarded-Proto` header (when behind proxies/load balancers)
+- `Host` header with proper port handling
+- HTTPS/HTTP protocol detection
+
+#### Use cases for full URLs
+
+Full URLs are essential for:
+- **Email links**: Password resets, email verification, notifications
+- **OAuth callbacks**: Return URLs for external authentication
+- **Webhooks**: Callback URLs for external services
+- **API documentation**: Showing complete endpoint URLs
+- **Social sharing**: Open Graph URLs, share links
+- **External redirects**: Redirecting to full URLs from emails or external systems
+
 ### Working with hierarchical group aliases
 
 Route helpers work seamlessly with the group alias system:

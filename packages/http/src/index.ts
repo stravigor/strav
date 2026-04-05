@@ -6,4 +6,4 @@ export * from './auth/index.ts'
 export * from './providers/index.ts'
 
 // Route helpers for named route invocation
-export { route, routeUrl } from './http/route_helper.ts'
+export { route, routeUrl, routeFullUrl } from './http/route_helper.ts'

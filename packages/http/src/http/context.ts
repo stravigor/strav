@@ -67,6 +67,22 @@ export default class Context {
     return this._subdomain
   }
 
+  /**
+   * Get the full origin (protocol + host) of the current request.
+   * Uses the X-Forwarded-Proto header if present (common behind proxies),
+   * otherwise determines from the request URL.
+   */
+  getOrigin(): string {
+    // Check for forwarded protocol (when behind proxy/load balancer)
+    const forwardedProto = this.headers.get('x-forwarded-proto')
+    const protocol = forwardedProto ? `${forwardedProto}:` : this.url.protocol
+
+    // Get host from header (includes port if non-standard)
+    const host = this.headers.get('host') || this.url.host
+
+    return `${protocol}//${host}`
+  }
+
   /** Shorthand for reading a single request header. */
   header(name: string): string | null {
     return this.headers.get(name)

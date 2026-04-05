@@ -1,5 +1,7 @@
 import { router } from './index.ts'
 import type { RouteDefinition } from './router.ts'
+import { app } from '@strav/kernel/core/application'
+import Configuration from '@strav/kernel/config/configuration'
 
 export interface RouteOptions extends Omit<RequestInit, 'body'> {
   params?: Record<string, any>
@@ -131,4 +133,62 @@ export async function route(
  */
 export function routeUrl(name: string, params?: Record<string, any>): string {
   return router.generateUrl(name, params)
+}
+
+/**
+ * Generate a full URL (with protocol and domain) for a named route.
+ *
+ * Uses the APP_URL from configuration if set, otherwise constructs from
+ * the current request context (requires passing the context).
+ *
+ * @example
+ * // With APP_URL configured
+ * const resetUrl = routeFullUrl('auth.password.reset', { token: 'abc123' })
+ * // Returns 'https://example.com/auth/password-reset?token=abc123'
+ *
+ * // With request context
+ * const profileUrl = routeFullUrl('users.profile', { id: 456 }, ctx)
+ * // Returns 'https://example.com/users/456'
+ *
+ * // Override the base URL
+ * const apiUrl = routeFullUrl('api.users', {}, null, 'https://api.example.com')
+ * // Returns 'https://api.example.com/api/users'
+ */
+export function routeFullUrl(
+  name: string,
+  params?: Record<string, any>,
+  context?: { getOrigin(): string } | null,
+  baseUrl?: string
+): string {
+  const path = routeUrl(name, params)
+
+  // Use provided base URL if given
+  if (baseUrl) {
+    return baseUrl.replace(/\/$/, '') + path
+  }
+
+  // Try to get app_url from config
+  const config = app.resolve(Configuration)
+  const appUrl = config.get('http.app_url') as string | undefined
+
+  if (appUrl) {
+    return appUrl.replace(/\/$/, '') + path
+  }
+
+  // Fall back to context origin
+  if (context) {
+    return context.getOrigin() + path
+  }
+
+  // If no context and no config, construct from http config
+  const protocol = config.get('http.secure', false) ? 'https' : 'http'
+  const domain = config.get('http.domain', 'localhost') as string
+  const port = config.get('http.port', 3000) as number
+
+  // Only include port if non-standard
+  const includePort = (protocol === 'http' && port !== 80) ||
+                      (protocol === 'https' && port !== 443)
+  const host = includePort ? `${domain}:${port}` : domain
+
+  return `${protocol}://${host}${path}`
 }
