@@ -38,6 +38,29 @@ const result = await brain.generate('List 3 colors', {
 const vectors = await brain.embed('Hello world')
 ```
 
+## Tools
+
+Define tools that AI agents can use:
+
+```ts
+import { defineTool } from '@strav/brain'
+import { z } from 'zod'
+
+const searchTool = defineTool({
+  name: 'search',
+  description: 'Search the database',
+  parameters: z.object({ query: z.string() }),
+  execute: async ({ query }, context) => {
+    const userId = context?.userId
+    return await db.search(query, { userId })
+  },
+})
+```
+
+The `execute` function receives two parameters:
+- `args` - The parsed and validated tool arguments
+- `context` - Optional context object passed from the agent runner
+
 ## Agents
 
 ```ts
@@ -50,7 +73,10 @@ class ResearchAgent extends Agent {
   tools = [searchTool, summarizeTool]
 }
 
-const result = await brain.agent(ResearchAgent).input('Find info on Bun').run()
+// Run agent with context
+const runner = brain.agent(ResearchAgent)
+runner.context({ userId: '123' }) // Pass context to tools
+const result = await runner.input('Find info on Bun').run()
 ```
 
 ## Threads

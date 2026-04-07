@@ -12,22 +12,23 @@ import type { ToolDefinition, JsonSchema } from './types.ts'
  *   name: 'search',
  *   description: 'Search the database',
  *   parameters: z.object({ query: z.string() }),
- *   execute: async ({ query }) => {
- *     return await db.search(query)
+ *   execute: async ({ query }, context) => {
+ *     const userId = context?.userId
+ *     return await db.search(query, { userId })
  *   },
  * })
  */
-export function defineTool(config: {
+export function defineTool<TArgs = any, TContext = Record<string, unknown>>(config: {
   name: string
   description: string
   parameters: any
-  execute: (args: any) => unknown | Promise<unknown>
+  execute: (args: TArgs, context?: TContext) => unknown | Promise<unknown>
 }): ToolDefinition {
   return {
     name: config.name,
     description: config.description,
     parameters: zodToJsonSchema(config.parameters) as JsonSchema,
-    execute: config.execute,
+    execute: config.execute as (args: Record<string, unknown>, context?: Record<string, unknown>) => unknown | Promise<unknown>,
   }
 }
 

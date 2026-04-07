@@ -27,7 +27,8 @@ import type {
 /** Execute a single tool call, returning the result and the tool message. */
 async function executeTool(
   tools: ToolDefinition[] | undefined,
-  toolCall: ToolCall
+  toolCall: ToolCall,
+  context?: Record<string, unknown>
 ): Promise<{ result: unknown; message: Message }> {
   const toolDef = tools?.find(t => t.name === toolCall.name)
   let result: unknown
@@ -36,7 +37,7 @@ async function executeTool(
     result = `Error: Tool "${toolCall.name}" not found`
   } else {
     try {
-      result = await toolDef.execute(toolCall.arguments)
+      result = await toolDef.execute(toolCall.arguments, context)
     } catch (err) {
       result = `Error: ${err instanceof Error ? err.message : String(err)}`
     }
@@ -556,7 +557,7 @@ export class AgentRunner<T extends Agent = Agent> {
       await agent.onToolCall?.(toolCall)
 
       const start = performance.now()
-      const { result, message } = await executeTool(agent.tools, toolCall)
+      const { result, message } = await executeTool(agent.tools, toolCall, this._context)
       const duration = performance.now() - start
 
       const record: ToolCallRecord = {

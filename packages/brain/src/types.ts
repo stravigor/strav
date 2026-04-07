@@ -49,7 +49,7 @@ export interface ToolDefinition {
   name: string
   description: string
   parameters: JsonSchema
-  execute: (args: Record<string, unknown>) => unknown | Promise<unknown>
+  execute: (args: Record<string, unknown>, context?: Record<string, unknown>) => unknown | Promise<unknown>
 }
 
 // ── Completion Request / Response ────────────────────────────────────────────
