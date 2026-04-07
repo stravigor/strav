@@ -141,17 +141,17 @@ bun strav generate:model User --scope=tenants
 ```typescript
 // app.ts - Application bootstrap
 import { Application } from '@strav/kernel'
+import { ConfigProvider, EncryptionProvider } from '@strav/kernel'
 import { HttpProvider } from '@strav/http'
 import { DatabaseProvider } from '@strav/database'
 
 const app = new Application()
-app.register([
-  HttpProvider,
-  DatabaseProvider,
-  // ... other providers
-])
+app.use(new ConfigProvider())
+   .use(new DatabaseProvider())
+   .use(new EncryptionProvider())
+   .use(new HttpProvider())
 
-await app.boot()
+await app.start()
 ```
 
 ## Package Architecture
