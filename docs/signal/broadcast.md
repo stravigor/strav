@@ -7,8 +7,8 @@ Channel-based real-time broadcasting over WebSocket. One connection per client, 
 ### Using a service provider (recommended)
 
 ```typescript
-import { BroadcastProvider } from '@strav/core/providers'
-import { session } from '@strav/core/session'
+import { BroadcastProvider } from '@strav/signal'
+import { session } from '@strav/http'
 
 app.use(new BroadcastProvider({
   middleware: [session()],
@@ -22,7 +22,7 @@ The `BroadcastProvider` calls `BroadcastManager.boot()` with the router and shut
 ### Manual setup
 
 ```typescript
-import { broadcast } from '@strav/core/broadcast'
+import { broadcast } from '@strav/signal'
 
 broadcast.boot(router, {
   middleware: [session()],   // optional — run middleware on each WS connection
@@ -36,7 +36,7 @@ broadcast.boot(router, {
 Define channels to control which topics clients can subscribe to. Channel patterns use the same `:param` syntax as routes.
 
 ```typescript
-import { broadcast } from '@strav/core/broadcast'
+import { broadcast } from '@strav/signal'
 ```
 
 ### Public channel
@@ -88,7 +88,7 @@ Each handler receives:
 Send events to channel subscribers from anywhere — controllers, services, event listeners:
 
 ```typescript
-import { broadcast } from '@strav/core/broadcast'
+import { broadcast } from '@strav/signal'
 
 // Broadcast to all subscribers
 broadcast.to('announcements').send('news', { title: 'v2 released!' })
@@ -107,7 +107,7 @@ Broadcasting to a channel with no subscribers is a no-op.
 The browser client manages a single WebSocket connection with automatic reconnection and multiplexed channel subscriptions.
 
 ```typescript
-import { Broadcast } from '@strav/core/broadcast/client'
+import { Broadcast } from '@strav/signal/broadcast'
 ```
 
 ### Connect
@@ -233,8 +233,8 @@ broadcast.subscriberCount('chat/1')     // subscribers on a specific channel
 Bridge application events to broadcast channels:
 
 ```typescript
-import Emitter from '@strav/core/events/emitter'
-import { broadcast } from '@strav/core/broadcast'
+import { Emitter } from '@strav/kernel'
+import { broadcast } from '@strav/signal'
 
 Emitter.on<{ task: Task }>('task.created', ({ task }) => {
   broadcast.to(`projects/${task.projectId}/tasks`).send('created', task)
@@ -245,7 +245,7 @@ Emitter.on<{ task: Task }>('task.created', ({ task }) => {
 
 ```typescript
 // index.ts
-import { broadcast } from '@strav/core/broadcast'
+import { broadcast } from '@strav/signal'
 
 broadcast.boot(router, { middleware: [session()] })
 
@@ -266,7 +266,7 @@ broadcast.channel('chat/:id', {
 
 ```typescript
 // client
-import { Broadcast } from '@strav/core/broadcast/client'
+import { Broadcast } from '@strav/signal/broadcast'
 
 const bc = new Broadcast()
 const chat = bc.subscribe('chat/1')
