@@ -7,9 +7,10 @@ export interface CompilationResult {
 }
 
 interface StackEntry {
-  type: 'if' | 'each' | 'section'
+  type: 'if' | 'each' | 'section' | 'push' | 'prepend'
   line: number
   blockName?: string
+  stackName?: string
 }
 
 function escapeJs(str: string): string {
@@ -94,6 +95,7 @@ export function compile(tokens: Token[]): CompilationResult {
 
   lines.push('let __out = "";')
   lines.push('const __blocks = {};')
+  lines.push('const __stacks = {};')
 
   for (const token of tokens) {
     switch (token.type) {
@@ -147,7 +149,7 @@ export function compile(tokens: Token[]): CompilationResult {
     throw new TemplateError(`Unclosed @${unclosed.type} block (opened at line ${unclosed.line})`)
   }
 
-  lines.push('return { output: __out, blocks: __blocks };')
+  lines.push('return { output: __out, blocks: __blocks, stacks: __stacks };')
 
   return { code: lines.join('\n'), layout }
 }
@@ -274,6 +276,40 @@ function compileDirective(
       )
       break
 
+    case 'push': {
+      if (!token.args) throw new TemplateError(`@push requires a name at line ${token.line}`)
+      const name = token.args.replace(/^['"]|['"]$/g, '').trim()
+      const nameStr = JSON.stringify(name)
+      // Initialize stack array if it doesn't exist, then capture content and push
+      lines.push(`if (!__stacks[${nameStr}]) __stacks[${nameStr}] = [];`)
+      lines.push(`__stacks[${nameStr}].push((function() { let __out = "";`)
+      stack.push({ type: 'push', line: token.line, stackName: name })
+      break
+    }
+
+    case 'prepend': {
+      if (!token.args) throw new TemplateError(`@prepend requires a name at line ${token.line}`)
+      const name = token.args.replace(/^['"]|['"]$/g, '').trim()
+      const nameStr = JSON.stringify(name)
+      // Initialize stack array if it doesn't exist, then capture content and unshift
+      lines.push(`if (!__stacks[${nameStr}]) __stacks[${nameStr}] = [];`)
+      lines.push(`__stacks[${nameStr}].unshift((function() { let __out = "";`)
+      stack.push({ type: 'prepend', line: token.line, stackName: name })
+      break
+    }
+
+    case 'stack': {
+      if (!token.args) throw new TemplateError(`@stack requires a name at line ${token.line}`)
+      const name = token.args.replace(/^['"]|['"]$/g, '').trim()
+      const nameStr = JSON.stringify(name)
+      // Output joined stack content - merge local and passed stacks
+      lines.push(`{`)
+      lines.push(`  const __mergedStack = [...((__data.__stacks && __data.__stacks[${nameStr}]) || []), ...(__stacks[${nameStr}] || [])];`)
+      lines.push(`  __out += __mergedStack.join('');`)
+      lines.push(`}`)
+      break
+    }
+
     case 'end': {
       if (!stack.length) {
         throw new TemplateError(`Unexpected @end at line ${token.line} — no open block`)
@@ -281,6 +317,8 @@ function compileDirective(
       const top = stack.pop()!
       if (top.type === 'section') {
         lines.push(`  return __out; })();`)
+      } else if (top.type === 'push' || top.type === 'prepend') {
+        lines.push(`  return __out; })());`)
       } else if (top.type === 'each') {
         lines.push(`  }`) // close for loop
         lines.push(`}`) // close block scope

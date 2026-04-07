@@ -30,6 +30,9 @@ const DIRECTIVES = new Set([
   'csrf',
   'class',
   'style',
+  'push',
+  'prepend',
+  'stack',
 ])
 
 export function tokenize(source: string): Token[] {

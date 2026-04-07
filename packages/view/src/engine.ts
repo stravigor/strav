@@ -48,7 +48,8 @@ export default class ViewEngine {
   private async renderWithDepth(
     name: string,
     data: Record<string, unknown>,
-    depth: number
+    depth: number,
+    parentStacks: Record<string, string[]> = {}
   ): Promise<string> {
     if (depth > MAX_INCLUDE_DEPTH) {
       throw new TemplateError(
@@ -58,19 +59,80 @@ export default class ViewEngine {
 
     const entry = await this.resolve(name)
 
-    const includeFn: IncludeFn = (includeName, includeData) => {
-      return this.renderWithDepth(includeName, { ...data, ...includeData }, depth + 1)
+    // Create an include function that merges stacks from includes
+    const includeFn: IncludeFn = async (includeName, includeData) => {
+      const includeResult = await this.renderWithDepthInternal(
+        includeName,
+        { ...data, ...includeData },
+        depth + 1,
+        {}
+      )
+      // Merge include's stacks into parent stacks
+      this.mergeStacks(parentStacks, includeResult.stacks)
+      return includeResult.output
     }
 
-    const result = await entry.fn(data, includeFn)
+    // Pass parent stacks to the template
+    const dataWithStacks = { ...data, __stacks: { ...parentStacks } }
+    const result = await entry.fn(dataWithStacks, includeFn)
 
-    // Layout inheritance: render child first, then render layout with blocks merged
+    // Merge current template's stacks with parent stacks
+    this.mergeStacks(parentStacks, result.stacks)
+
+    // Layout inheritance: render child first, then render layout with blocks and stacks merged
     if (entry.layout) {
-      const layoutData = { ...data, ...result.blocks }
-      return this.renderWithDepth(entry.layout, layoutData, depth + 1)
+      const layoutData = { ...data, ...result.blocks, __stacks: parentStacks }
+      return this.renderWithDepth(entry.layout, layoutData, depth + 1, parentStacks)
     }
 
     return result.output
+  }
+
+  private async renderWithDepthInternal(
+    name: string,
+    data: Record<string, unknown>,
+    depth: number,
+    parentStacks: Record<string, string[]> = {}
+  ): Promise<{ output: string; stacks: Record<string, string[]> }> {
+    if (depth > MAX_INCLUDE_DEPTH) {
+      throw new TemplateError(
+        `Maximum include depth (${MAX_INCLUDE_DEPTH}) exceeded — possible circular include`
+      )
+    }
+
+    const entry = await this.resolve(name)
+
+    const includeFn: IncludeFn = async (includeName, includeData) => {
+      const includeResult = await this.renderWithDepthInternal(
+        includeName,
+        { ...data, ...includeData },
+        depth + 1,
+        {}
+      )
+      this.mergeStacks(parentStacks, includeResult.stacks)
+      return includeResult.output
+    }
+
+    const dataWithStacks = { ...data, __stacks: { ...parentStacks } }
+    const result = await entry.fn(dataWithStacks, includeFn)
+    this.mergeStacks(parentStacks, result.stacks)
+
+    if (entry.layout) {
+      const layoutData = { ...data, ...result.blocks, __stacks: parentStacks }
+      const layoutOutput = await this.renderWithDepth(entry.layout, layoutData, depth + 1, parentStacks)
+      return { output: layoutOutput, stacks: parentStacks }
+    }
+
+    return { output: result.output, stacks: parentStacks }
+  }
+
+  private mergeStacks(target: Record<string, string[]>, source: Record<string, string[]>): void {
+    for (const [key, values] of Object.entries(source)) {
+      if (!target[key]) {
+        target[key] = []
+      }
+      target[key].push(...values)
+    }
   }
 
   private async resolve(name: string): Promise<CacheEntry> {

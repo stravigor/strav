@@ -146,6 +146,79 @@ Renders: `<input type="hidden" name="_token" value="a1b2c3...">`. The token is a
 
 Pair with the `csrf()` middleware on the route group to validate incoming tokens on POST/PUT/PATCH/DELETE (see [auth docs](../../http/docs/auth.md#csrf--csrf-protection)).
 
+### Content stacks
+
+Stack-based content sections for collecting and outputting content from multiple locations, useful for assets like scripts and styles.
+
+**@push** — Add content to the end of a stack:
+
+```html
+@push('scripts')
+  <script src="app.js"></script>
+@end
+
+@push('scripts')
+  <script>console.log('ready')</script>
+@end
+```
+
+**@prepend** — Add content to the beginning of a stack:
+
+```html
+@prepend('scripts')
+  <script>window.config = {}</script>
+@end
+```
+
+**@stack** — Output all content from a stack:
+
+```html
+<html>
+<head>
+  @stack('styles')
+</head>
+<body>
+  @stack('scripts')
+</body>
+</html>
+```
+
+Common pattern for layouts:
+
+```html
+{{-- views/layouts/app.strav --}}
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ title }}</title>
+  @stack('styles')
+</head>
+<body>
+  @show('content')
+  @stack('scripts')
+</body>
+</html>
+```
+
+```html
+{{-- views/pages/dashboard.strav --}}
+@layout('layouts/app')
+
+@push('styles')
+  <link rel="stylesheet" href="dashboard.css">
+@end
+
+@prepend('scripts')
+  <script>window.dashboard = true</script>
+@end
+
+@section('content')
+  <h1>Dashboard</h1>
+@end
+```
+
+Stacks accumulate content across template includes and layout inheritance. `@prepend` content appears before `@push` content in the output order.
+
 ### Includes
 
 Render a partial template with its own data:

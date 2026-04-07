@@ -1,6 +1,7 @@
 export interface RenderResult {
   output: string
   blocks: Record<string, string>
+  stacks: Record<string, string[]>
 }
 
 export type RenderFunction = (
