@@ -1,6 +1,6 @@
 {
   "name": "@strav/safir",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "type": "module",
   "description": "Lightweight Vue 3 UI component library for Stravigor",
   "license": "MIT",
