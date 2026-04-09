@@ -1,6 +1,6 @@
 {
   "name": "@strav/kernel",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "type": "module",
   "description": "Foundation of the Strav framework \u2014 application lifecycle, IoC container, configuration, events, and core utilities",
   "license": "MIT",
