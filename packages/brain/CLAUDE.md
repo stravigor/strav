@@ -1,6 +1,6 @@
 # @strav/brain
 
-Multi-provider AI module with agents, tool use, structured output, multi-turn threads, and workflow orchestration. Supports Anthropic, OpenAI, and DeepSeek. Zero SDK dependencies — all provider communication uses raw fetch().
+Multi-provider AI module with agents, tool use, structured output, multi-turn threads, and workflow orchestration. Supports Anthropic, OpenAI, Google Gemini, and DeepSeek. Zero SDK dependencies — all provider communication uses raw fetch().
 
 ## Dependencies
 - @strav/kernel (peer)
@@ -16,7 +16,7 @@ Multi-provider AI module with agents, tool use, structured output, multi-turn th
 - src/agent.ts — AI agent abstraction
 - src/tool.ts — tool definitions for AI tool use
 - src/workflow.ts — AI workflow orchestration (uses @strav/workflow)
-- src/providers/ — provider implementations (Anthropic, OpenAI, DeepSeek)
+- src/providers/ — provider implementations (Anthropic, OpenAI, Google, DeepSeek)
 - src/memory/ — conversation memory management (token counting, compaction, semantic facts, persistence)
 - src/utils/ — shared utilities
 - src/types.ts — type definitions

@@ -14,6 +14,7 @@ Requires `@strav/core` as a peer dependency.
 
 - **Anthropic** (Claude)
 - **OpenAI** (GPT, also works with DeepSeek via custom `baseUrl`)
+- **Google** (Gemini)
 
 ## Usage
 
@@ -73,6 +74,14 @@ class ResearchAgent extends Agent {
   tools = [searchTool, summarizeTool]
 }
 
+// Google Gemini agent
+class GeminiResearchAgent extends Agent {
+  provider = 'google'
+  model = 'gemini-2.0-flash'
+  instructions = 'You are a research assistant powered by Gemini.'
+  tools = [searchTool, summarizeTool]
+}
+
 // Run agent with context
 const runner = brain.agent(ResearchAgent)
 runner.context({ userId: '123' }) // Pass context to tools
@@ -88,6 +97,10 @@ const thread = brain.thread({ provider: 'anthropic', model: 'claude-sonnet-4-202
 await thread.send('Hello')
 await thread.send('Tell me more')
 const saved = thread.serialize() // persist and restore later
+
+// Google Gemini example
+const geminiThread = brain.thread({ provider: 'google', model: 'gemini-2.0-flash' })
+await geminiThread.send('Explain quantum computing')
 ```
 
 ## Workflows

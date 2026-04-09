@@ -1,6 +1,6 @@
 # AI
 
-Multi-provider AI with agents, tool use, structured output, multi-turn threads, and workflow orchestration. Supports Anthropic, OpenAI, and DeepSeek out of the box. Zero SDK dependencies — all provider communication uses raw `fetch()`.
+Multi-provider AI with agents, tool use, structured output, multi-turn threads, and workflow orchestration. Supports Anthropic, OpenAI, Google Gemini, and DeepSeek out of the box. Zero SDK dependencies — all provider communication uses raw `fetch()`.
 
 ## Quick start
 
@@ -63,6 +63,11 @@ export default {
       apiKey: env('OPENAI_API_KEY', ''),
       model: env('OPENAI_MODEL', 'gpt-4o'),
     },
+    google: {
+      driver: 'google',
+      apiKey: env('GOOGLE_AI_API_KEY', ''),
+      model: env('GOOGLE_MODEL', 'gemini-2.0-flash'),
+    },
     deepseek: {
       driver: 'openai',
       apiKey: env('DEEPSEEK_API_KEY', ''),
@@ -77,7 +82,7 @@ export default {
 }
 ```
 
-DeepSeek uses the OpenAI-compatible API — set `driver: 'openai'` with a custom `baseUrl`.
+DeepSeek uses the OpenAI-compatible API — set `driver: 'openai'` with a custom `baseUrl`. Google uses the native Gemini API — set `driver: 'google'`.
 
 ## brain helper
 
@@ -96,8 +101,8 @@ const answer = await brain.chat('Summarize this article: ...')
 
 // With options
 const answer = await brain.chat('Translate to French: Hello', {
-  provider: 'openai',
-  model: 'gpt-4o-mini',
+  provider: 'google',
+  model: 'gemini-2.0-flash',
   temperature: 0.3,
   system: 'You are a professional translator.',
 })
@@ -146,13 +151,16 @@ for await (const chunk of brain.stream('Write a poem about TypeScript')) {
 
 ### embed
 
-Generate embeddings (OpenAI provider):
+Generate embeddings (OpenAI and Google providers):
 
 ```typescript
 const vectors = await brain.embed('Hello world', { provider: 'openai' })
 // vectors: number[][] — one embedding per input
 
 const batch = await brain.embed(['Hello', 'World'], { provider: 'openai' })
+
+// Google Gemini embeddings
+const geminiVectors = await brain.embed('Hello world', { provider: 'google' })
 ```
 
 ## Agents
@@ -194,7 +202,7 @@ class SupportAgent extends Agent {
 
 | Property | Description | Default |
 |---|---|---|
-| `provider` | Provider name (`'anthropic'`, `'openai'`, etc.) | Config default |
+| `provider` | Provider name (`'anthropic'`, `'openai'`, `'google'`, etc.) | Config default |
 | `model` | Model identifier | Provider default |
 | `instructions` | System prompt. Supports `{{key}}` interpolation | `''` |
 | `tools` | Array of `ToolDefinition` objects | `undefined` |

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.12
+
+### Added
+
+- **GoogleProvider** — Support for Google's Gemini models
+  - Native Gemini API integration using `generativelanguage.googleapis.com`
+  - Support for completion, streaming, function calling, and embeddings
+  - Models: `gemini-2.0-flash`, `gemini-2.5-flash`, `gemini-3-pro-preview`
+  - Authentication via `x-goog-api-key` header
+  - Zero new dependencies — uses raw `fetch()` following existing patterns
+  - Comprehensive test suite with 29 tests covering all functionality
+
 ## 0.6.0
 
 ### Added
