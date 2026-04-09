@@ -1,6 +1,6 @@
 {
   "name": "@strav/search",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "type": "module",
   "description": "Full-text search for the Strav framework",
   "license": "MIT",
