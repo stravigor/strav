@@ -1,6 +1,6 @@
 {
   "name": "@strav/social",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "type": "module",
   "description": "OAuth social authentication for the Strav framework",
   "license": "MIT",
