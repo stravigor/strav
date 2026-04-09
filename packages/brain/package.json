@@ -1,6 +1,6 @@
 {
   "name": "@strav/brain",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "type": "module",
   "description": "AI module for the Strav framework",
   "license": "MIT",
