@@ -1,6 +1,6 @@
 {
   "name": "@strav/jina",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "type": "module",
   "description": "Headless authentication flows for the Strav framework",
   "license": "MIT",
