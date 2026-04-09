@@ -15,10 +15,10 @@
     "CHANGELOG.md"
   ],
   "peerDependencies": {
-    "@strav/kernel": "workspace:*",
-    "@strav/workflow": "workspace:*"
+    "@strav/kernel": "workspace:*"
   },
   "dependencies": {
+    "@strav/workflow": "workspace:*",
     "zod": "^3.25 || ^4.0"
   },
   "scripts": {
