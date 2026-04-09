@@ -28,21 +28,14 @@
   },
   "peerDependencies": {
     "vue": "^3.5.0",
-    "sass": "^1.80.0",
     "@strav/kernel": "workspace:*",
     "@strav/http": "workspace:*"
   },
-  "peerDependenciesMeta": {
-    "sass": {
-      "optional": true
-    }
-  },
   "dependencies": {
-    "@vue/compiler-sfc": "^3.5.28"
-  },
-  "devDependencies": {
+    "@vue/compiler-sfc": "^3.5.28",
     "sass": "^1.80.0"
   },
+  "devDependencies": {},
   "scripts": {
     "test": "bun test tests/",
     "typecheck": "tsc --noEmit"
