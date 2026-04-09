@@ -13,7 +13,7 @@ The `ExceptionHandler` catches thrown errors and converts them into HTTP respons
 In your bootstrap (`index.ts`):
 
 ```typescript
-import { ExceptionHandler } from '@strav/core/exceptions'
+import { ExceptionHandler } from '@strav/kernel'
 
 const handler = new ExceptionHandler(config.get('app.env') === 'local')
 router.useExceptionHandler(handler)
@@ -28,7 +28,7 @@ Pass `true` for dev mode — stack traces are included in error responses. In pr
 The quickest way to stop execution and return an HTTP error:
 
 ```typescript
-import { abort } from '@strav/core/exceptions'
+import { abort } from '@strav/kernel'
 
 // 404
 const project = await Project.find(id)
@@ -46,7 +46,7 @@ abort(422, { email: ['Required'], name: ['Too short'] })
 For more control, throw an error class directly:
 
 ```typescript
-import { NotFoundError, AuthorizationError, ValidationError } from '@strav/core/exceptions'
+import { NotFoundError, AuthorizationError, ValidationError } from '@strav/kernel'
 
 throw new NotFoundError('Project not found')
 throw new AuthorizationError('You do not own this resource')
@@ -73,7 +73,7 @@ All extend `HttpException`, which extends `StravError`.
 For non-standard status codes, use `HttpException` directly:
 
 ```typescript
-import { HttpException } from '@strav/core/exceptions'
+import { HttpException } from '@strav/kernel'
 
 throw new HttpException(402, 'Payment required')
 throw new HttpException(418, "I'm a teapot")
@@ -141,7 +141,7 @@ The handler renders: `{ "error": "User with ID 42 not found" }` with status 404.
 Thrown by AI providers, mail transports, and notification channels when external APIs return errors:
 
 ```typescript
-import { ExternalServiceError } from '@strav/core/exceptions'
+import { ExternalServiceError } from '@strav/kernel'
 
 throw new ExternalServiceError('Stripe', 402, 'Card declined')
 // Message: "Stripe error (402): Card declined"
@@ -153,7 +153,7 @@ throw new ExternalServiceError('Stripe', 402, 'Card declined')
 Override how specific error classes are rendered:
 
 ```typescript
-import { ExceptionHandler } from '@strav/core/exceptions'
+import { ExceptionHandler } from '@strav/kernel'
 
 class PaymentError extends StravError {
   constructor(public code: string, message: string) {
@@ -218,7 +218,7 @@ Error
 ## Catching Errors
 
 ```typescript
-import { StravError, HttpException, ConfigurationError } from '@strav/core/exceptions'
+import { StravError, HttpException, ConfigurationError } from '@strav/kernel'
 
 try {
   await riskyOperation()

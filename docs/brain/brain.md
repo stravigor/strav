@@ -47,7 +47,7 @@ app.resolve(BrainManager)
 Create `config/ai.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   default: env('AI_PROVIDER', 'anthropic'),

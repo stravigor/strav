@@ -45,7 +45,7 @@ app.resolve(McpManager)
 Edit `config/mcp.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers'
+import { env } from '@strav/kernel'
 
 export default {
   name: env('MCP_NAME', undefined),
@@ -65,7 +65,7 @@ Create the registration file referenced in your config (e.g. `mcp/server.ts`):
 ```typescript
 import { mcp } from '@strav/mcp'
 import { z } from 'zod'
-import Database from '@strav/core/database'
+import Database from '@strav/database'
 
 // Tool — an action the AI can invoke
 mcp.tool('get-user', {
@@ -221,7 +221,7 @@ For web-based AI clients. Enabled by default when using the provider. Mounts `PO
 
 ```typescript
 import { mountHttpTransport } from '@strav/mcp'
-import { router } from '@strav/core/http'
+import { router } from '@strav/http'
 
 const transport = mountHttpTransport(router)
 ```
@@ -281,7 +281,7 @@ MCP operations emit events through the `Emitter`:
 | `mcp:http-request` | `{ method, path }` | HTTP request received |
 
 ```typescript
-import Emitter from '@strav/core/events/emitter'
+import Emitter from '@strav/kernel'
 
 Emitter.on('mcp:tool-called', ({ name, params }) => {
   console.log(`Tool "${name}" called with`, params)
@@ -323,7 +323,7 @@ test('registers a tool', () => {
 // mcp/server.ts
 import { mcp } from '@strav/mcp'
 import { z } from 'zod'
-import Database from '@strav/core/database'
+import Database from '@strav/database'
 
 mcp.tool('list-users', {
   description: 'List all users with optional role filter',

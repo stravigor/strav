@@ -4,7 +4,7 @@ The jina module (`@strav/jina`) provides headless authentication flows — regis
 
 Jina is headless: it returns JSON responses from API endpoints. You bring your own frontend. Supports both session-based (cookie) and token-based (access token) authentication.
 
-Built on top of the [auth](./auth.md) and [session](./session.md) modules from `@strav/core`.
+Built on top of the [auth](./auth.md) and [session](./session.md) modules from `@strav/http`.
 
 ## Installation
 
@@ -30,7 +30,7 @@ Edit `actions/jina.ts` and fill in the functions that tell Jina how your User mo
 ```typescript
 // actions/jina.ts
 import { defineActions } from '@strav/jina'
-import { encrypt } from '@strav/core/encryption'
+import { encrypt } from '@strav/kernel'
 import User from '../models/user'
 
 export default defineActions<User>({
@@ -85,7 +85,7 @@ The `JinaProvider` depends on: `auth`, `session`, `encryption`, `mail`. It regis
 Edit `config/jina.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers'
+import { env } from '@strav/kernel'
 
 export default {
   features: [
@@ -530,7 +530,7 @@ Jina provides three middleware functions for protecting routes:
 Require the authenticated user to have a verified email. Returns `403` if not verified.
 
 ```typescript
-import { auth } from '@strav/core/auth'
+import { auth } from '@strav/http'
 import { verified } from '@strav/jina'
 
 router.group({ middleware: [auth(), verified()] }, r => {
@@ -543,7 +543,7 @@ router.group({ middleware: [auth(), verified()] }, r => {
 Require the user to have confirmed their password recently. Returns `423` (Locked) if the confirmation has expired or never happened.
 
 ```typescript
-import { auth } from '@strav/core/auth'
+import { auth } from '@strav/http'
 import { confirmed } from '@strav/jina'
 
 router.group({ middleware: [auth(), confirmed()] }, r => {
@@ -559,7 +559,7 @@ The timeout is configured via `confirmation.timeout` in the Jina config (default
 Require the user to have completed a 2FA challenge. Returns `403` if the user has 2FA enabled but a pending challenge exists in the session. If the user doesn't have 2FA enabled, the middleware passes through.
 
 ```typescript
-import { auth } from '@strav/core/auth'
+import { auth } from '@strav/http'
 import { twoFactorChallenge } from '@strav/jina'
 
 router.post('/transfer', auth(), twoFactorChallenge(), transferHandler)
@@ -570,7 +570,7 @@ router.post('/transfer', auth(), twoFactorChallenge(), transferHandler)
 Every auth flow emits an event via the core `Emitter`. Listen to events for side effects like logging, analytics, or notifications.
 
 ```typescript
-import Emitter from '@strav/core/events'
+import Emitter from '@strav/kernel'
 import { JinaEvents } from '@strav/jina'
 
 Emitter.on(JinaEvents.REGISTERED, async ({ user, ctx }) => {
@@ -705,9 +705,9 @@ The client stores the token and sends it in the `Authorization: Bearer <token>` 
 ## Full example
 
 ```typescript
-import { router } from '@strav/core/http'
-import { session } from '@strav/core/session'
-import { auth, csrf } from '@strav/core/auth'
+import { router } from '@strav/http'
+import { session } from '@strav/http'
+import { auth, csrf } from '@strav/http'
 import { JinaProvider, verified, confirmed } from '@strav/jina'
 import actions from './actions/jina'
 

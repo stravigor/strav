@@ -7,3 +7,8 @@ export * from './providers/index.ts'
 
 // Route helpers for named route invocation
 export { route, routeUrl, routeFullUrl } from './http/route_helper.ts'
+
+// Middleware exports for cross-package functionality
+export { httpCache } from './middleware/http_cache.ts'
+export { i18n } from './middleware/i18n.ts'
+export { requestLogger } from './middleware/request_logger.ts'

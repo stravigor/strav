@@ -5,7 +5,7 @@ The QueryBuilder provides a fluent, type-safe interface for constructing and exe
 ## Quick Start
 
 ```typescript
-import { query } from '@strav/database/database'
+import { query, transaction } from '@strav/database'
 import User from '../app/models/user'
 
 // Basic query
@@ -15,7 +15,6 @@ const users = await query(User)
   .all()
 
 // With transaction
-import { transaction } from '@strav/database/database'
 
 await transaction(async (trx) => {
   const users = await query(User, trx)
@@ -639,7 +638,7 @@ query(User)
 ## Error Handling
 
 ```typescript
-import { ModelNotFoundError } from '@strav/database/orm'
+import { ModelNotFoundError } from '@strav/database'
 
 try {
   const user = await query(User)

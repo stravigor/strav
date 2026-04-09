@@ -7,7 +7,7 @@ The queue module provides persistent, retryable background job processing backed
 ### Using a service provider (recommended)
 
 ```typescript
-import { QueueProvider } from '@strav/core/providers'
+import { QueueProvider } from '@strav/queue'
 
 app.use(new QueueProvider())
 ```
@@ -23,7 +23,7 @@ Options:
 ### Manual setup
 
 ```typescript
-import { Queue } from '@strav/core/queue'
+import { Queue } from '@strav/queue'
 
 app.singleton(Queue)
 app.resolve(Queue)
@@ -36,7 +36,7 @@ This creates `_stravigor_jobs` and `_stravigor_failed_jobs` if they don't exist.
 
 ```typescript
 // config/queue.ts
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   default: 'default',                           // default queue name
@@ -87,7 +87,7 @@ If no handler is registered for a job, it moves directly to the failed jobs tabl
 The worker polls the queue, picks up jobs, and runs their handlers.
 
 ```typescript
-import { Worker } from '@strav/core/queue'
+import { Worker } from '@strav/queue'
 
 const worker = new Worker({ queue: 'emails', sleep: 500 })
 await worker.start() // blocks until worker.stop() is called
@@ -121,8 +121,8 @@ When a job fails and has remaining attempts, it's released back to the queue wit
 Use `Queue.listener()` to connect the event bus to the queue:
 
 ```typescript
-import { Emitter } from '@strav/core/events'
-import { Queue } from '@strav/core/queue'
+import { Emitter } from '@strav/kernel'
+import { Queue } from '@strav/queue'
 
 Emitter.on('user.registered', Queue.listener('send-welcome-email'))
 Emitter.on('order.placed', Queue.listener('generate-invoice', { queue: 'billing' }))
@@ -240,8 +240,8 @@ A partial index on `(queue, available_at) WHERE reserved_at IS NULL` ensures onl
 ## Full example
 
 ```typescript
-import { Emitter } from '@strav/core/events'
-import { Queue, Worker } from '@strav/core/queue'
+import { Emitter } from '@strav/kernel'
+import { Queue, Worker } from '@strav/queue'
 
 // Bootstrap
 app.singleton(Queue)
@@ -279,7 +279,7 @@ Use `Queue.flush()` and `Queue.reset()` in your test teardown:
 
 ```typescript
 import { afterEach } from 'bun:test'
-import { Queue } from '@strav/core/queue'
+import { Queue } from '@strav/queue'
 
 afterEach(async () => {
   await Queue.flush()  // clear all jobs from DB

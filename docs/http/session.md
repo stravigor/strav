@@ -7,7 +7,7 @@ The session module provides a unified server-side session backed by a PostgreSQL
 ### Using a service provider (recommended)
 
 ```typescript
-import { SessionProvider } from '@strav/core/providers'
+import { SessionProvider } from '@strav/http'
 
 app.use(new SessionProvider())
 ```
@@ -23,7 +23,7 @@ Options:
 ### Manual setup
 
 ```typescript
-import { SessionManager } from '@strav/core/session'
+import { SessionManager } from '@strav/http'
 
 app.singleton(SessionManager)
 app.resolve(SessionManager)
@@ -34,7 +34,7 @@ await SessionManager.ensureTable()
 
 ```typescript
 // config/session.ts
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   cookie: 'stravigor_session', // cookie name
@@ -56,8 +56,8 @@ The `session()` middleware runs on every request and handles the full lifecycle:
 5. After the handler: saves dirty data to DB and refreshes the cookie (sliding expiration).
 
 ```typescript
-import { router } from '@strav/core/http'
-import { session } from '@strav/core/session'
+import { router } from '@strav/http'
+import { session } from '@strav/http'
 
 // Apply globally
 router.use(session())
@@ -73,7 +73,7 @@ router.group({ middleware: [session()] }, (r) => {
 Store arbitrary key-value data in the session's JSONB column:
 
 ```typescript
-import type { Session } from '@strav/core/session'
+import type { Session } from '@strav/http'
 
 router.post('/cart/add', async (ctx) => {
   const s = ctx.get<Session>('session')
@@ -176,7 +176,7 @@ return Session.destroy(ctx, response)
 Expired sessions remain in the database until cleaned up:
 
 ```typescript
-import { SessionManager } from '@strav/core/session'
+import { SessionManager } from '@strav/http'
 
 const deleted = await SessionManager.gc()
 console.log(`Cleaned up ${deleted} expired sessions`)

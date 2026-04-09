@@ -721,7 +721,7 @@ The `Server` class is `@inject`-able and reads from `config/http.ts`:
 
 ```typescript
 // config/http.ts
-import { ApiRouting } from '@strav/generators'
+import { ApiRouting } from '@strav/cli'
 
 export default {
   host: env('HTTP_HOST', '0.0.0.0'),
@@ -739,7 +739,7 @@ export default {
 ### Using a service provider (recommended)
 
 ```typescript
-import { HttpProvider } from '@strav/providers'
+import { HttpProvider } from '@strav/http'
 
 app.use(new HttpProvider())
 ```

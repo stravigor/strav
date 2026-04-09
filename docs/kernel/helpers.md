@@ -7,7 +7,7 @@ Utility functions used throughout the framework and available to application cod
 Read environment variables with type safety. Bun automatically loads `.env` files, so all variables are available without any setup.
 
 ```typescript
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 ```
 
 ### String values
@@ -40,7 +40,7 @@ All typed accessors throw if the variable is not set and no default is provided.
 Case conversion functions for transforming between naming conventions.
 
 ```typescript
-import { toSnakeCase, toCamelCase, toPascalCase } from '@strav/core/helpers/strings'
+import { toSnakeCase, toCamelCase, toPascalCase } from '@strav/kernel'
 ```
 
 ### toSnakeCase
@@ -79,7 +79,7 @@ toPascalCase('user')        // 'User'
 Naively pluralize an English word. Handles common suffixes:
 
 ```typescript
-import { pluralize } from '@strav/core/helpers/strings'
+import { pluralize } from '@strav/kernel'
 
 pluralize('user')      // 'users'
 pluralize('category')  // 'categories'
@@ -94,7 +94,7 @@ These helpers are used internally by the ORM (table names, column mapping) and t
 ## Crypto
 
 ```typescript
-import { randomHex } from '@strav/core/helpers/crypto'
+import { randomHex } from '@strav/kernel'
 ```
 
 ### randomHex
@@ -111,7 +111,7 @@ Used internally for CSRF tokens and session IDs.
 ## Identity
 
 ```typescript
-import { extractUserId } from '@strav/core/helpers/identity'
+import { extractUserId } from '@strav/database'
 ```
 
 ### extractUserId

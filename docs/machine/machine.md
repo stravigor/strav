@@ -195,7 +195,7 @@ interface TransitionMeta {
 Map transitions to event names. Events are emitted via `Emitter` after the transition completes (after effects run).
 
 ```typescript
-import Emitter from '@strav/core/events/emitter'
+import Emitter from '@strav/kernel'
 
 const orderMachine = defineMachine({
   // ...states, transitions...
@@ -218,7 +218,7 @@ Events are fire-and-forget — errors in listeners don't affect the transition.
 The `stateful()` mixin adds state machine methods directly to a `BaseModel` subclass, with automatic persistence via `.save()`.
 
 ```typescript
-import { BaseModel } from '@strav/core/orm'
+import { BaseModel } from '@strav/database'
 import { stateful } from '@strav/machine'
 
 class Order extends stateful(BaseModel, orderMachine) {
@@ -260,7 +260,7 @@ const active = await Order.inState(['processing', 'shipped']).get()
 Use `compose()` to combine `stateful()` with other mixins:
 
 ```typescript
-import { compose } from '@strav/core/helpers'
+import { compose } from '@strav/kernel'
 import { searchable } from '@strav/search'
 
 class Order extends compose(

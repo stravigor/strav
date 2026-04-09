@@ -9,7 +9,7 @@ The `Database` class wraps `Bun.sql` and reads connection settings from `config/
 Using a service provider (recommended):
 
 ```typescript
-import { DatabaseProvider } from '@strav/core/providers'
+import { DatabaseProvider } from '@strav/database'
 
 app.use(new DatabaseProvider())
 ```
@@ -19,7 +19,7 @@ The `DatabaseProvider` registers `Database` as a singleton and closes the connec
 Or manually:
 
 ```typescript
-import Database from '@strav/core/database/database'
+import { Database } from '@strav/database'
 
 app.singleton(Database)
 const db = app.resolve(Database)
@@ -27,10 +27,10 @@ const db = app.resolve(Database)
 
 ### Running queries
 
-Import the `sql` tagged-template from `stravigor/database` and use it directly:
+Import the `sql` tagged-template from `@strav/database` and use it directly:
 
 ```typescript
-import { sql } from '@strav/core/database'
+import { sql } from '@strav/database'
 
 // Parameterized queries (safe by default)
 const rows = await sql`SELECT * FROM "user" WHERE "role" = ${'admin'}`
@@ -53,7 +53,7 @@ Never use raw `BEGIN`/`COMMIT` — Bun throws `ERR_POSTGRES_UNSAFE_TRANSACTION` 
 The `transaction()` helper wraps a callback in a database transaction. It commits on success and rolls back on error:
 
 ```typescript
-import { transaction } from '@strav/core/database'
+import { transaction } from '@strav/database'
 
 await transaction(async (trx) => {
   await trx`INSERT INTO "order" ("user_id") VALUES (${userId})`
@@ -68,7 +68,7 @@ The `trx` handle can be passed to ORM methods (`query()`, `create()`, `save()`, 
 You can also use `sql.begin()` directly:
 
 ```typescript
-import { sql } from '@strav/core/database'
+import { sql } from '@strav/database'
 
 await sql.begin(async (tx) => {
   await tx`INSERT INTO "order" ("user_id") VALUES (${userId})`
@@ -87,7 +87,7 @@ await db.close()
 The `DatabaseIntrospector` reads the live database schema and produces a `DatabaseRepresentation`:
 
 ```typescript
-import DatabaseIntrospector from '@strav/core/database/introspector'
+import { DatabaseIntrospector } from '@strav/database'
 
 const introspector = new DatabaseIntrospector(db)
 const actual = await introspector.introspect()
@@ -96,7 +96,7 @@ const actual = await introspector.introspect()
 // actual.enums   — Map of enum definitions
 ```
 
-The introspector automatically excludes the `_stravigor_migrations` tracking table.
+The introspector automatically excludes the `_strav_migrations` tracking table.
 
 ## Migration system
 
@@ -133,7 +133,7 @@ database/migrations/
 
 ### Tracking
 
-The `MigrationTracker` uses a `_stravigor_migrations` table to track which migrations have been applied. Migrations are grouped into **batches** — each `migrate` invocation creates a new batch.
+The `MigrationTracker` uses a `_strav_migrations` table to track which migrations have been applied. Migrations are grouped into **batches** — each `migrate` invocation creates a new batch.
 
 ### CLI commands
 
@@ -164,7 +164,7 @@ bun strav fresh
 Compares two `DatabaseRepresentation` objects and returns categorized changes:
 
 ```typescript
-import SchemaDiffer from '@strav/core/database/migration/differ'
+import { SchemaDiffer } from '@strav/database'
 
 const differ = new SchemaDiffer()
 const diff = differ.diff(desired, actual)
@@ -179,7 +179,7 @@ const diff = differ.diff(desired, actual)
 Converts a diff into SQL:
 
 ```typescript
-import SqlGenerator from '@strav/core/database/migration/sql_generator'
+import { SqlGenerator } from '@strav/database'
 
 const generator = new SqlGenerator()
 const statements = generator.generate(diff)
@@ -206,7 +206,7 @@ bun strav generate:seeder UserSeeder
 This creates files in `database/seeders/`:
 
 ```typescript
-import { Seeder } from '@strav/core/database'
+import { Seeder } from '@strav/database'
 import { UserFactory, PostFactory } from '../factories'
 
 export default class DatabaseSeeder extends Seeder {
@@ -220,7 +220,7 @@ export default class DatabaseSeeder extends Seeder {
 Sub-seeders focus on a single model or concern:
 
 ```typescript
-import { Seeder } from '@strav/core/database'
+import { Seeder } from '@strav/database'
 import { UserFactory } from '../factories'
 
 export default class UserSeeder extends Seeder {

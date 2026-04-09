@@ -8,7 +8,7 @@ Each file in `config/` exports a default object. The filename becomes the top-le
 
 ```typescript
 // config/database.ts
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   host: env('DB_HOST', '127.0.0.1'),
@@ -21,7 +21,7 @@ export default {
 
 ```typescript
 // config/http.ts
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   host: env('HTTP_HOST', '0.0.0.0'),
@@ -35,7 +35,7 @@ export default {
 ### Using a service provider (recommended)
 
 ```typescript
-import { ConfigProvider } from '@strav/core/providers'
+import { ConfigProvider } from '@strav/kernel'
 
 app.use(new ConfigProvider())
 ```
@@ -45,7 +45,7 @@ The `ConfigProvider` registers `Configuration` as a singleton and calls `load()`
 ### Manual setup
 
 ```typescript
-import Configuration from '@strav/core/config/configuration'
+import { Configuration } from '@strav/kernel'
 
 const config = new Configuration('./config')
 await config.load()

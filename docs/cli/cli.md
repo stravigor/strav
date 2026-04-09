@@ -285,7 +285,7 @@ For example, `@strav/search` provides `search:import` and `search:flush` command
 CLI commands that need a database connection use a shared bootstrap function:
 
 ```typescript
-import { bootstrap, shutdown } from '@strav/core/cli/bootstrap'
+import { bootstrap, shutdown } from '@strav/cli'
 
 export function register(program: Command): void {
   program.command('my:command').action(async () => {

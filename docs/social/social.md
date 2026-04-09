@@ -49,7 +49,7 @@ Edit `config/social.ts` and uncomment the providers you need:
 
 ```typescript
 // config/social.ts
-import { env } from '@strav/core/helpers'
+import { env } from '@strav/kernel'
 
 export default {
   userKey: 'id',
@@ -96,8 +96,8 @@ Only configure the providers you need.
 The flow has two steps: **redirect** (send the user to the provider) and **callback** (receive the user back).
 
 ```typescript
-import { router } from '@strav/core/http'
-import { session } from '@strav/core/session'
+import { router } from '@strav/http'
+import { session } from '@strav/http'
 import { social } from '@strav/social'
 
 router.group({ middleware: [session()] }, r => {

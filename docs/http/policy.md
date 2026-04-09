@@ -5,7 +5,7 @@ The policy module provides authorization via policy classes and an `authorize()`
 ## Quick start
 
 ```typescript
-import { authorize } from '@strav/core/policy'
+import { authorize } from '@strav/http'
 
 // Define a policy
 const userPolicy = {

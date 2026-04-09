@@ -41,7 +41,7 @@ app.resolve(SearchManager)
 Edit `config/search.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers'
+import { env } from '@strav/kernel'
 
 export default {
   default: env('SEARCH_DRIVER', 'meilisearch'),
@@ -86,7 +86,7 @@ MEILISEARCH_KEY=your-master-key
 Add full-text search to any model with the `searchable()` mixin:
 
 ```typescript
-import BaseModel from '@strav/core/orm/base_model'
+import BaseModel from '@strav/database'
 import { searchable } from '@strav/search'
 
 class Article extends searchable(BaseModel) {
@@ -114,8 +114,8 @@ class Article extends searchable(BaseModel) {
 Works with `compose()` for multiple mixins:
 
 ```typescript
-import { compose } from '@strav/core/helpers'
-import { softDeletes } from '@strav/core/orm'
+import { compose } from '@strav/kernel'
+import { softDeletes } from '@strav/database'
 
 class Article extends compose(BaseModel, softDeletes, searchable) {
   // ...

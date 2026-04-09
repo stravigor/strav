@@ -49,7 +49,7 @@ app.resolve(StripeManager)
 Edit `config/stripe.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers'
+import { env } from '@strav/kernel'
 
 export default {
   secret: env('STRIPE_SECRET', ''),
@@ -86,7 +86,7 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 The `billable()` mixin adds billing methods directly to your user model. This is the recommended API for most applications.
 
 ```typescript
-import { BaseModel } from '@strav/core/orm'
+import { BaseModel } from '@strav/database'
 import { billable } from '@strav/stripe'
 
 class User extends billable(BaseModel) {
@@ -98,7 +98,7 @@ class User extends billable(BaseModel) {
 Works with `compose()` for combining multiple mixins:
 
 ```typescript
-import { compose } from '@strav/core/helpers'
+import { compose } from '@strav/kernel'
 import { billable } from '@strav/stripe'
 
 class User extends compose(BaseModel, softDeletes, billable) {
@@ -376,7 +376,7 @@ Register a route handler to receive Stripe webhook events. The handler verifies 
 ### Route setup
 
 ```typescript
-import { router } from '@strav/core/http'
+import { router } from '@strav/http'
 import { stripeWebhook } from '@strav/stripe/webhook'
 
 router.post('/stripe/webhook', stripeWebhook())

@@ -7,7 +7,7 @@ Cron-like periodic task execution — cleanup jobs, report generation, cache pru
 Define your tasks in `app/schedules.ts`:
 
 ```typescript
-import { Scheduler } from '@strav/core/scheduler'
+import { Scheduler } from '@strav/queue'
 
 Scheduler.task('cleanup:sessions', async () => {
   await db.sql`DELETE FROM "_stravigor_sessions" WHERE "expires_at" < NOW()`
@@ -27,7 +27,7 @@ No database tables, no DI container — `Scheduler` is a static registry like `E
 Register a task with a name and handler. Chain a frequency method to set its schedule:
 
 ```typescript
-import { Scheduler } from '@strav/core/scheduler'
+import { Scheduler } from '@strav/queue'
 
 Scheduler.task('task-name', async () => {
   // your logic
@@ -97,7 +97,7 @@ Supported syntax: `*`, exact (`5`), range (`1-5`), list (`1,3,5`), step (`*/10`)
 Run a task at random intervals within a range, simulating non-periodic, human-like behavior — useful for web scraping, polling external APIs, or any task where predictable timing is undesirable:
 
 ```typescript
-import { Scheduler, TimeUnit } from '@strav/core/scheduler'
+import { Scheduler, TimeUnit } from '@strav/queue'
 
 // Run every 5–30 minutes at random
 Scheduler.task('scrape:prices', async () => {
@@ -159,7 +159,7 @@ Errors are logged to stderr but never crash the scheduler process.
 The built-in parser is also available standalone:
 
 ```typescript
-import { parseCron, cronMatches, nextCronDate } from '@strav/core/scheduler'
+import { parseCron, cronMatches, nextCronDate } from '@strav/queue'
 
 const cron = parseCron('0 2 * * 1')           // Mondays at 2am
 cronMatches(cron, new Date())                  // true/false
@@ -172,9 +172,9 @@ Standard cron rule: when both day-of-month and day-of-week are restricted, eithe
 
 ```typescript
 // app/schedules.ts
-import { Scheduler, TimeUnit } from '@strav/core/scheduler'
-import { cache } from '@strav/core/cache'
-import { Queue } from '@strav/core/queue'
+import { Scheduler, TimeUnit } from '@strav/queue'
+import { cache } from '@strav/kernel'
+import { Queue } from '@strav/queue'
 
 // Cleanup expired sessions every hour
 Scheduler.task('cleanup:sessions', async () => {
@@ -217,7 +217,7 @@ Use `Scheduler.reset()` in your test teardown:
 
 ```typescript
 import { afterEach } from 'bun:test'
-import { Scheduler } from '@strav/core/scheduler'
+import { Scheduler } from '@strav/queue'
 
 afterEach(() => {
   Scheduler.reset()
@@ -227,7 +227,7 @@ afterEach(() => {
 Test task scheduling without running the scheduler loop:
 
 ```typescript
-import { Scheduler } from '@strav/core/scheduler'
+import { Scheduler } from '@strav/queue'
 
 Scheduler.task('test', handler).dailyAt('02:00')
 

@@ -155,7 +155,7 @@ ULIDs are:
 You can also generate ULIDs manually:
 
 ```typescript
-import { ulid, isUlid } from '@strav/kernel/helpers'
+import { ulid, isUlid } from '@strav/kernel'
 
 const id = ulid()  // e.g., "01HQVB2YKQF5JZRJ8E9QKQHQWR"
 console.log(isUlid(id))  // true
@@ -166,7 +166,7 @@ console.log(isUlid(id))  // true
 The `SchemaRegistry` discovers, validates, and resolves schemas:
 
 ```typescript
-import SchemaRegistry from '@strav/database'
+import { SchemaRegistry } from '@strav/database'
 
 const registry = new SchemaRegistry()
 await registry.discover('database/schemas')  // finds all schema files

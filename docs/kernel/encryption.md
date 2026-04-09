@@ -15,7 +15,7 @@ This writes `APP_KEY` to your `.env` file. The key is required for `encrypt`, `d
 Register the `EncryptionManager` using a service provider (recommended):
 
 ```typescript
-import { EncryptionProvider } from '@strav/core/providers'
+import { EncryptionProvider } from '@strav/kernel'
 
 app.use(new EncryptionProvider())
 ```
@@ -25,7 +25,7 @@ The `EncryptionProvider` depends on the `config` provider.
 Or manually:
 
 ```typescript
-import EncryptionManager from '@strav/core/encryption'
+import { EncryptionManager } from '@strav/kernel'
 
 app.singleton(EncryptionManager)
 app.resolve(EncryptionManager)
@@ -34,7 +34,7 @@ app.resolve(EncryptionManager)
 Create `config/encryption.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   key: env('APP_KEY', ''),
@@ -47,7 +47,7 @@ export default {
 The `encrypt` object is the primary API. All symmetric operations use AES-256-GCM with keys derived from your `APP_KEY`.
 
 ```typescript
-import { encrypt } from '@strav/core/encryption'
+import { encrypt } from '@strav/kernel'
 ```
 
 ### encrypt / decrypt
@@ -150,7 +150,7 @@ On `decrypt`, `unseal`, and `verifySignature`, the current key is tried first. I
 For runtime key swapping (e.g., in tests):
 
 ```typescript
-import { EncryptionManager } from '@strav/core/encryption'
+import { EncryptionManager } from '@strav/kernel'
 
 EncryptionManager.useKey('test-key-for-unit-tests')
 ```
@@ -158,7 +158,7 @@ EncryptionManager.useKey('test-key-for-unit-tests')
 ## Controller example
 
 ```typescript
-import { encrypt } from '@strav/core/encryption'
+import { encrypt } from '@strav/kernel'
 
 export default class ApiKeyController {
   async create(ctx: Context) {

@@ -46,7 +46,7 @@ await FlagManager.ensureTables()
 Edit `config/flag.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers'
+import { env } from '@strav/kernel'
 
 export default {
   default: env('FLAG_DRIVER', 'database'),
@@ -268,7 +268,7 @@ router.group({ middleware: [auth(), ensureFeature('beta-ui')] }, (r) => {
 The middleware uses `ctx.get('user')` as the scope by default. Pass a custom scope extractor for other entities:
 
 ```typescript
-import { compose } from '@strav/core/http'
+import { compose } from '@strav/http'
 
 r.get('/team/:id/analytics', compose(
   [ensureFeature('team-analytics', (ctx) => ctx.get('team'))],
@@ -287,7 +287,7 @@ Feature operations emit events through the `Emitter`:
 | `flag:deleted` | `{ feature, scope }` | Value forgotten or purged |
 
 ```typescript
-import Emitter from '@strav/core/events/emitter'
+import Emitter from '@strav/kernel'
 
 Emitter.on('flag:resolved', ({ feature, scope, value }) => {
   console.log(`Feature "${feature}" resolved to ${value} for ${scope}`)

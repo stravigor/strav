@@ -5,7 +5,7 @@ File storage with local disk, S3-compatible, and Ostra backends. Two classes: `S
 ## Quick start
 
 ```typescript
-import { Storage, Upload } from '@strav/core/storage'
+import { Storage, Upload } from '@strav/kernel'
 
 // Store a file
 const path = await Storage.put('avatars', file)          // 'avatars/a7f3c9d2.jpg'
@@ -39,7 +39,7 @@ const { path, url } = await Upload.file(avatar)
 Both `maxSize()` and `types()` are optional. If validation fails, a typed error is thrown:
 
 ```typescript
-import { FileTooLargeError, InvalidFileTypeError } from '@strav/core/storage'
+import { FileTooLargeError, InvalidFileTypeError } from '@strav/kernel'
 
 try {
   await Upload.file(file).maxSize('2mb').store('docs')
@@ -69,7 +69,7 @@ Without a name, a random hex filename is generated with the original extension p
 Create `config/storage.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   default: env('STORAGE_DRIVER', 'local'),
@@ -156,7 +156,7 @@ OSTRA_BUCKET=my-bucket
 Beyond the `Storage` facade, you can use `OstraClient` directly for the full Ostra API — buckets, versions, multipart uploads, signed URLs, and tokens:
 
 ```typescript
-import { OstraClient } from '@strav/core/storage'
+import { OstraClient } from '@strav/kernel'
 
 const ostra = new OstraClient({ url: 'http://localhost:9000', token: 'otk_...' })
 
@@ -203,7 +203,7 @@ await ostra.deleteToken('tok_abc')
 You can also access the `OstraClient` from the driver when using the `Storage` facade:
 
 ```typescript
-import { StorageManager, OstraDriver } from '@strav/core/storage'
+import { StorageManager, OstraDriver } from '@strav/kernel'
 
 const driver = StorageManager.driver as OstraDriver
 const { url } = await driver.client.bucket('my-bucket').signedUrl('private/doc.pdf', 'GET', 3600)
@@ -212,7 +212,7 @@ const { url } = await driver.client.bucket('my-bucket').signedUrl('private/doc.p
 Errors from the ostra server throw `OstraError` with `code`, `message`, and `statusCode`:
 
 ```typescript
-import { OstraError } from '@strav/core/storage'
+import { OstraError } from '@strav/kernel'
 
 try {
   await bucket.get('missing.txt')
@@ -230,7 +230,7 @@ try {
 ### Using a service provider (recommended)
 
 ```typescript
-import { StorageProvider } from '@strav/core/providers'
+import { StorageProvider } from '@strav/kernel'
 
 app.use(new StorageProvider())
 ```
@@ -240,7 +240,7 @@ The `StorageProvider` registers `StorageManager` as a singleton. It depends on t
 ### Manual setup
 
 ```typescript
-import StorageManager from '@strav/core/storage/storage_manager'
+import { StorageManager } from '@strav/kernel'
 
 app.singleton(StorageManager)
 app.resolve(StorageManager)
@@ -249,7 +249,7 @@ app.resolve(StorageManager)
 ## Controller example
 
 ```typescript
-import { Storage, Upload, FileTooLargeError } from '@strav/core/storage'
+import { Storage, Upload, FileTooLargeError } from '@strav/kernel'
 
 export default class ProfileController {
   async updateAvatar(ctx: Context) {

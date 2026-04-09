@@ -96,7 +96,7 @@ The middleware captures request/response data, sets a batch ID on the context, a
 Edit `config/devtools.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers'
+import { env } from '@strav/kernel'
 
 export default {
   enabled: env('DEVTOOLS_ENABLED', 'true').bool(),
@@ -565,7 +565,7 @@ Or don't resolve `DevtoolsManager` in your test bootstrap — collectors and rec
 ## Full setup example
 
 ```typescript
-import { app } from '@strav/core/core'
+import { app } from '@strav/kernel'
 import { DevtoolsProvider } from '@strav/devtools'
 
 app.use(new DevtoolsProvider({

@@ -7,7 +7,7 @@ In-memory caching with a pluggable store interface, cache-aside helpers, and HTT
 ### Using a service provider (recommended)
 
 ```typescript
-import { CacheProvider } from '@strav/core/providers'
+import { CacheProvider } from '@strav/kernel'
 
 app.use(new CacheProvider())
 ```
@@ -17,7 +17,7 @@ The `CacheProvider` registers `CacheManager` as a singleton. It depends on the `
 ### Manual setup
 
 ```typescript
-import CacheManager from '@strav/core/cache/cache_manager'
+import { CacheManager } from '@strav/kernel'
 
 app.singleton(CacheManager)
 app.resolve(CacheManager)
@@ -26,7 +26,7 @@ app.resolve(CacheManager)
 Create `config/cache.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   default: env('CACHE_DRIVER', 'memory'),
@@ -40,7 +40,7 @@ export default {
 The `cache` object is the primary API. All keys are automatically prefixed with the configured `prefix`.
 
 ```typescript
-import { cache } from '@strav/core/cache'
+import { cache } from '@strav/kernel'
 ```
 
 ### remember (cache-aside)
@@ -89,7 +89,7 @@ await cache.flush()             // clear everything
 Sets `Cache-Control`, `ETag`, and `Vary` headers on responses. The browser or CDN does the actual caching — this middleware only controls the headers.
 
 ```typescript
-import { httpCache } from '@strav/core/cache'
+import { httpCache } from '@strav/http'
 ```
 
 ### Basic usage
@@ -140,8 +140,8 @@ The middleware only applies to GET and HEAD requests — POST/PUT/DELETE respons
 The default `MemoryCacheStore` uses a `Map` with lazy TTL eviction — suitable for single-process deployments. For distributed setups, implement the `CacheStore` interface and swap it in:
 
 ```typescript
-import type { CacheStore } from '@strav/core/cache'
-import CacheManager from '@strav/core/cache/cache_manager'
+import type { CacheStore } from '@strav/kernel'
+import { CacheManager } from '@strav/kernel'
 
 class RedisCacheStore implements CacheStore {
   private redis = new Bun.RedisClient()
@@ -180,7 +180,7 @@ CacheManager.useStore(new RedisCacheStore())
 ## Controller example
 
 ```typescript
-import { cache } from '@strav/core/cache'
+import { cache } from '@strav/kernel'
 
 export default class ProjectController {
   async index(ctx: Context) {

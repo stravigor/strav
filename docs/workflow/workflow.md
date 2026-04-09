@@ -261,7 +261,7 @@ await workflow('content-pipeline')
 For long-running workflows, dispatch them as queue jobs:
 
 ```typescript
-import Queue from '@strav/core/queue'
+import Queue from '@strav/queue'
 
 // Define the job handler
 Queue.handle('run-workflow', async (payload) => {

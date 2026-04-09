@@ -5,7 +5,7 @@ The events module provides an in-memory publish/subscribe event bus with async s
 ## Quick start
 
 ```typescript
-import { Emitter } from '@strav/core/events'
+import { Emitter } from '@strav/kernel'
 
 // Listen
 Emitter.on('user.registered', async ({ user }) => {
@@ -111,8 +111,8 @@ Emitter.listenerCount('user.registered') // 3
 Use `Queue.listener()` to bridge events to background jobs:
 
 ```typescript
-import { Emitter } from '@strav/core/events'
-import { Queue } from '@strav/core/queue'
+import { Emitter } from '@strav/kernel'
+import { Queue } from '@strav/queue'
 
 // When a user registers, push a background job
 Emitter.on('user.registered', Queue.listener('send-welcome-email'))
@@ -130,7 +130,7 @@ This is the recommended pattern for offloading slow work (emails, webhooks, imag
 Use `NotificationManager.on()` to declaratively map events to multi-channel notifications:
 
 ```typescript
-import { NotificationManager, notifications } from '@strav/core/notification'
+import { NotificationManager, notifications } from '@strav/signal'
 
 NotificationManager.on('task.assigned', {
   create: ({ task, assigner }) => new TaskAssignedNotification(task, assigner),
@@ -150,7 +150,7 @@ Call `Emitter.reset()` in your test teardown to clear all listeners:
 
 ```typescript
 import { afterEach } from 'bun:test'
-import { Emitter } from '@strav/core/events'
+import { Emitter } from '@strav/kernel'
 
 afterEach(() => {
   Emitter.reset()

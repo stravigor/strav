@@ -5,7 +5,7 @@ Server-side template engine with Vue.js island support. Renders `.strav` templat
 ## Quick start
 
 ```typescript
-import { ViewEngine, view } from '@strav/core/view'
+import { ViewEngine, view } from '@strav/view'
 
 // In a route handler via Context
 router.get('/users', async (ctx) => {
@@ -24,7 +24,7 @@ router.get('/', async () => {
 Register the `ViewProvider` in your application:
 
 ```typescript
-import { ViewProvider } from '@strav/core/providers'
+import { ViewProvider } from '@strav/view'
 
 app.use(new ViewProvider())
 ```
@@ -34,7 +34,7 @@ This registers the `ViewEngine` singleton and wires it into the HTTP context so 
 Templates live in the `views/` directory by default. Configure via `config/view.ts`:
 
 ```typescript
-import { env } from '@strav/core/helpers/env'
+import { env } from '@strav/kernel'
 
 export default {
   directory: env('VIEW_DIRECTORY', 'views'),
@@ -207,7 +207,7 @@ The `@islands` directive emits `<script src="/islands.js"></script>`. You can pa
 **3. Build islands before server start:**
 
 ```typescript
-import { IslandBuilder } from '@strav/core/view'
+import { IslandBuilder } from '@strav/view'
 
 const islands = new IslandBuilder()
 await islands.build()
@@ -262,7 +262,7 @@ import Counter from './components/Counter.vue'
   'counter': Counter,
 }
 
-import '@strav/core/view/client/islands'
+import '@strav/view/client/islands'
 ```
 
 Include the bundled script in your layout:
@@ -276,7 +276,7 @@ Include the bundled script in your layout:
 Serve files from a `public/` directory:
 
 ```typescript
-import { staticFiles } from '@strav/core/view'
+import { staticFiles } from '@strav/view'
 
 router.use(staticFiles('public'))
 ```
@@ -305,8 +305,8 @@ Test templates directly with the engine:
 
 ```typescript
 import { test, expect, beforeAll } from 'bun:test'
-import ViewEngine from '@strav/core/view/engine'
-import Configuration from '@strav/core/config/configuration'
+import ViewEngine from '@strav/view'
+import Configuration from '@strav/kernel'
 
 let engine: ViewEngine
 

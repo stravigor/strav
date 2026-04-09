@@ -9,7 +9,7 @@ All session-based auth requires the `session()` middleware from the [session mod
 ### Using a service provider (recommended)
 
 ```typescript
-import { AuthProvider } from '@strav/core/providers'
+import { AuthProvider } from '@strav/http'
 import User from './app/models/user'
 
 app.use(new AuthProvider({ resolver: (id) => User.find(id) }))
@@ -27,7 +27,7 @@ Options:
 ### Manual setup
 
 ```typescript
-import { Auth } from '@strav/core/auth'
+import { Auth } from '@strav/http'
 import User from './app/models/user'
 
 app.singleton(Auth)
@@ -58,8 +58,8 @@ Session configuration (cookie name, lifetime, etc.) lives in `config/session.ts`
 ### auth() — require authentication
 
 ```typescript
-import { session } from '@strav/core/session'
-import { auth } from '@strav/core/auth'
+import { session } from '@strav/http'
+import { auth } from '@strav/http'
 
 // Session auth (default guard) — requires session() upstream
 router.group({ middleware: [session(), auth()] }, (r) => {
@@ -90,8 +90,8 @@ For token auth, it also sets `ctx.get('accessToken')` (the AccessTokenData recor
 ### csrf() — CSRF protection
 
 ```typescript
-import { session } from '@strav/core/session'
-import { csrf } from '@strav/core/auth'
+import { session } from '@strav/http'
+import { csrf } from '@strav/http'
 
 // Works with both anonymous and authenticated sessions
 router.group({ middleware: [session(), csrf()] }, (r) => {
@@ -127,8 +127,8 @@ Returns `403` if the token is missing or doesn't match.
 ### guest() — reject authenticated users
 
 ```typescript
-import { session } from '@strav/core/session'
-import { guest } from '@strav/core/auth'
+import { session } from '@strav/http'
+import { guest } from '@strav/http'
 
 // Redirect authenticated users to the dashboard
 router.group({ middleware: [session(), guest('/dashboard')] }, (r) => {
@@ -148,7 +148,7 @@ Sessions are managed by the [session module](./session.md). The auth module buil
 ### Login
 
 ```typescript
-import { Session } from '@strav/core/session'
+import { Session } from '@strav/http'
 
 router.post('/login', async (ctx) => {
   const { email, password } = await ctx.body<{ email: string; password: string }>()
@@ -172,7 +172,7 @@ s.authenticate(user.pid)   // raw string/number ID
 ### Logout
 
 ```typescript
-import { Session } from '@strav/core/session'
+import { Session } from '@strav/http'
 
 router.post('/logout', async (ctx) => {
   const response = ctx.redirect('/login')
@@ -186,7 +186,7 @@ router.post('/logout', async (ctx) => {
 Expired sessions remain in the database until cleaned up. Call `SessionManager.gc()` periodically (e.g., in a cron job or on a timer):
 
 ```typescript
-import { SessionManager } from '@strav/core/session'
+import { SessionManager } from '@strav/http'
 
 const deleted = await SessionManager.gc()
 console.log(`Cleaned up ${deleted} expired sessions`)
@@ -199,7 +199,7 @@ Access tokens are opaque random strings. The plain token is returned once at cre
 ### Creating a token
 
 ```typescript
-import { AccessToken } from '@strav/core/auth'
+import { AccessToken } from '@strav/http'
 
 router.post('/api/tokens', auth(), async (ctx) => {
   const { name } = await ctx.body<{ name: string }>()
@@ -263,9 +263,9 @@ await AccessToken.revokeAllFor(user)
 ## Full example
 
 ```typescript
-import { router } from '@strav/core/http'
-import { session, Session } from '@strav/core/session'
-import { auth, csrf, guest, AccessToken } from '@strav/core/auth'
+import { router } from '@strav/http'
+import { session, Session } from '@strav/http'
+import { auth, csrf, guest, AccessToken } from '@strav/http'
 
 // Global session middleware — every visitor gets a session
 router.use(session())
