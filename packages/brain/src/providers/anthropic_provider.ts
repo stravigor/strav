@@ -166,9 +166,14 @@ export class AnthropicProvider implements AIProvider {
       }
     }
 
-    // Structured output
+    // Structured output (using GA API with output_config)
     if (request.schema) {
-      body.output_format = { type: 'json_schema', schema: request.schema }
+      body.output_config = {
+        format: {
+          type: 'json_schema',
+          schema: request.schema
+        }
+      }
     }
 
     return body

@@ -138,6 +138,30 @@ describe('brain.generate()', () => {
 
     expect(result.data).toEqual({ name: 'Bob' })
   })
+
+  test('handles markdown-wrapped JSON responses', async () => {
+    const mock = setupMock()
+    mock.queueResponse({ content: '```json\n{"name":"Alice","age":30}\n```' })
+
+    const result = await brain.generate({
+      prompt: 'Extract info',
+      schema: { type: 'object', properties: { name: { type: 'string' }, age: { type: 'number' } } },
+    })
+
+    expect(result.data).toEqual({ name: 'Alice', age: 30 })
+  })
+
+  test('handles markdown without json language hint', async () => {
+    const mock = setupMock()
+    mock.queueResponse({ content: '```\n{"status":"success"}\n```' })
+
+    const result = await brain.generate({
+      prompt: 'Get status',
+      schema: { type: 'object', properties: { status: { type: 'string' } } },
+    })
+
+    expect(result.data).toEqual({ status: 'success' })
+  })
 })
 
 describe('AgentRunner.run()', () => {

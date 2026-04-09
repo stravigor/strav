@@ -160,7 +160,14 @@ export const brain = {
       temperature: options.temperature ?? config.temperature,
     })
 
-    const parsed = JSON.parse(response.content)
+    // Extract JSON from potential markdown wrapper
+    let jsonContent = response.content.trim()
+    if (jsonContent.startsWith('```json') || jsonContent.startsWith('```')) {
+      // Strip markdown code fence wrapper
+      jsonContent = jsonContent.replace(/^```(?:json)?\n?/, '').replace(/\n?```\s*$/, '')
+    }
+
+    const parsed = JSON.parse(jsonContent)
     const data = options.schema?.parse ? options.schema.parse(parsed) : parsed
 
     return {
@@ -340,7 +347,14 @@ export class AgentRunner<T extends Agent = Agent> {
         let data: any = response.content
         if (agent.output && response.content) {
           try {
-            const parsed = JSON.parse(response.content)
+            // Extract JSON from potential markdown wrapper
+            let jsonContent = response.content.trim()
+            if (jsonContent.startsWith('```json') || jsonContent.startsWith('```')) {
+              // Strip markdown code fence wrapper
+              jsonContent = jsonContent.replace(/^```(?:json)?\n?/, '').replace(/\n?```\s*$/, '')
+            }
+
+            const parsed = JSON.parse(jsonContent)
             data = agent.output.parse ? agent.output.parse(parsed) : parsed
           } catch {
             data = response.content

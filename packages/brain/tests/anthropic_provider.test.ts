@@ -202,7 +202,12 @@ describe('AnthropicProvider', () => {
       schema,
     })
 
-    expect(lastFetchBody().output_format).toEqual({ type: 'json_schema', schema })
+    expect(lastFetchBody().output_config).toEqual({
+      format: {
+        type: 'json_schema',
+        schema
+      }
+    })
   })
 
   test('maps assistant messages with tool calls', async () => {
