@@ -1,6 +1,6 @@
 {
   "name": "@strav/devtools",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "type": "module",
   "description": "Debug inspector and performance monitor for the Strav framework",
   "license": "MIT",
