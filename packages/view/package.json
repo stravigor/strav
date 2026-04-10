@@ -1,6 +1,6 @@
 {
   "name": "@strav/view",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "description": "View layer for the Strav framework \u2014 template engine, Vue SFC islands, and SPA client router",
   "license": "MIT",
