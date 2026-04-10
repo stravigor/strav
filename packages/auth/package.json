@@ -1,0 +1,27 @@
+{
+  "name": "@strav/auth",
+  "version": "0.2.12",
+  "type": "module",
+  "description": "Authentication primitives for the Strav framework",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./jwt": "./src/jwt/index.ts",
+    "./tokens": "./src/tokens/index.ts",
+    "./totp": "./src/totp/index.ts",
+    "./oauth": "./src/oauth/index.ts",
+    "./validation": "./src/validation/index.ts"
+  },
+  "files": [
+    "src/",
+    "package.json",
+    "tsconfig.json"
+  ],
+  "peerDependencies": {
+    "@strav/kernel": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit"
+  }
+}
