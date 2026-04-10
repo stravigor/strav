@@ -1,0 +1,31 @@
+{
+  "name": "@strav/spring",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Flagship framework scaffolding tool for the Strav ecosystem.",
+  "license": "MIT",
+  "keywords": [
+    "strav",
+    "bun",
+    "framework",
+    "scaffold",
+    "create",
+    "laravel",
+    "typescript",
+    "vue"
+  ],
+  "bin": {
+    "@strav/spring": "./src/index.ts"
+  },
+  "files": [
+    "src/",
+    "package.json",
+    "README.md"
+  ],
+  "dependencies": {
+    "@strav/kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
