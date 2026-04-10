@@ -85,6 +85,7 @@ export default defineSchema('comment', {
 ```typescript
 // app/controllers/blog_controller.ts
 import type { Context } from '@strav/http'
+import { query } from '@strav/database'
 import { Controller } from './controller.ts'
 import Post from '../models/post.ts'
 import Category from '../models/category.ts'
@@ -93,7 +94,7 @@ export default class BlogController extends Controller {
   async index(ctx: Context) {
     const { page = 1, category } = ctx.query
 
-    let query = Post.query()
+    let postQuery = query(Post)
       .where('status', 'published')
       .where('published_at', '<=', new Date())
       .preload('author')
@@ -101,10 +102,10 @@ export default class BlogController extends Controller {
       .orderBy('published_at', 'DESC')
 
     if (category) {
-      query = query.whereHas('category', (q) => q.where('slug', category))
+      postQuery = postQuery.whereHas('category', (q) => q.where('slug', category))
     }
 
-    const posts = await query.paginate(page, 10)
+    const posts = await postQuery.paginate(page, 10)
     const categories = await Category.all()
 
     return ctx.view('blog/index', {
@@ -118,7 +119,7 @@ export default class BlogController extends Controller {
   async show(ctx: Context) {
     const { slug } = ctx.params
 
-    const post = await Post.query()
+    const post = await query(Post)
       .where('slug', slug)
       .where('status', 'published')
       .preload('author')
@@ -139,7 +140,7 @@ export default class BlogController extends Controller {
     await post.merge({ view_count: post.view_count + 1 }).save()
 
     // Get related posts
-    const relatedPosts = await Post.query()
+    const relatedPosts = await query(Post)
       .where('id', '!=', post.id)
       .where('category_id', post.category_id)
       .where('status', 'published')
@@ -364,6 +365,8 @@ export default defineSchema('cart_item', {
 
 ```typescript
 // app/controllers/api/product_controller.ts
+import { query } from '@strav/database'
+
 export default class ProductController extends Controller {
   async index(ctx: Context) {
     const {
@@ -376,25 +379,25 @@ export default class ProductController extends Controller {
       sort = 'name'
     } = ctx.query
 
-    let query = Product.query()
+    let productQuery = query(Product)
       .where('status', 'active')
       .preload('category')
 
     // Filters
     if (category) {
-      query = query.whereHas('category', q => q.where('slug', category))
+      productQuery = productQuery.whereHas('category', q => q.where('slug', category))
     }
 
     if (min_price) {
-      query = query.where('price', '>=', parseFloat(min_price))
+      productQuery = productQuery.where('price', '>=', parseFloat(min_price))
     }
 
     if (max_price) {
-      query = query.where('price', '<=', parseFloat(max_price))
+      productQuery = productQuery.where('price', '<=', parseFloat(max_price))
     }
 
     if (search) {
-      query = query.where(q => {
+      productQuery = productQuery.where(q => {
         q.where('name', 'ILIKE', `%${search}%`)
          .orWhere('description', 'ILIKE', `%${search}%`)
          .orWhere('sku', 'ILIKE', `%${search}%`)
@@ -410,9 +413,9 @@ export default class ProductController extends Controller {
     }
 
     const [sortField, sortDirection] = sortMapping[sort] || ['name', 'ASC']
-    query = query.orderBy(sortField, sortDirection)
+    productQuery = productQuery.orderBy(sortField, sortDirection)
 
-    const products = await query.paginate(page, Math.min(limit, 100))
+    const products = await productQuery.paginate(page, Math.min(limit, 100))
 
     return this.respond(ctx, {
       products: products.data,
@@ -423,7 +426,7 @@ export default class ProductController extends Controller {
   async show(ctx: Context) {
     const { slug } = ctx.params
 
-    const product = await Product.query()
+    const product = await query(Product)
       .where('slug', slug)
       .where('status', 'active')
       .preload('category')
@@ -435,7 +438,7 @@ export default class ProductController extends Controller {
     }
 
     // Get related products
-    const relatedProducts = await Product.query()
+    const relatedProducts = await query(Product)
       .where('id', '!=', product.id)
       .where('category_id', product.category_id)
       .where('status', 'active')
@@ -450,12 +453,14 @@ export default class ProductController extends Controller {
 }
 
 // app/controllers/api/cart_controller.ts
+import { query } from '@strav/database'
+
 export default class CartController extends Controller {
   async show(ctx: Context) {
     const user = ctx.auth.user
     const cart = await this.getOrCreateCart(user, ctx.session)
 
-    const cartWithItems = await Cart.query()
+    const cartWithItems = await query(Cart)
       .where('id', cart.id)
       .preload('items', q =>
         q.preload('product')
@@ -486,7 +491,7 @@ export default class CartController extends Controller {
     const cart = await this.getOrCreateCart(user, ctx.session)
 
     // Check if item already exists
-    let cartItem = await CartItem.query()
+    let cartItem = await query(CartItem)
       .where('cart_id', cart.id)
       .where('product_id', product_id)
       .where('product_variant_id', product_variant_id || null)
@@ -511,7 +516,7 @@ export default class CartController extends Controller {
 
   private async getOrCreateCart(user, session) {
     if (user) {
-      let cart = await Cart.query().where('user_id', user.id).first()
+      let cart = await query(Cart).where('user_id', user.id).first()
       if (!cart) {
         cart = await Cart.create({ user_id: user.id })
       }
@@ -521,7 +526,7 @@ export default class CartController extends Controller {
       const sessionId = session.get('cart_session_id') || crypto.randomUUID()
       session.put('cart_session_id', sessionId)
 
-      let cart = await Cart.query().where('session_id', sessionId).first()
+      let cart = await query(Cart).where('session_id', sessionId).first()
       if (!cart) {
         cart = await Cart.create({
           session_id: sessionId,
@@ -1053,16 +1058,18 @@ export default class TaskController extends Controller {
 
 ```typescript
 // app/services/search_service.ts
+import { query } from '@strav/database'
+
 export class SearchService {
-  static async searchProducts(query: string, filters: any = {}) {
-    let baseQuery = Product.query().where('status', 'active')
+  static async searchProducts(searchTerm: string, filters: any = {}) {
+    let baseQuery = query(Product).where('status', 'active')
 
     // Text search
-    if (query) {
+    if (searchTerm) {
       baseQuery = baseQuery.where(q => {
-        q.where('name', 'ILIKE', `%${query}%`)
-         .orWhere('description', 'ILIKE', `%${query}%`)
-         .orWhere('sku', 'ILIKE', `%${query}%`)
+        q.where('name', 'ILIKE', `%${searchTerm}%`)
+         .orWhere('description', 'ILIKE', `%${searchTerm}%`)
+         .orWhere('sku', 'ILIKE', `%${searchTerm}%`)
       })
     }
 

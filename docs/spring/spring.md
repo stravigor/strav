@@ -267,12 +267,13 @@ async function save() {
 ```typescript
 // app/controllers/post_controller.ts
 import type { Context } from '@strav/http'
+import { query } from '@strav/database'
 import { Controller } from './controller.ts'
 import Post from '../models/post.ts'
 
 export default class PostController extends Controller {
   async index(ctx: Context) {
-    const posts = await Post.query()
+    const posts = await query(Post)
       .where('status', 'published')
       .orderBy('created_at', 'DESC')
       .limit(10)
@@ -283,7 +284,7 @@ export default class PostController extends Controller {
 
   async show(ctx: Context) {
     const { slug } = ctx.params
-    const post = await Post.query()
+    const post = await query(Post)
       .where('slug', slug)
       .where('status', 'published')
       .first()
