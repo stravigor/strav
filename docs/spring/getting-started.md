@@ -19,9 +19,6 @@ bun --version  # Should be 1.0+
 
 # Check PostgreSQL
 psql --version  # Should be 12+
-
-# Check Node.js (for compatibility)
-node --version  # Should be 18+
 ```
 
 ## Quick Start (5 Minutes)
