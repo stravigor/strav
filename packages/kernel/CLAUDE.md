@@ -3,7 +3,7 @@
 Foundation of the Stravigor ecosystem. Provides the Application lifecycle, IoC container, dependency injection, configuration, events, and core utilities. Every other package depends on this.
 
 ## Consumed by
-All packages: http, database, signal, queue, cli, flag, jina, stripe, devtools, mcp, machine, oauth2, brain, search, social, testing, workflow.
+All packages: http, database, signal, queue, cli, auth, flag, stripe, devtools, mcp, machine, oauth2, brain, search, social, testing, workflow.
 
 ## Commands
 - bun test

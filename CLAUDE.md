@@ -11,7 +11,7 @@ Bun monorepo. Run `bun install` from root.
   - signal — communication: mail, notifications, broadcasting
   - queue — background: job processing, task scheduling
   - cli — developer tooling: CLI framework, code generators
-  - flag, jina, stripe, devtools, mcp, machine, oauth2, brain, search, social, testing, workflow, rag
+  - auth, flag, stripe, devtools, mcp, machine, oauth2, brain, search, social, testing, workflow, rag
 - apps/ — products (platform, vault)
 - docs/ — ecosystem-wide documentation
 - deprecated/ — archived, do not reference for active work
@@ -30,8 +30,8 @@ kernel (0 deps)
 ```
 
 ### Consumer packages
+- auth → kernel
 - flag → kernel, database, http, cli
-- jina → kernel, http, signal, database
 - stripe → kernel, database, http
 - devtools → kernel, http, database, cli
 - mcp → kernel, http, cli
