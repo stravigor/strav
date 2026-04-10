@@ -152,17 +152,6 @@ This package provides low-level authentication primitives without imposing any s
 - **Secure** - Uses modern standards and best practices
 - **Framework-agnostic** - Works with any HTTP framework
 
-## Migrating from @strav/jina
-
-If you're using the deprecated `@strav/jina` package, you can migrate by:
-
-1. Installing `@strav/auth`
-2. Replacing jina's TOTP/token utilities with auth equivalents
-3. Building your own authentication handlers using these primitives
-4. Removing the jina dependency
-
-The main difference is that `@strav/auth` doesn't provide pre-built routes or handlers - you implement those yourself using the utilities provided.
-
 ## License
 
 MIT

@@ -32,12 +32,14 @@
     "./policy/*": "./src/policy/*.ts",
     "./auth": "./src/auth/index.ts",
     "./auth/*": "./src/auth/*.ts",
+    "./auth/bridge": "./src/auth/bridge.ts",
     "./providers": "./src/providers/index.ts",
     "./providers/*": "./src/providers/*.ts"
   },
   "peerDependencies": {
     "@strav/kernel": "workspace:*",
-    "@strav/database": "workspace:*"
+    "@strav/database": "workspace:*",
+    "@strav/auth": "workspace:*"
   },
   "dependencies": {
     "@vue/compiler-sfc": "^3.5.28",

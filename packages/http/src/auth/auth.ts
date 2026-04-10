@@ -7,6 +7,23 @@ import Database from '@strav/database/database/database'
 export { extractUserId } from '@strav/database/helpers/identity'
 export { randomHex } from '@strav/kernel/helpers/crypto'
 
+// Re-export commonly used auth primitives for convenience
+export {
+  signJWT,
+  verifyJWT,
+  createAccessToken as createJWTAccessToken,
+  createRefreshToken as createJWTRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken
+} from '@strav/auth/jwt'
+
+export {
+  createSignedToken,
+  verifySignedToken,
+  createMagicLinkToken,
+  verifyMagicLinkToken
+} from '@strav/auth/tokens'
+
 export interface TokenConfig {
   expiration: number | null
 }
