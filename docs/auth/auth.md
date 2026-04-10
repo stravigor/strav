@@ -496,14 +496,3 @@ async function resetPassword(token: string, newPassword: string) {
 7. **Rate Limiting**: Implement rate limiting on authentication endpoints
 8. **Token Rotation**: Implement refresh token rotation to limit exposure window
 
-## Migration from @strav/jina
-
-If you're migrating from the deprecated @strav/jina package:
-
-1. **Install @strav/auth**: `bun add @strav/auth`
-2. **Replace TOTP imports**: Change from `@strav/jina` to `@strav/auth/totp`
-3. **Replace token utilities**: Update to use `@strav/auth/tokens`
-4. **Build custom handlers**: Implement your own authentication routes using these primitives
-5. **Remove jina**: Uninstall `@strav/jina` once migration is complete
-
-The key difference is that @strav/auth provides utilities without imposing authentication flows - you have complete control over your implementation.

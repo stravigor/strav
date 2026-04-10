@@ -1,8 +1,32 @@
 # Auth
 
-The auth module provides session-based and access-token-based authentication, CSRF protection, and middleware for protecting routes.
+The HTTP auth module provides database-backed authentication (sessions and access tokens), CSRF protection, and middleware for protecting routes. It integrates with `@strav/auth` for low-level authentication primitives like JWTs, TOTP, and tokens.
 
 All session-based auth requires the `session()` middleware from the [session module](./session.md) to run first.
+
+## Integration with @strav/auth
+
+The HTTP auth module re-exports all `@strav/auth` primitives for convenience:
+
+```typescript
+import {
+  // Database-backed auth (HTTP-specific)
+  Auth, AccessToken, auth, csrf, guest,
+
+  // Low-level primitives from @strav/auth
+  signJWT, verifyJWT, createAccessToken as createJWTAccessToken,
+  createSignedToken, createMagicLinkToken, generateSecret, verifyTotp,
+
+  // HTTP bridge utilities
+  createJWTCookie, verifyJWTCookie, createMagicLinkURL
+} from '@strav/http/auth'
+```
+
+You can choose between:
+- **Database-backed tokens**: AccessToken class for persistent authentication with revocation
+- **Stateless JWT/signed tokens**: For distributed systems or temporary authentication
+
+See the [Auth primitives guide](../auth/auth.md) for detailed usage of JWT, TOTP, tokens, and other low-level utilities.
 
 ## Setup
 
@@ -192,9 +216,11 @@ const deleted = await SessionManager.gc()
 console.log(`Cleaned up ${deleted} expired sessions`)
 ```
 
-## Access tokens
+## Access tokens (Database-backed)
 
-Access tokens are opaque random strings. The plain token is returned once at creation and never stored — the database holds a SHA-256 hash. Even if the database is compromised, tokens cannot be recovered.
+HTTP access tokens are opaque random strings stored in the database. The plain token is returned once at creation and never stored — the database holds a SHA-256 hash. Even if the database is compromised, tokens cannot be recovered.
+
+This is different from JWT access tokens (`@strav/auth`) which are stateless and self-contained.
 
 ### Creating a token
 
@@ -260,6 +286,42 @@ await AccessToken.revokeAllFor(user)
 | expires_at | TIMESTAMPTZ | Null = never expires |
 | created_at | TIMESTAMPTZ | |
 
+## HTTP Bridge Utilities
+
+The `@strav/http/auth/bridge` module provides helpers for using `@strav/auth` primitives in HTTP contexts:
+
+```typescript
+import {
+  createJWTCookie,
+  verifyJWTCookie,
+  createMagicLinkURL,
+  extractBearerToken
+} from '@strav/http/auth/bridge'
+
+// Create JWT token and cookie header
+const { token, cookieHeader } = await createJWTCookie(
+  { userId: 123, role: 'admin' },
+  'jwt-secret',
+  {
+    cookieName: 'auth-token',
+    cookieOptions: { maxAge: 3600 }
+  }
+)
+
+// Generate magic link for passwordless auth
+const magicLink = createMagicLinkURL(
+  'https://app.com/auth/magic',
+  userId,
+  { email: 'user@example.com', expiresInMinutes: 15 }
+)
+
+// Extract Bearer token from request
+router.get('/protected', (ctx) => {
+  const token = extractBearerToken(ctx)
+  // Validate token...
+})
+```
+
 ## Full example
 
 ```typescript
@@ -290,7 +352,7 @@ router.group({ middleware: [auth(), csrf()] }, (r) => {
   })
 })
 
-// Token-protected API routes
+// Token-protected API routes (database-backed tokens)
 router.group({ prefix: '/api', middleware: [auth('token')] }, (r) => {
   r.get('/me', (ctx) => ctx.json(ctx.get('user')))
 })
