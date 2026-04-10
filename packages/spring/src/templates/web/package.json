@@ -10,17 +10,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@strav/kernel": "workspace:*",
-    "@strav/http": "workspace:*",
-    "@strav/view": "workspace:*",
-    "@strav/database": "workspace:*",
-    "@strav/cli": "workspace:*",
+    "@strav/kernel": "__STRAV_VERSION__",
+    "@strav/http": "__STRAV_VERSION__",
+    "@strav/view": "__STRAV_VERSION__",
+    "@strav/database": "__STRAV_VERSION__",
+    "@strav/cli": "__STRAV_VERSION__",
     "vue": "^3.5.28",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@strav/testing": "workspace:*",
+    "@strav/testing": "__STRAV_VERSION__",
     "typescript": "^5.9.3"
   }
 }
