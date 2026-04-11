@@ -1,9 +1,8 @@
 import { router } from '@strav/http'
-import HomeController from '../app/controllers/home_controller'
+import HomeController from '../app/controllers/home_controller.ts'
 
 // Web routes
 router.get('/', [HomeController, 'index'])
-router.get('/users', [HomeController, 'users'])
 
 // Health check endpoint
 router.get('/health', async (ctx) => {
