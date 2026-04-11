@@ -1,6 +1,6 @@
 {
   "name": "@strav/http",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "type": "module",
   "description": "HTTP layer for the Strav framework \u2014 router, server, middleware, authentication, sessions, validation, and views",
   "license": "MIT",
