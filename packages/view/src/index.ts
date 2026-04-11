@@ -10,6 +10,10 @@ export { defineRoutes } from './route_types.ts'
 export { spaRoutes } from './spa_routes.ts'
 export { default as ViewProvider } from './providers/view_provider.ts'
 
+// Static pages functionality
+export { default as PagesProvider } from './pages/pages_provider.ts'
+export { default as PageController } from './pages/page_controller.ts'
+
 // Client-side route helpers (browser-safe)
 export { route, routeUrl, registerRoutes } from './client/route_helper.ts'
 
@@ -19,3 +23,4 @@ export type { CacheEntry, RenderFunction, IncludeFn, RenderResult } from './cach
 export type { CssOptions, IslandBuilderOptions, IslandManifest } from './islands/island_builder.ts'
 export type { SpaRouteDefinition } from './route_types.ts'
 export type { RouteOptions } from './client/route_helper.ts'
+export type { PagesConfig, PageResolutionResult, ViewConfigWithPages } from './pages/types.ts'
