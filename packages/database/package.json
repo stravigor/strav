@@ -1,6 +1,6 @@
 {
   "name": "@strav/database",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "type": "module",
   "description": "Database layer for the Strav framework \u2014 query builder, ORM, schema builder, and migrations",
   "license": "MIT",
