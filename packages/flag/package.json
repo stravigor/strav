@@ -1,6 +1,6 @@
 {
   "name": "@strav/flag",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "type": "module",
   "description": "Feature flags for the Strav framework",
   "license": "MIT",
