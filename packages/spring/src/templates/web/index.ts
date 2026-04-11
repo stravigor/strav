@@ -26,7 +26,4 @@ app
     }
   })
 
-// Load routes
-await import('./start/routes')
-
 await app.start()
