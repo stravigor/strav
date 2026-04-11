@@ -1,0 +1,24 @@
+{
+  "name": "__PROJECT_NAME__",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot index.ts",
+    "start": "bun index.ts",
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@strav/kernel": "__STRAV_VERSION__",
+    "@strav/http": "__STRAV_VERSION__",
+    "@strav/database": "__STRAV_VERSION__",
+    "@strav/cli": "__STRAV_VERSION__",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@strav/testing": "__STRAV_VERSION__",
+    "typescript": "^5.9.3"
+  }
+}

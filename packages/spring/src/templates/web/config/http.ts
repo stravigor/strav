@@ -8,10 +8,4 @@ export default {
 
   // Full application URL (optional - will be constructed from host/port/domain if not set)
   app_url: env('APP_URL'),
-
-  cors: {
-    enabled: true,
-    origin: ['http://localhost:3000', 'http://localhost:5173'],
-    credentials: true,
-  },
 }
