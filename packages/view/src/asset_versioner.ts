@@ -59,21 +59,34 @@ export class AssetVersioner {
    * Watch a previously added asset for changes and re-hash automatically.
    * Useful in development when CSS/JS is rebuilt by external watchers.
    */
-  watch(publicPath: string): void {
+  async watch(publicPath: string): Promise<void> {
     if (this.watchers.has(publicPath)) return
 
     const filePath = join(this.publicDir, publicPath)
+
+    // Check if file exists before attempting to watch
+    const file = Bun.file(filePath)
+    if (!(await file.exists())) {
+      console.warn(`[AssetVersioner] Cannot watch non-existent file: ${publicPath} - will use unversioned path`)
+      return
+    }
+
     let timeout: ReturnType<typeof setTimeout> | null = null
 
-    const watcher = watch(filePath, () => {
-      // Debounce — file may be written in chunks
-      if (timeout) clearTimeout(timeout)
-      timeout = setTimeout(() => {
-        this.add(publicPath)
-      }, 100)
-    })
+    try {
+      const watcher = watch(filePath, () => {
+        // Debounce — file may be written in chunks
+        if (timeout) clearTimeout(timeout)
+        timeout = setTimeout(() => {
+          this.add(publicPath)
+        }, 100)
+      })
 
-    this.watchers.set(publicPath, watcher)
+      this.watchers.set(publicPath, watcher)
+    } catch (error: any) {
+      // Handle any unexpected errors gracefully
+      console.warn(`[AssetVersioner] Failed to watch ${publicPath}: ${error.message}`)
+    }
   }
 
   /** Stop all file watchers. */

@@ -31,7 +31,7 @@ export default class ViewProvider extends ServiceProvider {
 
     if (Bun.env.NODE_ENV !== 'production') {
       for (const path of assetPaths) {
-        this.assets.watch(path)
+        await this.assets.watch(path)
       }
     }
   }
