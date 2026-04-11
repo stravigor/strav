@@ -1,6 +1,6 @@
 # @strav/spring
 
-Flagship framework scaffolding tool for the Strav ecosystem - the Laravel of the Bun ecosystem.
+Flagship framework scaffolding tool for the Strav ecosystem - the rite of the Bun ecosystem.
 
 ## Usage
 

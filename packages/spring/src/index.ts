@@ -58,7 +58,7 @@ function parseArgs(): ParsedArgs {
 function printUsage(): void {
   console.log(`
   ${bold('@strav/spring')} ${dim(`v${VERSION}`)}
-  ${dim('The Laravel of the Bun ecosystem')}
+  ${dim('The Rite of the Bun ecosystem')}
 
   ${bold('Usage:')}
     bunx @strav/spring ${cyan('<project-name>')} [options]
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
 
   console.log()
   console.log(`  ${bold('@strav/spring')} ${dim(`v${VERSION}`)}`)
-  console.log(`  ${dim('The Laravel of the Bun ecosystem')}`)
+  console.log(`  ${dim('The rite of the Bun ecosystem')}`)
   console.log()
 
   // Project name
