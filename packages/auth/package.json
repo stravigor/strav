@@ -1,6 +1,6 @@
 {
   "name": "@strav/auth",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "description": "Authentication primitives for the Strav framework",
   "license": "MIT",
