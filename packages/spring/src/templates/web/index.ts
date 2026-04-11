@@ -13,6 +13,7 @@ const builder = new IslandBuilder({
   },
   outDir: './public/builds',
 })
+await builder.build()
 
 // Register service providers
 app
@@ -23,7 +24,6 @@ app
       builder.watch()
       ViewEngine.instance.watch()
     }
-    await builder.build()
   })
 
 // Load routes

@@ -6,8 +6,8 @@ import { ViewProvider } from '@strav/view'
 export const providers: ServiceProvider[] = [
   new ConfigProvider(),
   new HttpProvider(),
-  new DatabaseProvider(),
+  // new DatabaseProvider(),
   new EncryptionProvider(),
-  new SessionProvider(),
+  // new SessionProvider(),
   new ViewProvider(),
 ]
