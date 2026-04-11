@@ -1,6 +1,6 @@
 {
   "name": "@strav/signal",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "type": "module",
   "description": "Communication layer for the Strav framework \u2014 mail, notifications, and broadcasting",
   "license": "MIT",
