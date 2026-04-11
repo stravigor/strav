@@ -6,6 +6,7 @@
     You're all set. Your project is live and ready to build. <br/>
     Blazing fast, powered by Bun and Vue.js
   </p>
+  <vue:counter/>
   <div class="features">
     <div class="feature">
       <h4>Schema-First Architecture</h4>
