@@ -3,9 +3,15 @@ import { app } from '@strav/kernel'
 import { IslandBuilder, ViewEngine } from '@strav/view'
 import { providers } from './start/providers'
 
-// Build islands + CSS before the server starts so they're included in the public/ scan
+// Build islands + CSS before the server starts
+// Outputs: public/css/app.css (from SCSS) and public/builds/islands.js (Vue components)
 const builder = new IslandBuilder({
-  css: { entry: 'resources/css/app.scss' },
+  css: {
+    entry: 'resources/css/app.scss',
+    outDir: './public/css',
+    outFile: 'app.css'
+  },
+  outDir: './public/builds',
 })
 
 // Register service providers

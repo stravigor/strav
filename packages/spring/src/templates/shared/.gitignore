@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.bun
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+storage/logs/
+
+# Cache
+storage/cache/
+.cache/
+
+# Compiled assets
+public/css/*.css
+public/css/*.css.gz
+public/css/*.css.br
+public/builds/*.js
+public/builds/*.js.gz
+public/builds/*.js.br
+public/builds/*.json
+public/*.js
+public/*.js.gz
+public/*.js.br
+public/*.json
+
+# Keep directory structure
+!public/css/.gitkeep
+!public/builds/.gitkeep
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
