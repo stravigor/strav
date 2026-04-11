@@ -1,6 +1,6 @@
 {
   "name": "@strav/queue",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "type": "module",
   "description": "Background job processing and task scheduling for the Strav framework",
   "license": "MIT",
