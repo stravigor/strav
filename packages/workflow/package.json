@@ -1,6 +1,6 @@
 {
   "name": "@strav/workflow",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "type": "module",
   "description": "Workflow orchestration for the Strav framework",
   "license": "MIT",
