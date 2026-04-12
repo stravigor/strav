@@ -35,6 +35,41 @@ env.bool('APP_DEBUG', false)   // true for 'true', '1', 'yes'
 
 All typed accessors throw if the variable is not set and no default is provided. If the variable exists but cannot be parsed (e.g., `env.int('NOT_A_NUMBER')`), the default is returned.
 
+## config() — Configuration access
+
+Access configuration values without manually resolving from the container. The helper lazily resolves and caches the Configuration instance.
+
+```typescript
+import { config } from '@strav/kernel'
+```
+
+### Basic usage
+
+```typescript
+config('database.host')                  // returns value, uses Configuration.get()
+config('database.port', 5432)            // with default fallback
+config('app.name', 'My App')             // 'My App' if not set
+```
+
+### Typed values
+
+```typescript
+config.int('app.port', 3000)            // parsed as integer
+config.float('cache.ratio', 0.75)       // parsed as float
+config.bool('app.debug', false)         // boolean conversion
+config.array('app.tags', [])            // ensures array type
+```
+
+### Additional methods
+
+```typescript
+config.has('database.host')             // check if key exists
+config.set('app.debug', true)           // set value at runtime
+config.all()                            // get entire config tree
+```
+
+The config helper provides the same simple access pattern as `env()` but for configuration values loaded from the `config/` directory. It requires the ConfigProvider to be registered with the app.
+
 ## String helpers
 
 Case conversion functions for transforming between naming conventions.

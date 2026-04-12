@@ -71,6 +71,40 @@ config.set('app.debug', true) // set at runtime
 config.all()                  // returns the entire config tree
 ```
 
+## Config helper
+
+For simple configuration access without resolving from the container, use the `config()` helper:
+
+```typescript
+import { config } from '@strav/kernel'
+
+// Basic usage
+const dbHost = config('database.host')              // '127.0.0.1'
+const dbPort = config('database.port', 5432)        // with default fallback
+const appName = config('app.name', 'My App')        // 'My App' if not set
+```
+
+### Typed methods
+
+Similar to the `env()` helper, `config()` provides typed accessors:
+
+```typescript
+config.int('app.port', 3000)        // parsed as integer
+config.float('cache.ratio', 0.75)   // parsed as float
+config.bool('app.debug', false)     // boolean conversion
+config.array('app.tags', [])        // ensures array type
+```
+
+### Additional utilities
+
+```typescript
+config.has('database.host')         // check if key exists
+config.set('app.debug', true)       // set value at runtime
+config.all()                        // get entire config tree
+```
+
+The helper lazily resolves and caches the Configuration instance from the app container, providing the same simple access pattern as the `env()` helper.
+
 ## Supported file formats
 
 | Format | Extensions | Loader |
