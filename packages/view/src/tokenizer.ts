@@ -27,6 +27,7 @@ const DIRECTIVES = new Set([
   'show',
   'include',
   'islands',
+  'css',
   'csrf',
   'class',
   'style',

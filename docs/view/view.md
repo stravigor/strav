@@ -130,6 +130,20 @@ When `isActive` is `true`:
 <span style="background-color: red; font-weight: bold"></span>
 ```
 
+### CSS
+
+Include CSS files built with IslandBuilder:
+
+```html
+{{-- Include all CSS files --}}
+@css
+
+{{-- Include specific named CSS file --}}
+@css('admin')
+```
+
+When using multiple CSS entries with IslandBuilder, `@css` outputs `<link>` tags for all configured CSS files. Use `@css('key')` to include a specific CSS file. The directive automatically includes versioned URLs for cache busting.
+
 ### CSRF
 
 Output a hidden CSRF token input inside forms:
@@ -372,7 +386,39 @@ const islands = new IslandBuilder({
   outDir: './public',         // default: './public'
   outFile: 'islands.js',     // default: 'islands.js'
   minify: true,               // default: true in production
+  css: {                      // optional: CSS compilation
+    entry: 'resources/css/app.scss',   // see below for multiple entries
+    outDir: './public/css',             // default: './public/css'
+    basePath: '/css/',                  // default: '/css/'
+  }
 })
+```
+
+**Multiple CSS entries:**
+
+The `css.entry` option supports three formats:
+
+```typescript
+// Single entry (backward compatible)
+css: { entry: 'resources/css/app.scss' }
+
+// Array of entries (auto-generated output names)
+css: {
+  entry: [
+    'resources/css/app.scss',      // → app.css
+    'resources/css/admin.scss',    // → admin.css
+    'resources/css/vendor.scss'    // → vendor.css
+  ]
+}
+
+// Named entries (explicit keys)
+css: {
+  entry: {
+    main: 'resources/css/app.scss',     // → main.css
+    admin: 'resources/css/admin.scss',  // → admin.css
+    vendor: 'resources/css/vendor.scss' // → vendor.css
+  }
+}
 ```
 
 **Dev mode — watch for changes:**
@@ -383,6 +429,55 @@ islands.watch()
 
 // Stop watching
 islands.unwatch()
+```
+
+**Complete example with multiple CSS:**
+
+```typescript
+// server.ts
+import { IslandBuilder } from '@strav/view'
+
+const islands = new IslandBuilder({
+  css: {
+    entry: {
+      main: 'resources/css/app.scss',
+      admin: 'resources/css/admin.scss',
+      critical: 'resources/css/critical.scss'
+    }
+  }
+})
+
+await islands.build()
+
+if (Bun.env.NODE_ENV !== 'production') {
+  islands.watch()
+}
+```
+
+```html
+{{-- views/layouts/app.strav --}}
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ title }}</title>
+  @css('critical')  {{-- Critical CSS only --}}
+</head>
+<body>
+  @show('content')
+
+  @css  {{-- All CSS files --}}
+  @islands
+</body>
+</html>
+```
+
+```html
+{{-- views/admin/dashboard.strav --}}
+@layout('layouts/admin')
+
+@section('head')
+  @css('admin')  {{-- Admin-specific CSS --}}
+@end
 ```
 
 **Dependencies:** The app package needs `vue` as a dependency (it gets bundled into `islands.js`):

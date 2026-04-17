@@ -254,6 +254,34 @@ function compileDirective(
       break
     }
 
+    case 'css': {
+      if (!token.args) {
+        // No arguments: include all CSS files
+        lines.push(`
+          if (typeof __cssSrcArray !== 'undefined' && __cssSrcArray.length > 0) {
+            for (var i = 0; i < __cssSrcArray.length; i++) {
+              __out += '<link rel="stylesheet" href="' + __cssSrcArray[i] + '">';
+            }
+          } else if (typeof __cssSrc !== 'undefined') {
+            // Fallback to single CSS for backward compatibility
+            __out += '<link rel="stylesheet" href="' + __cssSrc + '">';
+          }
+        `.trim())
+      } else {
+        // With argument: include specific named CSS file
+        const key = token.args.replace(/^['"]|['"]$/g, '').trim()
+        lines.push(`
+          if (typeof __cssSrcs !== 'undefined' && __cssSrcs['${escapeJs(key)}']) {
+            __out += '<link rel="stylesheet" href="' + __cssSrcs['${escapeJs(key)}'] + '">';
+          } else if ('${escapeJs(key)}' === 'default' && typeof __cssSrc !== 'undefined') {
+            // Fallback to single CSS for 'default' key
+            __out += '<link rel="stylesheet" href="' + __cssSrc + '">';
+          }
+        `.trim())
+      }
+      break
+    }
+
     case 'class': {
       if (!token.args) throw new TemplateError(`@class requires arguments at line ${token.line}`)
       const classEntries = parseConditionalArray(token.args)

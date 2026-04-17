@@ -22,14 +22,32 @@ interface Router {
 }
 
 export interface CssOptions {
-  /** Sass entry file path. e.g. 'resources/css/app.scss' */
-  entry: string
-  /** Output filename. Default: derived from entry (app.scss → app.css) */
-  outFile?: string
+  /**
+   * CSS entry configuration. Supports:
+   * - string: Single entry file (backward compatible)
+   * - string[]: Multiple entry files with auto-generated output names
+   * - Record<string, string>: Named entries with explicit keys
+   */
+  entry: string | string[] | Record<string, string>
   /** Output directory. Default: './public/css' */
   outDir?: string
-  /** Base URL path for the CSS file. Default: '/css/' */
+  /** Base URL path for the CSS files. Default: '/css/' */
   basePath?: string
+}
+
+interface CssEntry {
+  /** Unique key for this CSS entry */
+  key: string
+  /** Source file path */
+  src: string
+  /** Output filename */
+  outFile: string
+  /** Output directory */
+  outDir: string
+  /** Base URL path */
+  basePath: string
+  /** Version hash */
+  version?: string
 }
 
 export interface IslandBuilderOptions {
@@ -66,11 +84,10 @@ export class IslandBuilder {
   private compress: boolean
   private basePath: string
   private watcher: FSWatcher | null = null
-  private cssWatcher: FSWatcher | null = null
+  private cssEntries: Map<string, CssEntry> = new Map()
+  private cssWatchers: Map<string, FSWatcher> = new Map()
   private _version: string | null = null
   private _manifest: IslandManifest | null = null
-  private cssOpts: { entry: string; outFile: string; outDir: string; basePath: string } | null = null
-  private _cssVersion: string | null = null
   private router: Router | null = null
 
   constructor(options: IslandBuilderOptions = {}) {
@@ -82,11 +99,57 @@ export class IslandBuilder {
     this.basePath = options.basePath ?? '/builds/'
 
     if (options.css) {
-      this.cssOpts = {
-        entry: resolve(options.css.entry),
-        outFile: options.css.outFile ?? basename(options.css.entry).replace(/\.scss$/, '.css'),
-        outDir: resolve(options.css.outDir ?? './public/css'),
-        basePath: options.css.basePath ?? '/css/',
+      this.initializeCssEntries(options.css)
+    }
+  }
+
+  /** Parse and normalize CSS options into CssEntry map */
+  private initializeCssEntries(cssOptions: CssOptions): void {
+    const outDir = resolve(cssOptions.outDir ?? './public/css')
+    const basePath = cssOptions.basePath ?? '/css/'
+
+    if (typeof cssOptions.entry === 'string') {
+      // Single entry (backward compatible)
+      const key = 'default'
+      const src = resolve(cssOptions.entry)
+      const outFile = basename(src).replace(/\.scss$/, '.css')
+
+      this.cssEntries.set(key, {
+        key,
+        src,
+        outFile,
+        outDir,
+        basePath,
+      })
+    } else if (Array.isArray(cssOptions.entry)) {
+      // Array of entries with auto-generated keys
+      for (const entry of cssOptions.entry) {
+        const src = resolve(entry)
+        const filename = basename(src)
+        const key = filename.replace(/\.(scss|css)$/, '')
+        const outFile = filename.replace(/\.scss$/, '.css')
+
+        this.cssEntries.set(key, {
+          key,
+          src,
+          outFile,
+          outDir,
+          basePath,
+        })
+      }
+    } else {
+      // Object with named entries
+      for (const [key, entry] of Object.entries(cssOptions.entry)) {
+        const src = resolve(entry)
+        const outFile = `${key}.css`
+
+        this.cssEntries.set(key, {
+          key,
+          src,
+          outFile,
+          outDir,
+          basePath,
+        })
       }
     }
   }
@@ -107,11 +170,43 @@ export class IslandBuilder {
     return this._manifest
   }
 
-  /** The versioned CSS src (e.g. '/css/app.css?v=abc12345'), or null if CSS is not configured. */
+  /**
+   * The versioned CSS src for the first/default entry (backward compatibility).
+   * Returns null if no CSS is configured.
+   */
   get cssSrc(): string | null {
-    if (!this.cssOpts) return null
-    const base = this.cssOpts.basePath + this.cssOpts.outFile
-    return this._cssVersion ? `${base}?v=${this._cssVersion}` : base
+    if (this.cssEntries.size === 0) return null
+
+    // Get first entry (or 'default' if it exists)
+    const entry = this.cssEntries.get('default') || this.cssEntries.values().next().value
+    if (!entry) return null
+
+    const base = entry.basePath + entry.outFile
+    return entry.version ? `${base}?v=${entry.version}` : base
+  }
+
+  /**
+   * Get all CSS sources as a Map of key to versioned URL.
+   * Returns empty Map if no CSS is configured.
+   */
+  get cssSrcs(): Map<string, string> {
+    const sources = new Map<string, string>()
+
+    for (const entry of this.cssEntries.values()) {
+      const base = entry.basePath + entry.outFile
+      const url = entry.version ? `${base}?v=${entry.version}` : base
+      sources.set(entry.key, url)
+    }
+
+    return sources
+  }
+
+  /**
+   * Get all CSS sources as an array of versioned URLs.
+   * Returns empty array if no CSS is configured.
+   */
+  get cssSrcArray(): string[] {
+    return Array.from(this.cssSrcs.values())
   }
 
   /** Discover all .vue files in the islands directory (recursively). */
@@ -275,55 +370,84 @@ export class IslandBuilder {
     }
   }
 
-  /** Update the ViewEngine global so @islands() picks up the versioned src. */
+  /** Update the ViewEngine global so @islands() and @css() pick up versioned sources. */
   private syncViewEngine(): void {
     try {
       ViewEngine.setGlobal('__islandsSrc', this.src)
+
+      // Set backward-compatible single CSS source
       if (this.cssSrc) {
         ViewEngine.setGlobal('__cssSrc', this.cssSrc)
+      }
+
+      // Set multiple CSS sources
+      const cssSrcs = this.cssSrcs
+      if (cssSrcs.size > 0) {
+        // Convert Map to plain object for easier use in templates
+        const cssSrcObject: Record<string, string> = {}
+        for (const [key, url] of cssSrcs.entries()) {
+          cssSrcObject[key] = url
+        }
+        ViewEngine.setGlobal('__cssSrcs', cssSrcObject)
+        ViewEngine.setGlobal('__cssSrcArray', this.cssSrcArray)
       }
     } catch {
       // ViewEngine may not be initialized yet
     }
   }
 
-  /** Compile Sass entry to CSS. */
+  /** Compile all Sass entries to CSS. */
   async buildCss(): Promise<void> {
-    if (!this.cssOpts) return
+    if (this.cssEntries.size === 0) return
 
     const sass = await import('sass')
-    const result = sass.compile(this.cssOpts.entry, {
-      style: this.minify ? 'compressed' : 'expanded',
-    })
+    const buildPromises: Promise<void>[] = []
 
-    mkdirSync(this.cssOpts.outDir, { recursive: true })
-    const outPath = join(this.cssOpts.outDir, this.cssOpts.outFile)
-    await Bun.write(outPath, result.css)
-
-    const content = new Uint8Array(Buffer.from(result.css))
-    this._cssVersion = this.computeHash(content)
-
-    let compressedSizes: { gzip?: number; brotli?: number } = {}
-    if (this.compress) {
-      compressedSizes = await this.generateCompressed(outPath, content)
-    } else {
-      this.cleanCompressed(outPath)
+    for (const entry of this.cssEntries.values()) {
+      buildPromises.push(this.buildSingleCss(entry, sass))
     }
 
+    await Promise.all(buildPromises)
     this.syncViewEngine()
+  }
 
-    const entryName = basename(this.cssOpts.entry)
-    const sizeKB = (content.length / 1024).toFixed(1)
-    const gzKB = compressedSizes.gzip
-      ? ` | gzip: ${(compressedSizes.gzip / 1024).toFixed(1)}kB`
-      : ''
-    const brKB = compressedSizes.brotli
-      ? ` | br: ${(compressedSizes.brotli / 1024).toFixed(1)}kB`
-      : ''
+  /** Compile a single CSS entry. */
+  private async buildSingleCss(entry: CssEntry, sass: any): Promise<void> {
+    try {
+      const result = sass.compile(entry.src, {
+        style: this.minify ? 'compressed' : 'expanded',
+      })
 
-    console.log(
-      `[css] Built ${entryName} → ${this.cssOpts.outFile} (${sizeKB}kB${gzKB}${brKB}) v=${this._cssVersion}`
-    )
+      mkdirSync(entry.outDir, { recursive: true })
+      const outPath = join(entry.outDir, entry.outFile)
+      await Bun.write(outPath, result.css)
+
+      const content = new Uint8Array(Buffer.from(result.css))
+      entry.version = this.computeHash(content)
+
+      let compressedSizes: { gzip?: number; brotli?: number } = {}
+      if (this.compress) {
+        compressedSizes = await this.generateCompressed(outPath, content)
+      } else {
+        this.cleanCompressed(outPath)
+      }
+
+      const entryName = basename(entry.src)
+      const sizeKB = (content.length / 1024).toFixed(1)
+      const gzKB = compressedSizes.gzip
+        ? ` | gzip: ${(compressedSizes.gzip / 1024).toFixed(1)}kB`
+        : ''
+      const brKB = compressedSizes.brotli
+        ? ` | br: ${(compressedSizes.brotli / 1024).toFixed(1)}kB`
+        : ''
+
+      console.log(
+        `[css] Built ${entryName} → ${entry.outFile} (${sizeKB}kB${gzKB}${brKB}) v=${entry.version}`
+      )
+    } catch (error) {
+      console.error(`[css] Failed to build ${entry.src}:`, error)
+      throw error
+    }
   }
 
   /** Extract route definitions for client-side registration. */
@@ -471,16 +595,32 @@ export class IslandBuilder {
       console.log(`[islands] Watching ${this.islandsDir}`)
     }
 
-    // Watch CSS source directory
-    if (this.cssOpts && !this.cssWatcher) {
-      const cssDir = dirname(this.cssOpts.entry)
+    // Watch CSS source directories
+    this.watchCss()
+  }
 
-      this.cssWatcher = fsWatch(cssDir, { recursive: true }, (_event, filename) => {
+  /** Watch CSS source directories for changes. */
+  private watchCss(): void {
+    if (this.cssEntries.size === 0) return
+
+    // Get unique directories to watch
+    const dirsToWatch = new Set<string>()
+    for (const entry of this.cssEntries.values()) {
+      dirsToWatch.add(dirname(entry.src))
+    }
+
+    // Set up watchers for each unique directory
+    for (const cssDir of dirsToWatch) {
+      // Skip if already watching this directory
+      if (this.cssWatchers.has(cssDir)) continue
+
+      const watcher = fsWatch(cssDir, { recursive: true }, (_event, filename) => {
         if (filename && !filename.endsWith('.scss') && !filename.endsWith('.css')) return
         console.log('[css] Change detected, recompiling...')
         this.buildCss().catch(err => console.error('[css] Build error:', err))
       })
 
+      this.cssWatchers.set(cssDir, watcher)
       console.log(`[css] Watching ${cssDir}`)
     }
   }
@@ -489,7 +629,12 @@ export class IslandBuilder {
   unwatch(): void {
     this.watcher?.close()
     this.watcher = null
-    this.cssWatcher?.close()
-    this.cssWatcher = null
+
+    // Close all CSS watchers
+    for (const [dir, watcher] of this.cssWatchers.entries()) {
+      watcher.close()
+      console.log(`[css] Stopped watching ${dir}`)
+    }
+    this.cssWatchers.clear()
   }
 }
