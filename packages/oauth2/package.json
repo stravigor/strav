@@ -1,6 +1,6 @@
 {
   "name": "@strav/oauth2",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "type": "module",
   "description": "OAuth2 server implementation for the Strav framework",
   "license": "MIT",
