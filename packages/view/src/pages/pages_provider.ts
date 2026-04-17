@@ -24,7 +24,17 @@ export default class PagesProvider extends ServiceProvider {
 
     const router = app.resolve(Router)
 
-    // Register catch-all route - this must be done in boot() to ensure
+    // Register subdomain-specific routes if subdomain routing is enabled
+    if (pagesConfig.subdomains?.enabled && pagesConfig.subdomains.mappings) {
+      for (const subdomain of Object.keys(pagesConfig.subdomains.mappings)) {
+        router.subdomain(subdomain, (r) => {
+          r.get('/', [PageController, 'handle']).as(`pages.${subdomain}.catch-home`)
+          r.get('/*path', [PageController, 'handle']).as(`pages.${subdomain}.catch-all`)
+        })
+      }
+    }
+
+    // Register catch-all route for main domain - this must be done in boot() to ensure
     // it's registered AFTER all application routes have been registered
     router.get('/', [PageController, 'handle']).as('pages.catch-home')
     router.get('/*path', [PageController, 'handle']).as('pages.catch-all')

@@ -26,8 +26,11 @@ export default class PageController {
     // Get the requested path from route parameters
     const requestPath = ctx.params.path || ''
 
+    // Get subdomain if subdomain routing is enabled
+    const subdomain = pagesConfig.subdomains?.enabled ? ctx.subdomain : ''
+
     // Resolve the page file path
-    const resolution = this.resolvePage(requestPath, viewConfig)
+    const resolution = this.resolvePage(requestPath, viewConfig, subdomain)
 
     // Return 404 if path is invalid or file doesn't exist
     if (!resolution.isValid || !resolution.exists) {
@@ -47,11 +50,23 @@ export default class PageController {
   /**
    * Resolve a request path to a .strav file
    */
-  private resolvePage(requestPath: string, viewConfig: ViewConfigWithPages): PageResolutionResult {
+  private resolvePage(requestPath: string, viewConfig: ViewConfigWithPages, subdomain: string = ''): PageResolutionResult {
     const pagesConfig = viewConfig.pages!
     const baseViewDir = viewConfig.directory || 'resources/views'
-    const pagesDir = join(baseViewDir, pagesConfig.directory || 'pages')
+    const basePagesDir = join(baseViewDir, pagesConfig.directory || 'pages')
     const indexFile = pagesConfig.indexFile || 'index.strav'
+
+    // Determine the pages directory based on subdomain
+    let pagesDir = basePagesDir
+    if (subdomain && pagesConfig.subdomains?.enabled) {
+      const subdomainDir = this.getSubdomainDirectory(subdomain, pagesConfig)
+      if (subdomainDir) {
+        pagesDir = join(basePagesDir, subdomainDir)
+      }
+    } else if (!subdomain && pagesConfig.subdomains?.enabled && pagesConfig.subdomains.defaultDirectory) {
+      // Use default directory for main domain when subdomains are enabled
+      pagesDir = join(basePagesDir, pagesConfig.subdomains.defaultDirectory)
+    }
 
     // Normalize the request path
     let normalizedPath = normalize(requestPath).replace(/^\/+/, '')
@@ -68,7 +83,7 @@ export default class PageController {
         const directFile = `${normalizedPath}.strav`
         const directFilePath = resolve(pagesDir, directFile)
 
-        if (this.isValidPath(directFilePath, pagesDir) && existsSync(directFilePath)) {
+        if (this.isValidPath(directFilePath, basePagesDir) && existsSync(directFilePath)) {
           normalizedPath = directFile
         } else {
           normalizedPath = join(normalizedPath, indexFile)
@@ -76,13 +91,46 @@ export default class PageController {
       }
     }
 
-    const filePath = resolve(pagesDir, normalizedPath)
+    let filePath = resolve(pagesDir, normalizedPath)
+    let exists = existsSync(filePath)
+
+    // Try fallback to default directory if enabled and file doesn't exist
+    if (!exists && subdomain && pagesConfig.subdomains?.fallbackToDefault !== false && pagesConfig.subdomains?.defaultDirectory) {
+      const defaultDir = join(basePagesDir, pagesConfig.subdomains.defaultDirectory)
+      const fallbackPath = resolve(defaultDir, normalizedPath)
+      if (existsSync(fallbackPath) && this.isValidPath(fallbackPath, basePagesDir)) {
+        filePath = fallbackPath
+        exists = true
+      }
+    }
 
     return {
       filePath,
-      exists: existsSync(filePath),
-      isValid: this.isValidPath(filePath, pagesDir) && normalizedPath.endsWith('.strav')
+      exists,
+      isValid: this.isValidPath(filePath, basePagesDir) && normalizedPath.endsWith('.strav')
     }
+  }
+
+  /**
+   * Get the subdomain-specific directory based on mappings
+   */
+  private getSubdomainDirectory(subdomain: string, pagesConfig: ViewConfigWithPages['pages']): string | null {
+    if (!pagesConfig?.subdomains?.mappings) return null
+
+    // First check for exact match
+    if (pagesConfig.subdomains.mappings[subdomain]) {
+      return pagesConfig.subdomains.mappings[subdomain]
+    }
+
+    // Check for dynamic patterns (e.g., :tenant)
+    for (const [pattern, directory] of Object.entries(pagesConfig.subdomains.mappings)) {
+      if (pattern.startsWith(':')) {
+        // Dynamic pattern matches any subdomain
+        return directory
+      }
+    }
+
+    return null
   }
 
   /**

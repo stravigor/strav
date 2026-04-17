@@ -19,6 +19,47 @@ export interface PagesConfig {
    * @default 'index.strav'
    */
   indexFile?: string
+
+  /**
+   * Subdomain routing configuration
+   */
+  subdomains?: SubdomainConfig
+}
+
+/**
+ * Configuration for subdomain routing
+ */
+export interface SubdomainConfig {
+  /**
+   * Whether subdomain routing is enabled
+   * @default false
+   */
+  enabled?: boolean
+
+  /**
+   * Map of subdomain patterns to directories
+   * Keys can be static (e.g., 'docs') or dynamic (e.g., ':tenant')
+   * Values are directory names within the pages directory
+   * @example
+   * {
+   *   'docs': '_docs',      // docs.example.com → pages/_docs/
+   *   'api': '_api',        // api.example.com → pages/_api/
+   *   ':tenant': '_tenants' // *.example.com → pages/_tenants/
+   * }
+   */
+  mappings?: Record<string, string>
+
+  /**
+   * Default directory for pages without subdomain (main domain)
+   * @default '_default'
+   */
+  defaultDirectory?: string
+
+  /**
+   * Whether to fallback to default directory when subdomain page not found
+   * @default true
+   */
+  fallbackToDefault?: boolean
 }
 
 /**

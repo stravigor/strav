@@ -82,6 +82,43 @@ export default {
 | `enabled` | `boolean` | `true` | Whether static pages are enabled |
 | `indexFile` | `string` | `'index.strav'` | Default file to serve for directory requests |
 
+### Subdomain routing configuration
+
+Enable subdomain-specific pages with additional configuration:
+
+```typescript
+export default {
+  directory: 'resources/views',
+  cache: env.bool('VIEW_CACHE', true),
+  assets: ['css/app.css', 'builds/islands.js'],
+  pages: {
+    directory: 'pages',
+    enabled: true,
+    indexFile: 'index.strav',
+    subdomains: {
+      enabled: true,
+      mappings: {
+        'docs': '_docs',           // docs.example.com → pages/_docs/
+        'api': '_api',             // api.example.com → pages/_api/
+        'blog': '_blog',           // blog.example.com → pages/_blog/
+        ':tenant': '_tenants'      // *.example.com → pages/_tenants/
+      },
+      defaultDirectory: '_default', // Main domain → pages/_default/
+      fallbackToDefault: true       // Fallback to _default if subdomain page not found
+    }
+  }
+}
+```
+
+### Subdomain configuration options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | `boolean` | `false` | Whether subdomain routing is enabled |
+| `mappings` | `object` | `{}` | Map of subdomain patterns to directories |
+| `defaultDirectory` | `string` | `'_default'` | Directory for main domain pages |
+| `fallbackToDefault` | `boolean` | `true` | Fallback to default directory when subdomain page not found |
+
 ## URL mapping
 
 Static pages follow a simple file-to-URL mapping:
@@ -100,6 +137,34 @@ resources/views/pages/
     ├── index.strav      → /blog
     └── 2024-recap.strav → /blog/2024-recap
 ```
+
+### Subdomain URL mapping
+
+When subdomain routing is enabled, pages are organized by subdomain:
+
+```
+resources/views/pages/
+├── _default/                     # Main domain (example.com)
+│   ├── index.strav              → example.com/
+│   ├── about.strav              → example.com/about
+│   └── contact.strav            → example.com/contact
+├── _docs/                        # docs.example.com
+│   ├── index.strav              → docs.example.com/
+│   ├── getting-started.strav    → docs.example.com/getting-started
+│   └── api/
+│       └── reference.strav      → docs.example.com/api/reference
+├── _api/                         # api.example.com
+│   ├── index.strav              → api.example.com/
+│   └── v1/
+│       └── endpoints.strav      → api.example.com/v1/endpoints
+└── _tenants/                     # Dynamic subdomain (*.example.com)
+    ├── index.strav              → acme.example.com/
+    ├── dashboard.strav          → acme.example.com/dashboard
+    └── settings.strav           → acme.example.com/settings
+```
+
+With `fallbackToDefault: true`, if a page doesn't exist in the subdomain directory, it will try the `_default` directory. For example:
+- `docs.example.com/contact` → First tries `_docs/contact.strav`, then falls back to `_default/contact.strav`
 
 ### URL resolution rules
 
@@ -282,6 +347,35 @@ Example:
 router.get('/api', (ctx) => ctx.json({ message: 'API endpoint' }))
 
 // Only if no /api route exists will pages/api.strav be served
+```
+
+## Dynamic subdomain patterns
+
+Use dynamic subdomain patterns to handle multi-tenant applications or user-specific pages:
+
+```typescript
+// config/view.ts
+pages: {
+  subdomains: {
+    enabled: true,
+    mappings: {
+      ':tenant': '_tenants',     // Any subdomain → _tenants/
+      ':user': '_profiles'       // Any subdomain → _profiles/
+    }
+  }
+}
+```
+
+In your templates, you can access the subdomain value via the context:
+
+```html
+<!-- pages/_tenants/dashboard.strav -->
+@layout('layouts/app')
+
+@section('content')
+  <h1>Welcome to {{ ctx.subdomain }}'s Dashboard</h1>
+  <!-- For acme.example.com, displays: Welcome to acme's Dashboard -->
+@end
 ```
 
 ## Common patterns
