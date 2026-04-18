@@ -17,6 +17,7 @@ function escapeJs(str: string): string {
   return str
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
+    .replace(/'/g, "\\'")
     .replace(/\n/g, '\\n')
     .replace(/\r/g, '\\r')
     .replace(/\t/g, '\\t')
@@ -220,13 +221,25 @@ function compileDirective(
 
     case 'show': {
       if (!token.args) throw new TemplateError(`@show requires a name at line ${token.line}`)
-      const name = token.args.replace(/^['"]|['"]$/g, '').trim()
+
+      // Parse arguments: either "name" or "name", "fallback"
+      const match = token.args.match(/^\s*['"]([^'"]+)['"]\s*(?:,\s*['"]([^'"]*)['"]\s*)?$/)
+      if (!match) {
+        throw new TemplateError(`@show syntax error at line ${token.line}: expected "'name'" or "'name', 'fallback'"`)
+      }
+
+      const name = match[1]!
+      const fallback = match[2] || ''
       const nameStr = JSON.stringify(name)
-      // Output block content: prefer child-provided variable, fall back to __blocks.
+      const fallbackStr = JSON.stringify(fallback)
+
+      // Output block content: prefer child-provided variable, fall back to __blocks, then fallback value
       lines.push(`if (typeof ${name} !== 'undefined' && ${name} !== null) {`)
       lines.push(`  __out += ${name};`)
+      lines.push(`} else if (__blocks[${nameStr}]) {`)
+      lines.push(`  __out += __blocks[${nameStr}];`)
       lines.push(`} else {`)
-      lines.push(`  __out += __blocks[${nameStr}] || '';`)
+      lines.push(`  __out += ${fallbackStr};`)
       lines.push(`}`)
       break
     }
