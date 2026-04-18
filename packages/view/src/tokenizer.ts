@@ -34,6 +34,7 @@ const DIRECTIVES = new Set([
   'push',
   'prepend',
   'stack',
+  'set',
 ])
 
 export function tokenize(source: string): Token[] {

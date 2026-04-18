@@ -97,6 +97,7 @@ export function compile(tokens: Token[]): CompilationResult {
   lines.push('let __out = "";')
   lines.push('const __blocks = {};')
   lines.push('const __stacks = {};')
+  lines.push('const __variables = {};')
 
   for (const token of tokens) {
     switch (token.type) {
@@ -150,7 +151,7 @@ export function compile(tokens: Token[]): CompilationResult {
     throw new TemplateError(`Unclosed @${unclosed.type} block (opened at line ${unclosed.line})`)
   }
 
-  lines.push('return { output: __out, blocks: __blocks, stacks: __stacks };')
+  lines.push('return { output: __out, blocks: __blocks, stacks: __stacks, variables: __variables };')
 
   return { code: lines.join('\n'), layout }
 }
@@ -348,6 +349,25 @@ function compileDirective(
       lines.push(`  const __mergedStack = [...((__data.__stacks && __data.__stacks[${nameStr}]) || []), ...(__stacks[${nameStr}] || [])];`)
       lines.push(`  __out += __mergedStack.join('');`)
       lines.push(`}`)
+      break
+    }
+
+    case 'set': {
+      if (!token.args) throw new TemplateError(`@set requires arguments at line ${token.line}`)
+
+      // Parse arguments: @set('name', 'value')
+      const match = token.args.match(/^\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]*)['"]?\s*$/)
+      if (!match) {
+        throw new TemplateError(`@set syntax error at line ${token.line}: expected @set('name', 'value'). Got: "${token.args}"`)
+      }
+
+      const name = match[1]!
+      const value = match[2]!
+      const nameStr = JSON.stringify(name)
+      const valueStr = JSON.stringify(value)
+
+      // Store variable in __variables object
+      lines.push(`__variables[${nameStr}] = ${valueStr};`)
       break
     }
 

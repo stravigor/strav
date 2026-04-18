@@ -277,6 +277,40 @@ Layouts define the page shell. Child templates fill named sections.
 
 The child template renders first, collecting its sections. Then the layout renders with those sections available as data.
 
+### Setting layout variables
+
+Use `@set` to declare variables in child templates that parent layouts can access:
+
+```html
+{{-- views/pages/about.strav --}}
+@layout('layouts/app')
+@set('title', 'About Us')
+@set('meta_description', 'Learn more about our company')
+
+@section('content')
+  <h1>About Us</h1>
+  <p>Welcome to our company...</p>
+@end
+```
+
+**Layout** — variables are automatically available:
+
+```html
+{{-- views/layouts/app.strav --}}
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ meta_description }}">
+</head>
+<body>
+  @show('content')
+</body>
+</html>
+```
+
+Variables set with `@set` are merged into the parent layout's template data, making them accessible via normal `{{ variable }}` expressions. This provides a clean separation between content blocks (`@section`) and simple key-value data (`@set`).
+
 ### Asset versioning
 
 Append content hashes to asset URLs for cache busting. List assets in `config/view.ts` and the `ViewProvider` handles the rest — hashing at boot, registering the `asset()` template global, and watching for changes in development.

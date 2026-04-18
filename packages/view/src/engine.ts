@@ -79,9 +79,9 @@ export default class ViewEngine {
     // Merge current template's stacks with parent stacks
     this.mergeStacks(parentStacks, result.stacks)
 
-    // Layout inheritance: render child first, then render layout with blocks and stacks merged
+    // Layout inheritance: render child first, then render layout with blocks, variables, and stacks merged
     if (entry.layout) {
-      const layoutData = { ...data, ...result.blocks, __stacks: parentStacks }
+      const layoutData = { ...data, ...result.blocks, ...result.variables, __stacks: parentStacks }
       return this.renderWithDepth(entry.layout, layoutData, depth + 1, parentStacks)
     }
 
@@ -118,7 +118,7 @@ export default class ViewEngine {
     this.mergeStacks(parentStacks, result.stacks)
 
     if (entry.layout) {
-      const layoutData = { ...data, ...result.blocks, __stacks: parentStacks }
+      const layoutData = { ...data, ...result.blocks, ...result.variables, __stacks: parentStacks }
       const layoutOutput = await this.renderWithDepth(entry.layout, layoutData, depth + 1, parentStacks)
       return { output: layoutOutput, stacks: parentStacks }
     }
