@@ -2,6 +2,7 @@ export interface RenderResult {
   output: string
   blocks: Record<string, string>
   stacks: Record<string, string[]>
+  variables: Record<string, unknown>
 }
 
 export type RenderFunction = (

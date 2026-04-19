@@ -64,8 +64,66 @@ export function tokenize(source: string): Token[] {
     return source.slice(pos)
   }
 
+  function extractCodeBlock(): { content: string; length: number } | null {
+    const rest = source.slice(pos)
+
+    // Match opening <code> tag (case-insensitive)
+    const openMatch = rest.match(/^<code(?:\s+[^>]*)?>|^<CODE(?:\s+[^>]*)?>/i)
+    if (!openMatch) return null
+
+    let depth = 1
+    let searchPos = openMatch[0].length
+
+    // Find matching closing tag, handling nested code tags
+    while (searchPos < rest.length && depth > 0) {
+      // Look for the next <code> or </code> tag
+      const nextOpen = rest.slice(searchPos).search(/<code(?:\s+[^>]*)?>|<CODE(?:\s+[^>]*)?>/i)
+      const nextClose = rest.slice(searchPos).search(/<\/code>|<\/CODE>/i)
+
+      if (nextClose === -1) {
+        // No closing tag found, treat entire thing as regular text
+        return null
+      }
+
+      if (nextOpen !== -1 && nextOpen < nextClose) {
+        // Found opening tag before closing tag
+        depth++
+        searchPos += nextOpen + rest.slice(searchPos + nextOpen).match(/^<code(?:\s+[^>]*)?>|^<CODE(?:\s+[^>]*)?>/i)![0].length
+      } else {
+        // Found closing tag
+        depth--
+        if (depth === 0) {
+          // Found the matching closing tag
+          const closeMatch = rest.slice(searchPos + nextClose).match(/^<\/code>|^<\/CODE>/i)!
+          const fullLength = searchPos + nextClose + closeMatch[0].length
+          return {
+            content: rest.slice(0, fullLength),
+            length: fullLength
+          }
+        } else {
+          searchPos += nextClose + rest.slice(searchPos + nextClose).match(/^<\/code>|^<\/CODE>/i)![0].length
+        }
+      }
+    }
+
+    // Unclosed code tag, treat as regular text
+    return null
+  }
+
   while (pos < source.length) {
     const rest = remaining()
+
+    // Check for code blocks first, before any template syntax
+    const codeBlock = extractCodeBlock()
+    if (codeBlock) {
+      flushText()
+      // Add the entire code block as a text token (no template processing)
+      tokens.push({ type: 'text', value: codeBlock.content, line })
+      line += countLines(codeBlock.content)
+      pos += codeBlock.length
+      textStart = pos
+      continue
+    }
 
     // 1. Comments: {{-- ... --}}
     if (rest.startsWith('{{--')) {
