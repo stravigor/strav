@@ -1,6 +1,11 @@
 # Queue
 
-The queue module provides persistent, retryable background job processing backed by PostgreSQL. Jobs survive restarts and can be processed by multiple concurrent workers.
+The queue module provides persistent, retryable background job processing backed by PostgreSQL, plus a cron-like task scheduler for periodic jobs. Jobs survive restarts and can be processed by multiple concurrent workers.
+
+## Components
+
+- **Queue**: Database-backed job processing with retry logic and worker management
+- **Scheduler**: Cron-like periodic task execution for maintenance, reports, and cleanup jobs
 
 ## Setup
 
@@ -179,6 +184,16 @@ bun strav queue:work --queue emails --sleep 500
 
 Press Ctrl+C to stop gracefully.
 
+### schedule
+
+Start the task scheduler:
+
+```bash
+bun strav schedule
+```
+
+Runs periodic tasks defined in `app/schedules.ts`. See [Scheduler documentation](./scheduler.md) for complete details.
+
 ### queue:retry
 
 Move failed jobs back to the queue for reprocessing:
@@ -241,14 +256,14 @@ A partial index on `(queue, available_at) WHERE reserved_at IS NULL` ensures onl
 
 ```typescript
 import { Emitter } from '@strav/kernel'
-import { Queue, Worker } from '@strav/queue'
+import { Queue, Worker, Scheduler } from '@strav/queue'
 
 // Bootstrap
 app.singleton(Queue)
 app.resolve(Queue)
 await Queue.ensureTables()
 
-// Register handlers
+// Register queue handlers
 Queue.handle('send-welcome-email', async (payload, meta) => {
   await mailer.send(payload.email, 'Welcome!')
   console.log(`Sent welcome email (attempt ${meta.attempts}/${meta.maxAttempts})`)
@@ -259,6 +274,16 @@ Queue.handle('generate-report', async (payload) => {
   await saveReport(report)
 })
 
+// Register scheduled tasks
+Scheduler.task('cleanup:sessions', async () => {
+  await db.sql`DELETE FROM "_strav_sessions" WHERE "expires_at" < NOW()`
+}).hourly()
+
+Scheduler.task('warm-cache', async () => {
+  await warmApplicationCache()
+}).daily()
+  .runImmediately() // runs immediately on startup, then daily
+
 // Connect events to queue
 Emitter.on('user.registered', Queue.listener('send-welcome-email'))
 
@@ -268,6 +293,9 @@ await Queue.push('generate-report', { userId: 42 }, {
   timeout: 120_000,
 })
 
+// Manual task execution
+await Scheduler.runNow('cleanup:sessions')
+
 // Start a worker (typically in a separate process)
 const worker = new Worker()
 await worker.start()
@@ -275,14 +303,15 @@ await worker.start()
 
 ## Testing
 
-Use `Queue.flush()` and `Queue.reset()` in your test teardown:
+Use `Queue.flush()`, `Queue.reset()`, and `Scheduler.reset()` in your test teardown:
 
 ```typescript
 import { afterEach } from 'bun:test'
-import { Queue } from '@strav/queue'
+import { Queue, Scheduler } from '@strav/queue'
 
 afterEach(async () => {
   await Queue.flush()  // clear all jobs from DB
   Queue.reset()        // clear registered handlers
+  Scheduler.reset()    // clear registered scheduled tasks
 })
 ```

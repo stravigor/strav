@@ -135,6 +135,51 @@ Scheduler.task('heavy-report', async () => {
 
 If the task is still running at the next tick, it is skipped.
 
+### Immediate execution
+
+Execute a task immediately upon registration, then follow the configured schedule:
+
+```typescript
+// Bootstrap task that runs immediately and then hourly
+Scheduler.task('cache-warm', async () => {
+  await warmCache()
+}).hourly()
+  .runImmediately()
+
+// Deployment task that runs immediately with overlap prevention
+Scheduler.task('migrate-data', async () => {
+  await migrateData()
+}).dailyAt('03:00')
+  .withoutOverlapping()
+  .runImmediately()
+```
+
+Perfect for:
+- **Bootstrap tasks**: Cache warming, data seeding
+- **Deployment tasks**: Run immediately on deploy, then on schedule
+- **Testing**: Verify a task works right after registration
+
+### Manual task execution
+
+Execute any registered task on-demand:
+
+```typescript
+// Register a task
+Scheduler.task('cleanup', async () => {
+  await cleanupTempFiles()
+}).daily()
+
+// Later, trigger it manually
+try {
+  await Scheduler.runNow('cleanup')
+  console.log('Manual cleanup completed')
+} catch (error) {
+  console.error(`Manual execution failed: ${error.message}`)
+}
+```
+
+Throws an error if the task name doesn't exist, with helpful suggestions of available tasks.
+
 ## Running the scheduler
 
 ### CLI
@@ -191,10 +236,11 @@ Scheduler.task('reports:daily', async () => {
 }).dailyAt('02:00')
   .withoutOverlapping()
 
-// Prune cache every 6 hours
+// Warm cache on startup, then prune every 6 hours
 Scheduler.task('cache:prune', async () => {
   await cache.flush()
 }).cron('0 */6 * * *')
+  .runImmediately()
 
 // Send weekly digest on Monday mornings
 Scheduler.task('emails:digest', async () => {
@@ -204,11 +250,22 @@ Scheduler.task('emails:digest', async () => {
   }
 }).weeklyOn('monday', '08:00')
 
+// Bootstrap data migration on deployment, then daily maintenance
+Scheduler.task('data:migrate', async () => {
+  await performDataMigration()
+}).daily()
+  .withoutOverlapping()
+  .runImmediately()
+
 // Scrape competitor prices at random intervals (human-like)
 Scheduler.task('scrape:competitors', async () => {
   await scrapeCompetitorPrices()
 }).sporadically(10, 45, TimeUnit.Minutes)
   .withoutOverlapping()
+
+// Manual task execution example
+// Later in your application, you can trigger tasks manually:
+// await Scheduler.runNow('cleanup:sessions')
 ```
 
 ## Testing
