@@ -38,6 +38,7 @@ export class Schedule {
 
   private _cron: CronExpression | null = null
   private _noOverlap = false
+  private _runImmediately = false
 
   private _sporadicMin: number | null = null
   private _sporadicMax: number | null = null
@@ -179,6 +180,22 @@ export class Schedule {
     return this
   }
 
+  /**
+   * Execute this task immediately upon registration, then follow the configured schedule.
+   * Useful for bootstrap tasks, cache warming, or ensuring tasks run on deployment.
+   */
+  runImmediately(): this {
+    this._runImmediately = true
+
+    // Execute the handler immediately
+    this.executeHandler().catch(error => {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`[scheduler] Immediate execution of "${this.name}" failed: ${message}`)
+    })
+
+    return this
+  }
+
   // ── Internal ──────────────────────────────────────────────────────────────
 
   /** Check if this task is due at the given Date (evaluated in UTC). */
@@ -201,6 +218,11 @@ export class Schedule {
     return this._noOverlap
   }
 
+  /** Whether this task should run immediately upon registration. */
+  get shouldRunImmediately(): boolean {
+    return this._runImmediately
+  }
+
   /** The parsed cron expression (for testing/debugging). */
   get expression(): CronExpression | null {
     return this._cron
@@ -209,6 +231,14 @@ export class Schedule {
   /** The next scheduled run time (for sporadic schedules). */
   get nextRunAt(): Date | null {
     return this._nextRunAt
+  }
+
+  /** Execute the task handler, handling both sync and async cases. */
+  private async executeHandler(): Promise<void> {
+    const result = this.handler()
+    if (result instanceof Promise) {
+      await result
+    }
   }
 
   /** Compute the next random run time from a reference point. */

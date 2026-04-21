@@ -40,6 +40,30 @@ export default class Scheduler {
     return Scheduler._tasks.filter(t => t.isDue(date))
   }
 
+  /**
+   * Manually execute a task by name immediately.
+   *
+   * @param name The name of the task to execute
+   * @returns Promise that resolves when the task completes
+   * @throws Error if task is not found
+   */
+  static async runNow(name: string): Promise<void> {
+    const task = Scheduler._tasks.find(t => t.name === name)
+    if (!task) {
+      throw new Error(`Task "${name}" not found. Available tasks: ${Scheduler._tasks.map(t => t.name).join(', ')}`)
+    }
+
+    try {
+      const result = task.handler()
+      if (result instanceof Promise) {
+        await result
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`Manual execution of task "${name}" failed: ${message}`)
+    }
+  }
+
   /** Clear all registered tasks. For testing. */
   static reset(): void {
     Scheduler._tasks = []
