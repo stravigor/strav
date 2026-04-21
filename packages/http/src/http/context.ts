@@ -218,6 +218,98 @@ export default class Context {
     return this.html(html, status)
   }
 
+  /**
+   * Create a Server-Sent Events response.
+   *
+   * @param generator - Async generator or readable stream that yields SSE events
+   * @param options - Optional SSE configuration
+   * @returns Response with SSE headers and streaming body
+   *
+   * @example
+   * // With async generator
+   * return ctx.sse(async function* () {
+   *   yield { event: 'message', data: 'Hello' }
+   *   yield { data: { count: 1 } }
+   * })
+   *
+   * @example
+   * // With ReadableStream
+   * const stream = new ReadableStream({
+   *   start(controller) {
+   *     controller.enqueue({ event: 'ping', data: 'pong' })
+   *   }
+   * })
+   * return ctx.sse(stream)
+   */
+  sse(
+    source: AsyncGenerator<any, void, unknown> | ReadableStream,
+    options?: { cors?: string | string[] }
+  ): Response {
+    // Build SSE headers
+    const headers = new Headers({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    })
+
+    // Add CORS if specified
+    const cors = options?.cors ?? this.headers.get('origin') ?? '*'
+    if (cors) {
+      headers.set('Access-Control-Allow-Origin', Array.isArray(cors) ? cors.join(', ') : cors)
+      headers.set('Access-Control-Allow-Credentials', 'true')
+    }
+
+    // Format SSE helper
+    const formatSSE = (event: any): string => {
+      const lines: string[] = []
+      if (event.event) lines.push(`event: ${event.event}`)
+      if (event.id) lines.push(`id: ${event.id}`)
+      if (event.retry) lines.push(`retry: ${event.retry}`)
+
+      const dataStr = typeof event.data === 'string'
+        ? event.data
+        : JSON.stringify(event.data)
+
+      for (const line of dataStr.split('\n')) {
+        lines.push(`data: ${line}`)
+      }
+
+      return lines.join('\n') + '\n\n'
+    }
+
+    let stream: ReadableStream
+
+    if (source instanceof ReadableStream) {
+      // Transform stream to SSE format
+      stream = source.pipeThrough(new TransformStream({
+        transform(event, controller) {
+          const formatted = formatSSE(event)
+          controller.enqueue(new TextEncoder().encode(formatted))
+        }
+      }))
+    } else {
+      // Convert async generator to SSE stream
+      stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder()
+          try {
+            for await (const event of source) {
+              const formatted = formatSSE(event)
+              controller.enqueue(encoder.encode(formatted))
+            }
+          } catch (error) {
+            controller.error(error)
+          } finally {
+            controller.close()
+          }
+        }
+      })
+    }
+
+    return new Response(stream, { headers })
+  }
+
   // ---------------------------------------------------------------------------
   // Middleware state
   // ---------------------------------------------------------------------------
