@@ -1,8 +1,8 @@
 {
   "name": "@strav/signal",
-  "version": "0.3.18",
+  "version": "0.3.19",
   "type": "module",
-  "description": "Communication layer for the Strav framework \u2014 mail, notifications, and broadcasting",
+  "description": "Communication layer for the Strav framework \u2014 mail, notifications, broadcasting, and SSE",
   "license": "MIT",
   "keywords": [
     "bun",
@@ -26,6 +26,8 @@
     "./notification/*": "./src/notification/*.ts",
     "./broadcast": "./src/broadcast/index.ts",
     "./broadcast/*": "./src/broadcast/*.ts",
+    "./sse": "./src/sse/index.ts",
+    "./sse/*": "./src/sse/*.ts",
     "./providers": "./src/providers/index.ts",
     "./providers/*": "./src/providers/*.ts"
   },
