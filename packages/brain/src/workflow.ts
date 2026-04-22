@@ -2,7 +2,7 @@ import { Workflow as BaseWorkflow } from '@strav/workflow'
 import type { WorkflowContext as BaseContext } from '@strav/workflow'
 import { AgentRunner } from './helpers.ts'
 import type { Agent } from './agent.ts'
-import type { AgentResult, WorkflowResult, Usage } from './types.ts'
+import type { AgentResult, SuspendedRun, WorkflowResult, Usage } from './types.ts'
 
 // ── AI Workflow Context ─────────────────────────────────────────────────────
 
@@ -25,6 +25,20 @@ function addUsage(total: Usage, add: Usage): void {
   total.inputTokens += add.inputTokens
   total.outputTokens += add.outputTokens
   total.totalTokens += add.totalTokens
+}
+
+// Workflow orchestration runs agents to completion; suspension is a standalone
+// primitive on AgentRunner. Surface a clear error rather than silently swallowing.
+function assertCompleted(
+  result: AgentResult | SuspendedRun,
+  stepName: string
+): asserts result is AgentResult {
+  if ((result as SuspendedRun).status === 'suspended') {
+    throw new Error(
+      `Workflow step "${stepName}" suspended — Workflow does not support agent suspension. ` +
+        `Use AgentRunner.run()/resume() directly, or ensure workflow agents don't define shouldSuspend.`
+    )
+  }
 }
 
 // ── Workflow Builder ────────────────────────────────────────────────────────
@@ -60,6 +74,7 @@ export class Workflow {
     this.pipeline.step(name, async (ctx: BaseContext) => {
       const inputText = resolveInput(mapInput, ctx)
       const result = await new AgentRunner(agent).input(inputText).run()
+      assertCompleted(result, name)
       addUsage(this.totalUsage, result.usage)
       return result
     })
@@ -81,6 +96,7 @@ export class Workflow {
         handler: async (ctx: BaseContext) => {
           const inputText = resolveInput(a.mapInput, ctx)
           const result = await new AgentRunner(a.agent).input(inputText).run()
+          assertCompleted(result, `${name}.${a.name}`)
           addUsage(this.totalUsage, result.usage)
           return result
         },
@@ -104,6 +120,7 @@ export class Workflow {
     this.pipeline.step(`${name}:router`, async (ctx: BaseContext) => {
       const inputText = resolveInput(mapInput, ctx)
       const result = await new AgentRunner(router).input(inputText).run()
+      assertCompleted(result, `${name}:router`)
       addUsage(this.totalUsage, result.usage)
       return result
     })
@@ -121,6 +138,7 @@ export class Workflow {
           async (ctx: BaseContext) => {
             const inputText = resolveInput(mapInput, ctx)
             const result = await new AgentRunner(BranchAgent).input(inputText).run()
+            assertCompleted(result, `${name}:${key}`)
             addUsage(this.totalUsage, result.usage)
             return result
           },
@@ -148,6 +166,7 @@ export class Workflow {
       name,
       async (input: unknown, _ctx: BaseContext) => {
         const result = await new AgentRunner(agent).input(String(input)).run()
+        assertCompleted(result, name)
         addUsage(this.totalUsage, result.usage)
         return result
       },

@@ -62,6 +62,26 @@ export abstract class Agent {
   /** Called when the model requests a tool call, before execution. */
   onToolCall?(call: ToolCall): void | Promise<void>
 
+  /**
+   * Called before a tool is executed. Return `true` to suspend the agent loop
+   * before running this tool call; the runner will return a `SuspendedRun`
+   * with a JSON-serializable snapshot of the loop state. Resume later via
+   * `AgentRunner.resume(state, toolResults)` once the tool result is known.
+   *
+   * This is a policy-free primitive: the framework does not attach meaning
+   * to suspension. Integrators can use it to gate mutating tools on human
+   * approval, dispatch a tool to an external worker, rate-limit, etc.
+   *
+   * When suspension occurs mid-batch, the triggering call and any remaining
+   * unprocessed calls in the same batch are captured together in
+   * `pendingToolCalls` so the provider's tool_use/tool_result contract stays
+   * balanced on resume.
+   */
+  shouldSuspend?(
+    call: ToolCall,
+    context: Record<string, unknown>
+  ): boolean | Promise<boolean>
+
   /** Called after a tool finishes execution. */
   onToolResult?(call: ToolCallRecord): void | Promise<void>
 

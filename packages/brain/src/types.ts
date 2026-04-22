@@ -112,11 +112,51 @@ export interface AgentResult<T = any> {
 }
 
 export interface AgentEvent {
-  type: 'text' | 'tool_start' | 'tool_result' | 'iteration' | 'done'
+  type: 'text' | 'tool_start' | 'tool_result' | 'iteration' | 'done' | 'suspended'
   text?: string
   toolCall?: ToolCallRecord
   iteration?: number
   result?: AgentResult
+  suspended?: SuspendedRun
+}
+
+// ── Suspend / Resume ─────────────────────────────────────────────────────────
+
+/**
+ * A JSON-serializable snapshot of an agent loop at the moment it suspended.
+ *
+ * All fields are plain data — no functions, class instances, or cycles — so
+ * the snapshot can be stringified, stored across a process boundary, and
+ * later passed to `AgentRunner.resume()` to continue the run.
+ */
+export interface SerializedAgentState {
+  messages: Message[]
+  allToolCalls: ToolCallRecord[]
+  totalUsage: Usage
+  iterations: number
+}
+
+/**
+ * Result of an agent run that was suspended before executing one or more
+ * tool calls. The integrator is expected to obtain tool results out-of-band
+ * (human approval, external system, queued job, etc.) and call
+ * `AgentRunner.resume(state, toolResults)` to continue.
+ *
+ * `pendingToolCalls` contains the pending call that triggered suspension
+ * plus any subsequent tool calls from the same batch that have not been
+ * executed. Results must be supplied for each of them on resume so the
+ * conversation remains well-formed for the provider.
+ */
+export interface SuspendedRun {
+  status: 'suspended'
+  pendingToolCalls: ToolCall[]
+  state: SerializedAgentState
+}
+
+/** Result of a pending tool call, supplied to `AgentRunner.resume()`. */
+export interface ToolCallResult {
+  toolCallId: string
+  result: unknown
 }
 
 // ── Workflow ──────────────────────────────────────────────────────────────────

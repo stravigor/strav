@@ -20,6 +20,9 @@ import type {
   Usage,
   JsonSchema,
   SerializedThread,
+  SerializedAgentState,
+  SuspendedRun,
+  ToolCallResult,
 } from './types.ts'
 
 // ── Shared tool executor ─────────────────────────────────────────────────────
@@ -257,8 +260,57 @@ export class AgentRunner<T extends Agent = Agent> {
     return this
   }
 
-  /** Run the agent to completion. */
-  async run(): Promise<AgentResult> {
+  /** Run the agent to completion (or until it suspends on a tool call). */
+  async run(): Promise<AgentResult | SuspendedRun> {
+    return this.runFromState(null)
+  }
+
+  /**
+   * Resume a previously suspended agent run with the results of the pending
+   * tool calls. Returns a completed `AgentResult` — or another `SuspendedRun`
+   * if the continuation itself hits another suspending tool call.
+   *
+   * `toolResults` must contain one entry per call in the original
+   * `SuspendedRun.pendingToolCalls`, matched by `toolCallId`. To signal a
+   * rejection, pass a string or object describing the error as the
+   * `result` — the model sees it as a normal tool failure and adapts.
+   */
+  async resume(
+    state: SerializedAgentState,
+    toolResults: ToolCallResult[]
+  ): Promise<AgentResult | SuspendedRun> {
+    const hydratedMessages: Message[] = [...state.messages]
+    const hydratedToolCalls: ToolCallRecord[] = [...state.allToolCalls]
+
+    for (const r of toolResults) {
+      const originalCall = findToolCallInMessages(hydratedMessages, r.toolCallId)
+
+      hydratedMessages.push({
+        role: 'tool',
+        toolCallId: r.toolCallId,
+        content: typeof r.result === 'string' ? r.result : JSON.stringify(r.result),
+      })
+
+      hydratedToolCalls.push({
+        name: originalCall?.name ?? '',
+        arguments: originalCall?.arguments ?? {},
+        result: r.result,
+        duration: 0,
+      })
+    }
+
+    return this.runFromState({
+      messages: hydratedMessages,
+      allToolCalls: hydratedToolCalls,
+      totalUsage: { ...state.totalUsage },
+      iterations: state.iterations,
+    })
+  }
+
+  /** Shared loop body. Used by both `run()` (fresh state) and `resume()` (restored state). */
+  private async runFromState(
+    initial: SerializedAgentState | null
+  ): Promise<AgentResult | SuspendedRun> {
     const agent = new this.AgentClass()
     const config = BrainManager.config
 
@@ -274,11 +326,13 @@ export class AgentRunner<T extends Agent = Agent> {
     const maxTokens = agent.maxTokens ?? config.maxTokens
     const temperature = agent.temperature ?? config.temperature
 
-    try {
-      await agent.onStart?.(this._input, this._context)
-    } catch (err) {
-      await agent.onError?.(err instanceof Error ? err : new Error(String(err)))
-      throw err
+    if (!initial) {
+      try {
+        await agent.onStart?.(this._input, this._context)
+      } catch (err) {
+        await agent.onError?.(err instanceof Error ? err : new Error(String(err)))
+        throw err
+      }
     }
 
     // Build system prompt with context interpolation
@@ -295,10 +349,14 @@ export class AgentRunner<T extends Agent = Agent> {
       schema = zodToJsonSchema(agent.output)
     }
 
-    const messages: Message[] = [{ role: 'user', content: this._input }]
-    const allToolCalls: ToolCallRecord[] = []
-    const totalUsage: Usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
-    let iterations = 0
+    const messages: Message[] = initial
+      ? [...initial.messages]
+      : [{ role: 'user', content: this._input }]
+    const allToolCalls: ToolCallRecord[] = initial ? [...initial.allToolCalls] : []
+    const totalUsage: Usage = initial
+      ? { ...initial.totalUsage }
+      : { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+    let iterations = initial?.iterations ?? 0
 
     // Tool loop
     while (iterations < maxIterations) {
@@ -374,8 +432,16 @@ export class AgentRunner<T extends Agent = Agent> {
         return result
       }
 
-      // Execute tool calls
-      await this.executeTools(agent, response.toolCalls, messages, allToolCalls)
+      // Execute tool calls (or suspend if the agent vetos)
+      const suspension = await this.executeTools(
+        agent,
+        response.toolCalls,
+        messages,
+        allToolCalls,
+        totalUsage,
+        iterations
+      )
+      if (suspension) return suspension
     }
 
     // Max iterations reached — return what we have
@@ -519,8 +585,28 @@ export class AgentRunner<T extends Agent = Agent> {
         return
       }
 
-      // Execute tools and yield events
-      for (const toolCall of toolCalls) {
+      // Execute tools and yield events (or suspend if the agent vetos)
+      for (let i = 0; i < toolCalls.length; i++) {
+        const toolCall = toolCalls[i]!
+
+        if (agent.shouldSuspend) {
+          const suspend = await agent.shouldSuspend(toolCall, this._context)
+          if (suspend) {
+            const suspended: SuspendedRun = {
+              status: 'suspended',
+              pendingToolCalls: toolCalls.slice(i),
+              state: {
+                messages: [...messages],
+                allToolCalls: [...allToolCalls],
+                totalUsage: { ...totalUsage },
+                iterations,
+              },
+            }
+            yield { type: 'suspended', suspended }
+            return
+          }
+        }
+
         await agent.onToolCall?.(toolCall)
 
         const start = performance.now()
@@ -565,9 +651,31 @@ export class AgentRunner<T extends Agent = Agent> {
     agent: Agent,
     toolCalls: ToolCall[],
     messages: Message[],
-    allToolCalls: ToolCallRecord[]
-  ): Promise<void> {
-    for (const toolCall of toolCalls) {
+    allToolCalls: ToolCallRecord[],
+    totalUsage: Usage,
+    iterations: number
+  ): Promise<SuspendedRun | null> {
+    for (let i = 0; i < toolCalls.length; i++) {
+      const toolCall = toolCalls[i]!
+
+      if (agent.shouldSuspend) {
+        const suspend = await agent.shouldSuspend(toolCall, this._context)
+        if (suspend) {
+          // Capture this call + all remaining calls in the batch so the
+          // provider's tool_use/tool_result contract stays balanced on resume.
+          return {
+            status: 'suspended',
+            pendingToolCalls: toolCalls.slice(i),
+            state: {
+              messages: [...messages],
+              allToolCalls: [...allToolCalls],
+              totalUsage: { ...totalUsage },
+              iterations,
+            },
+          }
+        }
+      }
+
       await agent.onToolCall?.(toolCall)
 
       const start = performance.now()
@@ -585,7 +693,25 @@ export class AgentRunner<T extends Agent = Agent> {
 
       messages.push(message)
     }
+    return null
   }
+}
+
+// ── Helpers for resume ───────────────────────────────────────────────────────
+
+/**
+ * Walk `messages` backwards and find the `ToolCall` (on an assistant message)
+ * whose id matches `toolCallId`. Returns undefined if not found.
+ */
+function findToolCallInMessages(messages: Message[], toolCallId: string): ToolCall | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!
+    if (m.role === 'assistant' && m.toolCalls) {
+      const call = m.toolCalls.find(c => c.id === toolCallId)
+      if (call) return call
+    }
+  }
+  return undefined
 }
 
 // ── Thread ────────────────────────────────────────────────────────────────────

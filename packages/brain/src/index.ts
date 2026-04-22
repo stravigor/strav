@@ -34,6 +34,9 @@ export type {
   BeforeHook,
   AfterHook,
   SerializedThread,
+  SerializedAgentState,
+  SuspendedRun,
+  ToolCallResult,
   OutputSchema,
 } from './types.ts'
 export type { ChatOptions, GenerateOptions, GenerateResult, EmbedOptions } from './helpers.ts'
