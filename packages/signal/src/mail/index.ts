@@ -7,6 +7,7 @@ export { MailgunTransport } from './transports/mailgun_transport.ts'
 export { AlibabaTransport } from './transports/alibaba_transport.ts'
 export { LogTransport } from './transports/log_transport.ts'
 export { inlineCss } from './css_inliner.ts'
+export * from './inbound/index.ts'
 export type {
   MailTransport,
   MailMessage,
