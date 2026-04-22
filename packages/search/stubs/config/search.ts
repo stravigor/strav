@@ -38,5 +38,20 @@ export default {
       /** Typo tolerance: 'off' to disable, 'auto' for defaults, or { minTokenLength, maxDistance }. */
       typoTolerance: env('SEARCH_TYPO_TOLERANCE', 'auto'),
     },
+
+    postgres: {
+      driver: 'postgres-fts',
+      /** Postgres schema for index tables. */
+      schema: env('SEARCH_PG_SCHEMA', 'strav_search'),
+      /** Default text-search configuration ('english', 'french', ...). */
+      language: env('SEARCH_PG_LANGUAGE', 'english'),
+      /** Typo tolerance: 'off' to disable, 'auto' for defaults, or { minTokenLength, maxDistance, similarity }. */
+      typoTolerance: env('SEARCH_TYPO_TOLERANCE', 'auto'),
+      /** Per-search work_mem hint. Set to null/empty to skip. */
+      workMem: env('SEARCH_PG_WORK_MEM', '64MB'),
+      /** GIN index tuning — fastupdate=off improves read tail latency. */
+      gin: { fastupdate: false },
+      // `connection` (Bun SQL instance) is resolved from @strav/database at runtime.
+    },
   },
 }

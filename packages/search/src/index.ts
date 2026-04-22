@@ -18,6 +18,11 @@ export type {
   TypoToleranceMode,
   TypoToleranceSettings,
 } from './drivers/embedded/index.ts'
+export { PostgresFtsDriver } from './drivers/postgres/index.ts'
+export type {
+  PostgresFtsConfig,
+  PgIndexSettings,
+} from './drivers/postgres/index.ts'
 
 // Mixin
 export { searchable } from './searchable.ts'

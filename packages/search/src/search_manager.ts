@@ -6,6 +6,7 @@ import { TypesenseDriver } from './drivers/typesense_driver.ts'
 import { AlgoliaDriver } from './drivers/algolia_driver.ts'
 import { NullDriver } from './drivers/null_driver.ts'
 import { EmbeddedDriver } from './drivers/embedded/index.ts'
+import { PostgresFtsDriver } from './drivers/postgres/index.ts'
 
 @inject
 export default class SearchManager {
@@ -89,6 +90,9 @@ export default class SearchManager {
         return new AlgoliaDriver(config)
       case 'embedded':
         return new EmbeddedDriver(config)
+      case 'postgres-fts':
+      case 'postgres':
+        return new PostgresFtsDriver(config)
       case 'null':
         return new NullDriver()
       default:
