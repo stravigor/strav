@@ -1,6 +1,7 @@
 import type Context from '../http/context.ts'
 import { clearCookie } from '../http/cookie.ts'
 import { randomHex } from '@strav/kernel/helpers/crypto'
+import type { SessionRecord } from '@strav/kernel/session/session_store'
 import { extractUserId } from '@strav/database/helpers/identity'
 import SessionManager from './session_manager.ts'
 
@@ -8,11 +9,11 @@ const FLASH_KEY = '_flash'
 const FLASH_OLD_KEY = '_flash_old'
 
 /**
- * Unified server-side session backed by a database row and an HTTP-only cookie.
+ * Unified server-side session backed by a {@link SessionStore} and an
+ * HTTP-only cookie.
  *
  * Serves both anonymous visitors and authenticated users. Stores arbitrary
- * key-value data in a JSONB column and supports flash data (available only
- * on the next request).
+ * key-value data and supports flash data (available only on the next request).
  *
  * @example
  * // Read / write data (anonymous or authenticated)
@@ -187,11 +188,7 @@ export default class Session {
 
   /** Update the last_activity timestamp to keep the session alive. */
   async touch(): Promise<void> {
-    await SessionManager.db.sql`
-      UPDATE "_strav_sessions"
-      SET "last_activity" = NOW()
-      WHERE "id" = ${this._id}
-    `
+    await SessionManager.store.touch(this._id)
   }
 
   /**
@@ -205,15 +202,12 @@ export default class Session {
     this._dirty = true
 
     await this.save()
-    await SessionManager.db.sql`
-      DELETE FROM "_strav_sessions" WHERE "id" = ${oldId}
-    `
+    await SessionManager.store.destroy(oldId)
   }
 
   /**
-   * Persist session data to the database. Uses an upsert so both new
-   * and existing sessions go through the same code path.
-   * No-op if the session has not been modified.
+   * Persist session data via the configured {@link SessionStore}. No-op if the
+   * session has not been modified.
    */
   async save(): Promise<void> {
     if (!this._dirty) return
@@ -221,18 +215,16 @@ export default class Session {
     const dataToSave = { ...this._data }
     delete dataToSave[FLASH_OLD_KEY]
 
-    await SessionManager.db.sql`
-      INSERT INTO "_strav_sessions"
-        ("id", "user_id", "csrf_token", "data", "ip_address", "user_agent", "last_activity")
-      VALUES
-        (${this._id}, ${this._userId}, ${this._csrfToken},
-         ${JSON.stringify(dataToSave)}::jsonb, ${this.ipAddress}, ${this.userAgent}, NOW())
-      ON CONFLICT ("id") DO UPDATE SET
-        "user_id"       = EXCLUDED."user_id",
-        "csrf_token"    = EXCLUDED."csrf_token",
-        "data"          = EXCLUDED."data",
-        "last_activity" = NOW()
-    `
+    await SessionManager.store.save({
+      id: this._id,
+      userId: this._userId,
+      csrfToken: this._csrfToken,
+      data: dataToSave,
+      ipAddress: this.ipAddress,
+      userAgent: this.userAgent,
+      lastActivity: new Date(),
+      createdAt: this.createdAt,
+    })
     this._dirty = false
   }
 
@@ -255,11 +247,9 @@ export default class Session {
 
   /** Look up a session by ID. Returns null if not found. */
   static async find(id: string): Promise<Session | null> {
-    const rows = await SessionManager.db.sql`
-      SELECT * FROM "_strav_sessions" WHERE "id" = ${id} LIMIT 1
-    `
-    if (rows.length === 0) return null
-    return Session.hydrate(rows[0] as Record<string, unknown>)
+    const record = await SessionManager.store.find(id)
+    if (!record) return null
+    return Session.fromRecord(record)
   }
 
   /** Read the session cookie from the request and look up the session. */
@@ -269,15 +259,13 @@ export default class Session {
     return Session.find(sessionId)
   }
 
-  /** Delete the session from the database and clear the cookie on the response. */
+  /** Delete the session from the store and clear the cookie on the response. */
   static async destroy(ctx: Context, response: Response): Promise<Response> {
     const cfg = SessionManager.config
     const sessionId = ctx.cookie(cfg.cookie)
 
     if (sessionId) {
-      await SessionManager.db.sql`
-        DELETE FROM "_strav_sessions" WHERE "id" = ${sessionId}
-      `
+      await SessionManager.store.destroy(sessionId)
     }
 
     return clearCookie(response, cfg.cookie, { path: '/' })
@@ -287,22 +275,16 @@ export default class Session {
   // Internal
   // ---------------------------------------------------------------------------
 
-  private static hydrate(row: Record<string, unknown>): Session {
-    const rawData = row.data
-    const data: Record<string, unknown> =
-      typeof rawData === 'string'
-        ? JSON.parse(rawData)
-        : ((rawData as Record<string, unknown>) ?? {})
-
+  private static fromRecord(record: SessionRecord): Session {
     return new Session(
-      row.id as string,
-      (row.user_id as string) ?? null,
-      row.csrf_token as string,
-      data,
-      (row.ip_address as string) ?? null,
-      (row.user_agent as string) ?? null,
-      row.last_activity as Date,
-      row.created_at as Date
+      record.id,
+      record.userId,
+      record.csrfToken,
+      record.data,
+      record.ipAddress,
+      record.userAgent,
+      record.lastActivity,
+      record.createdAt
     )
   }
 }

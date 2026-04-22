@@ -1,4 +1,6 @@
 export * from './database/index.ts'
+export * from './redis/index.ts'
+export * from './session/index.ts'
 export * from './orm/index.ts'
 export * from './schema/index.ts'
 export * from './helpers/index.ts'

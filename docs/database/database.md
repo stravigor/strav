@@ -1,6 +1,6 @@
 # Database
 
-The database module provides the PostgreSQL connection wrapper, database introspection, and the full migration system.
+The database module provides the PostgreSQL connection wrapper, database introspection, and the full migration system. A Redis client wrapper also lives in this package — see [Redis](./redis.md).
 
 ## Database connection
 

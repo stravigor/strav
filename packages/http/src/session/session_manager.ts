@@ -1,9 +1,10 @@
 import { inject } from '@strav/kernel/core/inject'
 import { ConfigurationError } from '@strav/kernel/exceptions/errors'
 import Configuration from '@strav/kernel/config/configuration'
-import Database from '@strav/database/database/database'
+import type { SessionStore } from '@strav/kernel/session/session_store'
 
 export interface SessionConfig {
+  driver: 'postgres' | 'redis'
   cookie: string
   lifetime: number
   httpOnly: boolean
@@ -14,22 +15,23 @@ export interface SessionConfig {
 /**
  * Central session configuration hub.
  *
- * Resolved once via the DI container — stores the database reference
- * and parsed config for Session and the session middleware.
+ * Resolved once via the DI container — holds the chosen {@link SessionStore}
+ * and the parsed config shared by Session and the session middleware. The
+ * store itself is plugged in by SessionProvider based on `session.driver`.
  *
  * @example
  * app.singleton(SessionManager)
  * app.resolve(SessionManager)
- * await SessionManager.ensureTable()
+ * SessionManager.useStore(new PostgresSessionStore(db))
  */
 @inject
 export default class SessionManager {
-  private static _db: Database
+  private static _store: SessionStore | null = null
   private static _config: SessionConfig
 
-  constructor(db: Database, config: Configuration) {
-    SessionManager._db = db
+  constructor(config: Configuration) {
     SessionManager._config = {
+      driver: 'postgres',
       cookie: 'strav_session',
       lifetime: 120,
       httpOnly: true,
@@ -39,45 +41,28 @@ export default class SessionManager {
     }
   }
 
-  static get db(): Database {
-    if (!SessionManager._db) {
+  static get store(): SessionStore {
+    if (!SessionManager._store) {
       throw new ConfigurationError(
-        'SessionManager not configured. Resolve it through the container first.'
+        'SessionManager has no store configured. Call SessionManager.useStore() (SessionProvider does this on boot).'
       )
     }
-    return SessionManager._db
+    return SessionManager._store
   }
 
   static get config(): SessionConfig {
     return SessionManager._config
   }
 
-  /** Create the sessions table if it does not exist. */
-  static async ensureTable(): Promise<void> {
-    await SessionManager.db.sql`
-      CREATE TABLE IF NOT EXISTS "_strav_sessions" (
-        "id"            UUID PRIMARY KEY,
-        "user_id"       VARCHAR(255),
-        "csrf_token"    VARCHAR(64) NOT NULL,
-        "data"          JSONB NOT NULL DEFAULT '{}',
-        "ip_address"    VARCHAR(45),
-        "user_agent"    TEXT,
-        "last_activity" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        "created_at"    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `
+  /** Plug in the session store. Called by SessionProvider based on config. */
+  static useStore(store: SessionStore): void {
+    SessionManager._store = store
   }
 
-  /** Delete all expired sessions. Call periodically for housekeeping. */
+  /** Delete expired sessions. Call periodically for housekeeping. */
   static async gc(): Promise<number> {
     const lifetimeMs = SessionManager.config.lifetime * 60_000
     const cutoff = new Date(Date.now() - lifetimeMs)
-
-    const rows = await SessionManager.db.sql`
-      DELETE FROM "_strav_sessions"
-      WHERE "last_activity" < ${cutoff}
-      RETURNING "id"
-    `
-    return rows.length
+    return SessionManager.store.gc(cutoff)
   }
 }

@@ -34,6 +34,8 @@
     "./storage/*": "./src/storage/*.ts",
     "./cache": "./src/cache/index.ts",
     "./cache/*": "./src/cache/*.ts",
+    "./session": "./src/session/index.ts",
+    "./session/*": "./src/session/*.ts",
     "./i18n": "./src/i18n/index.ts",
     "./i18n/*": "./src/i18n/*.ts",
     "./logger": "./src/logger/index.ts",

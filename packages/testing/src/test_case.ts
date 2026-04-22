@@ -81,12 +81,16 @@ export class TestCase {
     if (this.options.auth) {
       const { SessionManager } = await import('@strav/http')
       const { Auth } = await import('@strav/http')
+      const { PostgresSessionStore } = await import('@strav/database')
 
       if (!app.has(SessionManager)) app.singleton(SessionManager)
       if (!app.has(Auth)) app.singleton(Auth)
+      if (!app.has(PostgresSessionStore)) app.singleton(PostgresSessionStore)
 
       app.resolve(SessionManager)
-      await SessionManager.ensureTable()
+      const sessionStore = app.resolve(PostgresSessionStore)
+      SessionManager.useStore(sessionStore)
+      await sessionStore.ensureSchema()
 
       app.resolve(Auth)
       await Auth.ensureTables()
