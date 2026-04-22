@@ -28,5 +28,15 @@ export default {
       appId: env('ALGOLIA_APP_ID', ''),
       apiKey: env('ALGOLIA_SECRET', ''),
     },
+
+    embedded: {
+      driver: 'embedded',
+      /** Directory holding per-index `.sqlite` files. Use ':memory:' for tests. */
+      path: env('SEARCH_PATH', './storage/search'),
+      /** SQLite synchronous pragma. NORMAL is crash-safe with sub-second-of-writes loss. */
+      synchronous: env('SEARCH_SYNCHRONOUS', 'NORMAL'),
+      /** Typo tolerance: 'off' to disable, 'auto' for defaults, or { minTokenLength, maxDistance }. */
+      typoTolerance: env('SEARCH_TYPO_TOLERANCE', 'auto'),
+    },
   },
 }

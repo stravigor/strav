@@ -1,8 +1,10 @@
 # Search
 
-Full-text search with a unified API across multiple engines. Built-in drivers for **Meilisearch**, **Typesense**, and **Algolia**. Custom drivers can be added via `extend()`.
+Full-text search with a unified API across multiple engines. Built-in drivers for **Embedded** (in-process SQLite FTS5, no external service), **Meilisearch**, **Typesense**, and **Algolia**. Custom drivers can be added via `extend()`.
 
 The `searchable()` mixin integrates search directly into your ORM models — upsert on save, remove on delete, query with a single static method.
+
+> **Picking a driver.** If you want zero ops surface and a one-process self-host, start with **embedded**. If you already run Meilisearch/Typesense, or you need a hosted service, use one of the network drivers. The API surface is identical across drivers — you can switch later by changing one config line.
 
 ## Installation
 
@@ -48,6 +50,16 @@ export default {
   prefix: env('SEARCH_PREFIX', ''),
 
   drivers: {
+    embedded: {
+      driver: 'embedded',
+      // Directory holding per-index `.sqlite` files. Use ':memory:' for tests.
+      path: env('SEARCH_PATH', './storage/search'),
+      // SQLite synchronous pragma: 'OFF' | 'NORMAL' | 'FULL'.
+      synchronous: env('SEARCH_SYNCHRONOUS', 'NORMAL'),
+      // 'off' | 'auto' | { minTokenLength, maxDistance }
+      typoTolerance: env('SEARCH_TYPO_TOLERANCE', 'auto'),
+    },
+
     meilisearch: {
       driver: 'meilisearch',
       host: env('MEILISEARCH_HOST', 'localhost'),
@@ -73,6 +85,15 @@ export default {
 ```
 
 ### 3. Set environment variables
+
+For the embedded driver (no external service):
+
+```env
+SEARCH_DRIVER=embedded
+SEARCH_PATH=./storage/search
+```
+
+For Meilisearch:
 
 ```env
 SEARCH_DRIVER=meilisearch
@@ -217,6 +238,8 @@ await Article.search('test', { filter: 'status = published AND category_id = 3' 
 await Article.search('test', { filter: 'status:=published' })
 ```
 
+> The **embedded** driver only accepts the object form — raw filter strings are rejected to avoid SQL injection. It supports operator objects: `{ priority: { gte: 3, lt: 8 }, status: { in: ['open', 'pending'] } }` (operators: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `nin`). Each filtered field must be listed in `filterableAttributes`.
+
 ## Auto-indexing
 
 Register event listeners so models are automatically indexed on create/update and removed on delete:
@@ -331,7 +354,7 @@ export default {
 
 ## CLI commands
 
-The search package provides two CLI commands (auto-discovered by the framework):
+The search package provides three CLI commands (auto-discovered by the framework):
 
 ### search:import
 
@@ -353,22 +376,63 @@ Remove all documents from a model's search index:
 bun strav search:flush app/models/article.ts
 ```
 
+### search:optimize
+
+Merge FTS5 segments for a model's index (embedded driver only). FTS5 writes to small segments that are merged on the fly; running this periodically (e.g. nightly) compacts them into one for tighter storage and faster queries on large indexes:
+
+```bash
+bun strav search:optimize app/models/article.ts
+```
+
+For other drivers this command exits with an error — segment merging is the search engine's responsibility.
+
 ## Testing
 
-Use the `NullDriver` to disable search in tests:
+Three options, depending on what you want to assert.
+
+**1. Disable search entirely with `NullDriver`** — fastest, all writes are no-ops, all searches return empty:
 
 ```env
 # .env.test
 SEARCH_DRIVER=null
 ```
 
-Or swap in a recording engine at runtime:
+Or swap it in at runtime:
 
 ```typescript
-import SearchManager from '@strav/search'
-import { NullDriver } from '@strav/search'
+import SearchManager, { NullDriver } from '@strav/search'
 
 SearchManager.useEngine(new NullDriver())
+```
+
+**2. Real search against an in-memory index** — when you want to assert search behaviour without spinning up a Meilisearch container, point the embedded driver at `:memory:`:
+
+```env
+# .env.test
+SEARCH_DRIVER=embedded
+SEARCH_PATH=:memory:
+```
+
+Or programmatically:
+
+```typescript
+import SearchManager, { EmbeddedDriver } from '@strav/search'
+
+SearchManager.useEngine(new EmbeddedDriver({ driver: 'embedded', path: ':memory:' }))
+```
+
+This gives you a fresh, real FTS5 index per test process — fast enough that `:memory:` is the default for the package's own tests.
+
+**3. A recording engine** for asserting the calls without running them — useful for unit tests of code that orchestrates indexing:
+
+```typescript
+const engine = {
+  name: 'recording',
+  calls: [] as Array<{ method: string; args: unknown[] }>,
+  async upsert(...args) { this.calls.push({ method: 'upsert', args }) },
+  // ...implement the rest of SearchEngine identically
+}
+SearchManager.useEngine(engine)
 ```
 
 Call `SearchManager.reset()` in test teardown to clear cached engines.
@@ -410,9 +474,64 @@ export default class ArticleController {
 
 ## Drivers
 
+### Embedded
+
+In-process full-text search backed by `bun:sqlite`'s FTS5 engine. No external service to run — each index is a single `.sqlite` file under the configured `path`. Recommended for self-hosted apps, single-process deployments, and SMB-scale workloads (~50k documents per index).
+
+**What you get:**
+
+- BM25 ranking with per-field weights — column order in `searchableAttributes` controls relative weight (first = highest).
+- Prefix queries (`type*`), exact phrases (`"quick brown fox"`), negation (`-foo`), required terms (`+foo`).
+- Porter stemmer for English morphology (`running`, `runs`, `ran` all match `run`).
+- Levenshtein-1 typo tolerance — `javasript` finds documents containing `javascript`. Configurable via `typoTolerance`.
+- Highlighted snippets with `<mark>...</mark>` tags around matched terms; source text is HTML-escaped before being marked up.
+- Object-form filters with `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `nin` operators against `filterableAttributes`.
+- Sorting on any `sortableAttributes` column.
+- Crash-safe persistence (SQLite WAL mode); concurrent reads, single writer per index file.
+
+**Configuration knobs:**
+
+- `path` — directory for `.sqlite` files (default `./storage/search`). Use `:memory:` for tests.
+- `synchronous` — SQLite `PRAGMA synchronous`: `OFF` (fastest, can lose recent writes on power-loss), `NORMAL` (default — crash-safe with sub-second-of-writes loss), `FULL` (no loss, slowest).
+- `typoTolerance`:
+  - `'off'` — exact match only.
+  - `'auto'` — Levenshtein-1 candidates for tokens of length ≥4 (default).
+  - `{ minTokenLength: 5, maxDistance: 2 }` — fine-grained control. `maxDistance: 2` is much slower than 1 — only enable if needed.
+
+**Per-field weights example.** Column order in `searchableAttributes` is the BM25 weight order (earlier columns weighted higher):
+
+```typescript
+class Ticket extends searchable(BaseModel) {
+  static searchableSettings() {
+    return {
+      // subject is weighted higher than body for ranking purposes
+      searchableAttributes: ['subject', 'body'],
+      filterableAttributes: ['status', 'priority', 'tags'],
+      sortableAttributes: ['priority', 'created_at'],
+    }
+  }
+}
+```
+
+**Snippet output.** Snippets are escaped + tagged: `<mark>typescript</mark> handbook`. The driver replaces unsafe HTML in the source text first, so it's safe to render directly:
+
+```typescript
+const result = await Article.search('reliable', { attributesToHighlight: ['body'] })
+// result.hits[0].highlights.body === 'Learn TypeScript fundamentals and write <mark>reliable</mark> code at scale.'
+```
+
+**Limitations (v1):**
+
+- Stemming is English-only. Other languages are tokenised and matched but not morphologically reduced. Ranking quality on non-English content is reduced.
+- One writer per index file (SQLite WAL). If you spawn multiple Bun workers all writing to the same index, writes serialize.
+- Object-form filters only — raw SQL strings are rejected.
+- Changing `searchableAttributes` after creation requires deleting and re-creating the index (`bun strav search:flush` then `bun strav search:import`), since the FTS5 schema is fixed at creation time.
+
+**Why pick this driver:** you don't have to deploy or operate a separate search service. The trade-off vs. Meilisearch is mostly around very large datasets and very advanced ranking (synonyms, learned ranking, etc.) — for SMB-scale corpora, embedded is competitive.
+
 ### Meilisearch
 
-Default port `7700`. Uses Bearer token authentication. Filter objects are converted to Meilisearch syntax (`key = value`, `key IN [values]`). The recommended driver for most projects — fast, easy to self-host, and feature-rich.
+Default port `7700`. Uses Bearer token authentication. Filter objects are converted to Meilisearch syntax (`key = value`, `key IN [values]`). Fast, easy to self-host, feature-rich. Pick this if you already run Meilisearch or you need synonyms/multi-language stemming out of the box.
 
 ### Typesense
 

@@ -12,6 +12,12 @@ export { MeilisearchDriver } from './drivers/meilisearch_driver.ts'
 export { TypesenseDriver } from './drivers/typesense_driver.ts'
 export { AlgoliaDriver } from './drivers/algolia_driver.ts'
 export { NullDriver } from './drivers/null_driver.ts'
+export { EmbeddedDriver } from './drivers/embedded/index.ts'
+export type {
+  EmbeddedConfig,
+  TypoToleranceMode,
+  TypoToleranceSettings,
+} from './drivers/embedded/index.ts'
 
 // Mixin
 export { searchable } from './searchable.ts'

@@ -1,6 +1,6 @@
 # @strav/search
 
-Full-text search with a unified API across multiple engines. Built-in drivers for Meilisearch, Typesense, and Algolia. The searchable() mixin integrates search directly into ORM models.
+Full-text search with a unified API across multiple engines. Built-in drivers for Meilisearch, Typesense, Algolia, and an in-process `embedded` driver backed by `bun:sqlite` FTS5 (no external service required). The searchable() mixin integrates search directly into ORM models.
 
 ## Dependencies
 - @strav/kernel (peer)
@@ -16,8 +16,9 @@ Full-text search with a unified API across multiple engines. Built-in drivers fo
 - src/search_provider.ts — service provider registration
 - src/search_engine.ts — engine abstraction
 - src/searchable.ts — ORM mixin for model indexing
-- src/drivers/ — engine implementations (Meilisearch, Typesense, Algolia)
-- src/commands/ — CLI commands (index, flush, etc.)
+- src/drivers/ — engine implementations (Meilisearch, Typesense, Algolia, Null)
+- src/drivers/embedded/ — in-process FTS5 driver (engine, query compiler, typo expander, snippet formatter)
+- src/commands/ — CLI commands (search:import, search:flush, search:optimize)
 - src/types.ts — type definitions
 - src/errors.ts — package-specific errors
 
