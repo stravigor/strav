@@ -17,7 +17,7 @@ Communication layer for the Strav framework — mail, notifications, real-time b
 
 ## Architecture
 - src/mail/ — MailManager, transports (SMTP, Resend, SendGrid, Mailgun, Alibaba, Log), CSS inliner
-- src/mail/inbound/ — inbound webhook parsers (Postmark), loop-guard helper, canonical ParsedInboundMail type. IMAP + SendGrid/Mailgun/SES parsers pending.
+- src/mail/inbound/ — inbound email: webhook parsers (Postmark, Mailgun) with HMAC verification where applicable, IMAP driver (imapflow + mailparser) with pluggable client factory for testing, loop-guard helper, canonical ParsedInboundMail type. SendGrid / SES webhooks + OAuth2 (Gmail/M365) IMAP pending. `mail.poll(...)` helper schedules IMAP polls via @strav/queue's Scheduler.
 - src/notification/ — NotificationManager, BaseNotification, channels (email, database, webhook, Discord)
 - src/broadcast/ — BroadcastManager (server), Broadcast/Subscription (client)
 - src/sse/ — SSEManager (server), SSEClient (client), parser utilities

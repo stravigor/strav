@@ -62,3 +62,61 @@ export interface InboundWebhookInput {
 export interface InboundWebhookParser {
   parse(input: InboundWebhookInput): Promise<ParsedInboundMail>
 }
+
+// -- IMAP driver --------------------------------------------------------------
+
+export type ImapAuth =
+  /** Plain password auth. */
+  | { user: string; pass: string }
+  /**
+   * OAuth2 XOAUTH2. Provide a short-lived access token (refresh it yourself before
+   * calling poll()). Gmail and Microsoft 365 require this path when modern-auth is
+   * enforced.
+   */
+  | { user: string; accessToken: string }
+
+export interface ImapInboundConfig {
+  host: string
+  /** Default 993 (IMAPS). */
+  port?: number
+  /** Default true (IMAPS). Set false only for plain IMAP on 143. */
+  secure?: boolean
+  auth: ImapAuth
+  /** Mailbox to poll. Default 'INBOX'. */
+  mailbox?: string
+  /** Maximum messages fetched per poll cycle. Default 50. */
+  batchSize?: number
+  /** Fetch and parse but do NOT mark \Seen. Useful for diagnostics. Default false. */
+  dryRun?: boolean
+  /** Forwarded to node:tls. Use only when you know what you're doing. */
+  tls?: { rejectUnauthorized?: boolean }
+}
+
+export interface PollResult {
+  /** Messages parsed + handler ran + marked \Seen. */
+  processed: number
+  /**
+   * Handler threw (or the fetch failed) — the message is NOT marked \Seen,
+   * so it will be retried on the next cycle.
+   */
+  failed: number
+  /** Messages whose raw source could not be fetched (skipped, not retried). */
+  skipped: number
+}
+
+export type InboundMailHandler = (mail: ParsedInboundMail) => void | Promise<void>
+
+// -- Mailgun Routes webhook ---------------------------------------------------
+
+export interface MailgunInboundConfig {
+  /**
+   * Mailgun "HTTP webhook signing key" from the dashboard — distinct from the
+   * sending API key. Rotating it in the dashboard requires rotating here too.
+   */
+  webhookSigningKey: string
+  /**
+   * Reject signatures whose timestamp is older than N seconds. Default 300
+   * (5 minutes). Tightens replay protection; widen only if clock skew is an issue.
+   */
+  maxAgeSeconds?: number
+}

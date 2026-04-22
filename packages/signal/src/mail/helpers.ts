@@ -1,7 +1,12 @@
 import MailManager from './mail_manager.ts'
 import { ViewEngine } from '@strav/view'
 import { inlineCss } from './css_inliner.ts'
-import { Queue } from '@strav/queue'
+import { Queue, Scheduler, type Schedule } from '@strav/queue'
+import { ImapInboundDriver } from './inbound/imap_driver.ts'
+import type {
+  ImapInboundConfig,
+  InboundMailHandler,
+} from './inbound/types.ts'
 import type { MailMessage, MailResult, MailAttachment } from './types.ts'
 
 /**
@@ -207,6 +212,34 @@ export const mail = {
   registerQueueHandler(): void {
     Queue.handle<MailMessage>('strav:send-mail', async message => {
       await MailManager.transport.send(message)
+    })
+  },
+
+  /**
+   * Register a scheduled IMAP poll. Each tick connects, fetches UNSEEN messages,
+   * parses them into ParsedInboundMail, invokes onMail, and marks \Seen on
+   * success. Returns the Schedule so the caller chooses the cadence and overlap
+   * policy.
+   *
+   * @example
+   * mail.poll('mailbox:support', {
+   *   host: 'imap.example.com',
+   *   auth: { user: 'support@example.com', pass: env('IMAP_PASSWORD') },
+   * }, async inbound => {
+   *   await processIncomingSupportMail(inbound)
+   * }).everyMinute().withoutOverlapping()
+   */
+  poll(
+    name: string,
+    configOrDriver: ImapInboundConfig | ImapInboundDriver,
+    onMail: InboundMailHandler
+  ): Schedule {
+    const driver =
+      configOrDriver instanceof ImapInboundDriver
+        ? configOrDriver
+        : new ImapInboundDriver(configOrDriver)
+    return Scheduler.task(name, async () => {
+      await driver.poll(onMail)
     })
   },
 }

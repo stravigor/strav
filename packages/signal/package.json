@@ -41,7 +41,10 @@
   "dependencies": {
     "nodemailer": "^6.10.0",
     "@types/nodemailer": "^6.4.0",
-    "juice": "^11.0.0"
+    "juice": "^11.0.0",
+    "imapflow": "^1.0.190",
+    "mailparser": "^3.7.2",
+    "@types/mailparser": "^3.4.5"
   },
   "scripts": {
     "test": "bun test tests/",
