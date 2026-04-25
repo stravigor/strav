@@ -9,7 +9,6 @@ const builder = new IslandBuilder({
   css: {
     entry: 'resources/css/app.scss',
     outDir: './public/css',
-    outFile: 'app.css'
   },
   outDir: './public/builds',
 })
