@@ -229,6 +229,22 @@ const islands = new IslandBuilder({
 })
 ```
 
+**Multiple sources:**
+
+For module-organized apps or vendor packages that ship their own islands, use `sources` (and `packages` for vendor manifests) to merge everything into a single bundle:
+
+```typescript
+new IslandBuilder({
+  sources: [
+    { islandsDir: 'app/modules/auth/islands',    namespace: 'auth' },
+    { islandsDir: 'app/modules/billing/islands', namespace: 'billing' },
+  ],
+  packages: ['@strav/admin-ui'],
+})
+```
+
+Components are addressed as `<vue:auth/login-form/>`. See [view docs](../view/view.md) for the full source-and-manifest model.
+
 **Dev mode — watch for changes:**
 
 ```typescript

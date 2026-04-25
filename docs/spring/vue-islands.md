@@ -576,6 +576,51 @@ const islands = new IslandBuilder({
 })
 ```
 
+### Module-organized Apps
+
+When an app is organized by feature module rather than a flat `islands/` folder, use `sources` to merge multiple directories into one bundle:
+
+```typescript
+const islands = new IslandBuilder({
+  sources: [
+    { islandsDir: 'resources/islands' },                              // app, anonymous
+    { islandsDir: 'app/modules/auth/islands',    namespace: 'auth' },
+    { islandsDir: 'app/modules/billing/islands', namespace: 'billing' },
+  ],
+})
+```
+
+A file at `app/modules/auth/islands/login-form.vue` is addressable in templates as `<vue:auth/login-form/>`. The unnamespaced source keeps unprefixed names (`<vue:counter/>`).
+
+The output is still a single `islands.js` — one `<script>` tag, one Vue runtime, one mount loop. No extra runtime cost for splitting your code by module.
+
+### Vendor Packages
+
+Third-party packages can ship Vue islands and CSS for the host app to bundle. Packages declare their contribution in `package.json`:
+
+```jsonc
+{
+  "name": "@strav/admin-ui",
+  "strav": {
+    "islands": {
+      "namespace": "admin",                  // required
+      "dir": "./islands",                    // required, relative to package root
+      "css": { "admin": "./css/admin.scss" } // optional
+    }
+  }
+}
+```
+
+The host opts in by name:
+
+```typescript
+const islands = new IslandBuilder({
+  packages: ['@strav/admin-ui'],
+})
+```
+
+Packages ship raw `.vue` and `.scss` (no per-package bundling) — the host compiles them with its own Vue runtime. Each source can also include a `setup.ts` exporting a default `(app) => void`; all setups are invoked in source order, so packages can register their own Vue plugins or globals.
+
 ## Template Integration
 
 ### Using Islands in Templates
