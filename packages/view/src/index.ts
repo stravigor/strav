@@ -20,7 +20,12 @@ export { route, routeUrl, registerRoutes } from './client/route_helper.ts'
 export type { Token, TokenType, VueAttr } from './tokenizer.ts'
 export type { CompilationResult } from './compiler.ts'
 export type { CacheEntry, RenderFunction, IncludeFn, RenderResult } from './cache.ts'
-export type { CssOptions, IslandBuilderOptions, IslandManifest } from './islands/island_builder.ts'
+export type {
+  CssOptions,
+  IslandBuilderOptions,
+  IslandManifest,
+  IslandSource,
+} from './islands/island_builder.ts'
 export type { SpaRouteDefinition } from './route_types.ts'
 export type { RouteOptions } from './client/route_helper.ts'
 export type { PagesConfig, PageResolutionResult, ViewConfigWithPages } from './pages/types.ts'

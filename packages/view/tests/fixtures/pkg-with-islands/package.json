@@ -1,0 +1,12 @@
+{
+  "name": "@test/pkg-with-islands",
+  "version": "0.0.0",
+  "private": true,
+  "strav": {
+    "islands": {
+      "namespace": "admin",
+      "dir": "./islands",
+      "css": { "admin": "./css/admin.scss" }
+    }
+  }
+}
