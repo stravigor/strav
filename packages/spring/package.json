@@ -1,6 +1,6 @@
 {
   "name": "@strav/spring",
-  "version": "0.3.28",
+  "version": "0.3.29",
   "type": "module",
   "description": "Flagship framework scaffolding tool for the Strav ecosystem.",
   "license": "MIT",
