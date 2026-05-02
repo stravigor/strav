@@ -1,6 +1,6 @@
 {
   "name": "@strav/rag",
-  "version": "0.3.29",
+  "version": "0.3.30",
   "type": "module",
   "description": "Vector retrieval framework for RAG in the Strav framework",
   "license": "MIT",
