@@ -73,6 +73,7 @@ ALL_PACKAGES=(
     auth machine
     brain flag stripe devtools mcp
     oauth2 search social testing rag faker
+    audit transit
     # Flagship framework scaffolding
     spring
 )
