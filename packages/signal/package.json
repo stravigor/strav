@@ -2,7 +2,7 @@
   "name": "@strav/signal",
   "version": "0.3.29",
   "type": "module",
-  "description": "Communication layer for the Strav framework \u2014 mail, notifications, instant messaging (WhatsApp / Messenger / LINE), broadcasting, and SSE",
+  "description": "Communication layer for the Strav framework \u2014 mail, notifications, instant messaging (WhatsApp / Messenger / LINE), outbound webhooks, broadcasting, and SSE",
   "license": "MIT",
   "keywords": [
     "bun",
@@ -14,7 +14,9 @@
     "whatsapp",
     "messenger",
     "line",
-    "messaging"
+    "messaging",
+    "webhook",
+    "webhooks"
   ],
   "files": [
     "src/",
@@ -34,6 +36,8 @@
     "./sse/*": "./src/sse/*.ts",
     "./messaging": "./src/messaging/index.ts",
     "./messaging/*": "./src/messaging/*.ts",
+    "./webhook": "./src/webhook/index.ts",
+    "./webhook/*": "./src/webhook/*.ts",
     "./providers": "./src/providers/index.ts",
     "./providers/*": "./src/providers/*.ts"
   },

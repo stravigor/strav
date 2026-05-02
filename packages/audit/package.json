@@ -1,0 +1,34 @@
+{
+  "name": "@strav/audit",
+  "version": "0.3.29",
+  "type": "module",
+  "description": "Append-only, tamper-evident audit log for the Strav framework",
+  "license": "MIT",
+  "keywords": [
+    "bun",
+    "framework",
+    "typescript",
+    "strav",
+    "audit",
+    "audit-log",
+    "activity-log",
+    "compliance"
+  ],
+  "files": [
+    "src/",
+    "package.json",
+    "tsconfig.json"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "peerDependencies": {
+    "@strav/kernel": "workspace:*",
+    "@strav/database": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit"
+  }
+}

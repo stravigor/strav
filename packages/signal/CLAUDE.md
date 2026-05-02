@@ -1,6 +1,6 @@
 # @strav/signal
 
-Communication layer for the Strav framework — mail, notifications, instant messaging (WhatsApp / Messenger / LINE), real-time broadcasting, and Server-Sent Events (SSE).
+Communication layer for the Strav framework — mail, notifications, instant messaging (WhatsApp / Messenger / LINE), outbound webhooks (subscriber endpoints with signed delivery + retry), real-time broadcasting, and Server-Sent Events (SSE).
 
 ## Dependencies
 - @strav/kernel (peer)
@@ -22,7 +22,8 @@ Communication layer for the Strav framework — mail, notifications, instant mes
 - src/broadcast/ — BroadcastManager (server), Broadcast/Subscription (client)
 - src/sse/ — SSEManager (server), SSEClient (client), parser utilities
 - src/messaging/ — MessagingManager, transports (WhatsApp Cloud API, Messenger Send API, LINE Messaging API, Log), inbound webhook parsers (X-Hub-Signature-256 for Meta, X-Line-Signature for LINE), MessagingChannel adapter for notifications. Stateless pass-through — parsers expose conversation/user IDs and reply tokens, persistence is the consumer's responsibility.
-- src/providers/ — MailProvider, NotificationProvider, BroadcastProvider, MessagingProvider
+- src/webhook/ — WebhookManager, customer-registered endpoint storage (`_strav_webhook_endpoints`), per-event delivery rows (`_strav_webhook_deliveries`), HMAC signing (`X-Strav-Signature` over `timestamp + "." + body`), exponential-backoff retry with jitter and dead-letter, replay. Deliveries run as `@strav/queue` jobs (`strav:webhook-deliver`).
+- src/providers/ — MailProvider, NotificationProvider, BroadcastProvider, MessagingProvider, WebhookProvider
 
 ## Key Exports
 
@@ -33,6 +34,7 @@ Communication layer for the Strav framework — mail, notifications, instant mes
 - @strav/signal/mail — Mail functionality (mail helper, PendingMail, transports)
 - @strav/signal/notification — Notification functionality (notify, BaseNotification, channels)
 - @strav/signal/messaging — Instant messaging (messaging helper, PendingMessage, transports, inbound parsers)
+- @strav/signal/webhook — Outbound webhook subscriber system (webhook helper, WebhookManager, signature helpers)
 - @strav/signal/broadcast — Broadcasting (broadcast helper, BroadcastManager, client classes)
 - @strav/signal/sse — Server-Sent Events (sse helper, SSEManager, SSEClient, parser utilities)
 - @strav/signal/providers — Service providers
@@ -63,6 +65,14 @@ Communication layer for the Strav framework — mail, notifications, instant mes
 - Notification routing: when MessagingProvider is registered, channels named after the providers are auto-registered in NotificationManager
 - HTTP layer must surface RAW request body to inbound parsers — Meta and LINE compute HMAC over the exact bytes; re-stringifying JSON breaks verification
 
+### Webhook (outbound subscriber system)
+- Different from `signal/notification/channels/webhook_channel.ts` (one-shot per-recipient) — this models *event subscribers* the customer registers
+- Primary API: `webhook` helper (`webhook.endpoints.create(...)`, `webhook.dispatch(event, payload)`, `webhook.replay(deliveryId)`)
+- Storage: `_strav_webhook_endpoints` (id, url, secret, events[]) and `_strav_webhook_deliveries` (status, attempts, response_status, next_retry_at)
+- Delivery: queued via `@strav/queue` (`strav:webhook-deliver` job). On failure → exponential backoff (configurable max attempts, base delay, factor, ceiling, jitter). After max attempts → status `'dead'`; `replay()` re-queues
+- Subscribers verify with `verifySignature({ secret, body, timestamp, signature })` — same HMAC scheme used to sign (`HMAC-SHA256(secret, timestamp + "." + body)`)
+- Headers sent: `X-Strav-Delivery`, `X-Strav-Event`, `X-Strav-Timestamp`, `X-Strav-Signature: sha256=…`
+
 ### Broadcasting
 - Server: `broadcast` helper for channel setup and sending
 - Client: `Broadcast` class for WebSocket subscription
@@ -79,5 +89,6 @@ Communication layer for the Strav framework — mail, notifications, instant mes
 - Mail: LogTransport for testing without sending
 - Notifications: Mock notifiables with required interface
 - Messaging: LogMessagingTransport always registered; swap fakes in via `MessagingManager.useTransport()` and reset via `MessagingManager.reset()`
+- Webhook: use `MemoryWebhookStore` via `WebhookManager.useStore(...)`; mock `globalThis.fetch` for delivery assertions; stub `Queue.push` to capture retry scheduling without a real queue
 - Broadcasting: WebSocket testing requires running server
 - SSE: Parser has comprehensive unit tests, integration tests use mock streams

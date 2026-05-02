@@ -1,0 +1,36 @@
+{
+  "name": "@strav/transit",
+  "version": "0.3.29",
+  "type": "module",
+  "description": "Streaming CSV/JSONL import-export pipeline with validation, deduplication, idempotent upsert, and progress reporting",
+  "license": "MIT",
+  "keywords": [
+    "bun",
+    "framework",
+    "typescript",
+    "strav",
+    "csv",
+    "jsonl",
+    "import",
+    "export",
+    "etl",
+    "data-pipeline"
+  ],
+  "files": [
+    "src/",
+    "package.json",
+    "tsconfig.json"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "peerDependencies": {
+    "@strav/kernel": "workspace:*",
+    "@strav/database": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit"
+  }
+}
