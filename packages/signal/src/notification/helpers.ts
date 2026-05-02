@@ -32,6 +32,12 @@ export async function notify(
       if (webhook) routing.webhook = webhook
       const discord = recipient.routeNotificationForDiscord?.()
       if (discord) routing.discord = discord
+      const whatsapp = recipient.routeNotificationForWhatsapp?.()
+      if (whatsapp) routing.whatsapp = whatsapp
+      const messenger = recipient.routeNotificationForMessenger?.()
+      if (messenger) routing.messenger = messenger
+      const line = recipient.routeNotificationForLine?.()
+      if (line) routing.line = line
 
       await Queue.push(
         'strav:send-notification',
@@ -167,6 +173,9 @@ export const notifications = {
         routeNotificationForEmail: () => routing?.email ?? null,
         routeNotificationForWebhook: () => routing?.webhook ?? null,
         routeNotificationForDiscord: () => routing?.discord ?? null,
+        routeNotificationForWhatsapp: () => routing?.whatsapp ?? null,
+        routeNotificationForMessenger: () => routing?.messenger ?? null,
+        routeNotificationForLine: () => routing?.line ?? null,
       }
 
       for (const channelName of payload.channels) {

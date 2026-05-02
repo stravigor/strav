@@ -10,6 +10,12 @@ export interface Notifiable {
   routeNotificationForWebhook?(): string | null
   /** Discord webhook URL. Returns null to skip. */
   routeNotificationForDiscord?(): string | null
+  /** WhatsApp recipient (E.164 phone). Returns null to skip. */
+  routeNotificationForWhatsapp?(): string | null
+  /** Messenger recipient PSID. Returns null to skip. */
+  routeNotificationForMessenger?(): string | null
+  /** LINE recipient (userId / groupId / roomId). Returns null to skip. */
+  routeNotificationForLine?(): string | null
 }
 
 // -- Channel envelopes --------------------------------------------------------
@@ -67,6 +73,29 @@ export interface DiscordEmbed {
 
 // -- Channel interface --------------------------------------------------------
 
+/** Envelope produced by a notification for an instant-messaging channel. */
+export interface MessagingEnvelope {
+  /** Plain text body. Optional when sending media-only. */
+  text?: string
+  /**
+   * Media attachments. Loosely typed here to avoid a notification → messaging
+   * dependency cycle; matches `MessagingMedia` from `@strav/signal/messaging`.
+   */
+  media?: {
+    kind: 'image' | 'audio' | 'video' | 'file'
+    url?: string
+    mediaId?: string
+    filename?: string
+    contentType?: string
+    caption?: string
+  }[]
+  /**
+   * Provider-specific reply context (WhatsApp WAMID, LINE reply token).
+   * See `MessagingMessage.replyTo` in `@strav/signal/messaging`.
+   */
+  replyTo?: string
+}
+
 /** Serializable envelope bundle built by BaseNotification. */
 export interface NotificationPayload {
   notificationClass: string
@@ -75,6 +104,9 @@ export interface NotificationPayload {
   database?: DatabaseEnvelope
   webhook?: WebhookEnvelope
   discord?: DiscordEnvelope
+  whatsapp?: MessagingEnvelope
+  messenger?: MessagingEnvelope
+  line?: MessagingEnvelope
 }
 
 /**

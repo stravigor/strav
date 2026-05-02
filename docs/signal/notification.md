@@ -1,6 +1,8 @@
 # Notification
 
-Multi-channel notifications (email, in-app, webhook, Discord) with event integration, queue support, and pluggable custom channels.
+Multi-channel notifications (email, in-app, webhook, Discord, and instant messaging via WhatsApp / Messenger / LINE) with event integration, queue support, and pluggable custom channels.
+
+For instant-messaging channels (WhatsApp / Messenger / LINE), see also the [Messaging guide](./messaging.md). When `MessagingProvider` is registered, those three channels are auto-wired into `NotificationManager`.
 
 ## Quick start
 
@@ -151,10 +153,13 @@ class User extends BaseModel implements Notifiable {
   routeNotificationForEmail() { return this.email }
   routeNotificationForDiscord() { return null }  // no per-user Discord
   routeNotificationForWebhook() { return null }
+  routeNotificationForWhatsapp() { return this.phone }       // E.164
+  routeNotificationForMessenger() { return this.psid }       // Page-Scoped ID
+  routeNotificationForLine() { return this.lineUserId }      // userId / groupId / roomId
 }
 ```
 
-Only `notifiableId()` and `notifiableType()` are required. The `routeNotificationForXxx()` methods are optional and used by channels to resolve delivery addresses.
+Only `notifiableId()` and `notifiableType()` are required. The `routeNotificationForXxx()` methods are optional and used by channels to resolve delivery addresses — return `null` for any channel a recipient should opt out of.
 
 ## Channels
 
@@ -230,6 +235,37 @@ toDiscord(): DiscordEnvelope {
   }
 }
 ```
+
+### Instant messaging (WhatsApp / Messenger / LINE)
+
+When `MessagingProvider` is registered alongside `NotificationProvider`, three additional channels — `whatsapp`, `messenger`, `line` — are auto-registered. Define `toWhatsapp()` / `toMessenger()` / `toLine()` envelope builders on your notification, name the channels in `via()`, and the recipient's matching `routeNotificationFor*()` method resolves the destination ID.
+
+```typescript
+import type { Notifiable, MessagingEnvelope } from '@strav/signal'
+
+class OrderShipped extends BaseNotification {
+  constructor(private trackingUrl: string) { super() }
+
+  via(_: Notifiable) {
+    return ['whatsapp', 'line']
+  }
+
+  toWhatsapp(_: Notifiable): MessagingEnvelope {
+    return { text: `Your order has shipped: ${this.trackingUrl}` }
+  }
+
+  toLine(_: Notifiable): MessagingEnvelope {
+    return {
+      text: `Your order has shipped`,
+      media: [{ kind: 'image', url: 'https://cdn.example.com/shipped.png' }],
+    }
+  }
+}
+```
+
+`MessagingEnvelope` carries `text`, `media[]`, and an optional `replyTo` (WhatsApp WAMID or LINE reply token). Channels skip silently when either the envelope or the recipient route is missing — so a single notification can name all three providers and the ones a given recipient hasn't opted into are dropped.
+
+For full provider details (recipient ID formats per provider, media constraints, signature verification on inbound webhooks, configuration), see the [Messaging guide](./messaging.md).
 
 ### Custom channel
 

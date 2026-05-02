@@ -2,7 +2,7 @@
   "name": "@strav/signal",
   "version": "0.3.28",
   "type": "module",
-  "description": "Communication layer for the Strav framework \u2014 mail, notifications, broadcasting, and SSE",
+  "description": "Communication layer for the Strav framework \u2014 mail, notifications, instant messaging (WhatsApp / Messenger / LINE), broadcasting, and SSE",
   "license": "MIT",
   "keywords": [
     "bun",
@@ -10,7 +10,11 @@
     "typescript",
     "strav",
     "mail",
-    "notification"
+    "notification",
+    "whatsapp",
+    "messenger",
+    "line",
+    "messaging"
   ],
   "files": [
     "src/",
@@ -28,6 +32,8 @@
     "./broadcast/*": "./src/broadcast/*.ts",
     "./sse": "./src/sse/index.ts",
     "./sse/*": "./src/sse/*.ts",
+    "./messaging": "./src/messaging/index.ts",
+    "./messaging/*": "./src/messaging/*.ts",
     "./providers": "./src/providers/index.ts",
     "./providers/*": "./src/providers/*.ts"
   },

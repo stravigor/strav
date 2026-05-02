@@ -1,6 +1,6 @@
 # @strav/signal
 
-Communication layer for the Strav framework — mail, notifications, real-time broadcasting, and Server-Sent Events (SSE).
+Communication layer for the Strav framework — mail, notifications, instant messaging (WhatsApp / Messenger / LINE), real-time broadcasting, and Server-Sent Events (SSE).
 
 ## Dependencies
 - @strav/kernel (peer)
@@ -18,19 +18,21 @@ Communication layer for the Strav framework — mail, notifications, real-time b
 ## Architecture
 - src/mail/ — MailManager, transports (SMTP, Resend, SendGrid, Mailgun, Alibaba, Log), CSS inliner
 - src/mail/inbound/ — inbound email: webhook parsers (Postmark, Mailgun) with HMAC verification where applicable, IMAP driver (imapflow + mailparser) with pluggable client factory for testing, loop-guard helper, canonical ParsedInboundMail type. SendGrid / SES webhooks + OAuth2 (Gmail/M365) IMAP pending. `mail.poll(...)` helper schedules IMAP polls via @strav/queue's Scheduler.
-- src/notification/ — NotificationManager, BaseNotification, channels (email, database, webhook, Discord)
+- src/notification/ — NotificationManager, BaseNotification, channels (email, database, webhook, Discord). When MessagingProvider is registered, `whatsapp` / `messenger` / `line` channels are added too — `BaseNotification` exposes optional `toWhatsapp()` / `toMessenger()` / `toLine()` envelope builders.
 - src/broadcast/ — BroadcastManager (server), Broadcast/Subscription (client)
 - src/sse/ — SSEManager (server), SSEClient (client), parser utilities
-- src/providers/ — MailProvider, NotificationProvider, BroadcastProvider
+- src/messaging/ — MessagingManager, transports (WhatsApp Cloud API, Messenger Send API, LINE Messaging API, Log), inbound webhook parsers (X-Hub-Signature-256 for Meta, X-Line-Signature for LINE), MessagingChannel adapter for notifications. Stateless pass-through — parsers expose conversation/user IDs and reply tokens, persistence is the consumer's responsibility.
+- src/providers/ — MailProvider, NotificationProvider, BroadcastProvider, MessagingProvider
 
 ## Key Exports
 
 ### From root (@strav/signal)
-- All mail, notification, broadcast, SSE, and provider exports
+- All mail, notification, messaging, broadcast, SSE, and provider exports
 
 ### From subpaths
 - @strav/signal/mail — Mail functionality (mail helper, PendingMail, transports)
 - @strav/signal/notification — Notification functionality (notify, BaseNotification, channels)
+- @strav/signal/messaging — Instant messaging (messaging helper, PendingMessage, transports, inbound parsers)
 - @strav/signal/broadcast — Broadcasting (broadcast helper, BroadcastManager, client classes)
 - @strav/signal/sse — Server-Sent Events (sse helper, SSEManager, SSEClient, parser utilities)
 - @strav/signal/providers — Service providers
@@ -54,6 +56,13 @@ Communication layer for the Strav framework — mail, notifications, real-time b
 - Multi-channel: via() method determines channels
 - Database storage: Automatic with DatabaseChannel
 
+### Messaging (instant messaging)
+- Primary API: `messaging` helper with fluent builder (`messaging.via('whatsapp').to(...).text(...).send()`)
+- Multi-provider: WhatsApp / Messenger / LINE; transports are looked up by name (no single "default transport" model — IM apps fan out across providers in parallel)
+- Inbound: each provider has a webhook parser that verifies signature (X-Hub-Signature-256 for WhatsApp/Messenger, X-Line-Signature for LINE) and normalizes to ParsedInboundMessage[]
+- Notification routing: when MessagingProvider is registered, channels named after the providers are auto-registered in NotificationManager
+- HTTP layer must surface RAW request body to inbound parsers — Meta and LINE compute HMAC over the exact bytes; re-stringifying JSON breaks verification
+
 ### Broadcasting
 - Server: `broadcast` helper for channel setup and sending
 - Client: `Broadcast` class for WebSocket subscription
@@ -69,5 +78,6 @@ Communication layer for the Strav framework — mail, notifications, real-time b
 ## Testing Considerations
 - Mail: LogTransport for testing without sending
 - Notifications: Mock notifiables with required interface
+- Messaging: LogMessagingTransport always registered; swap fakes in via `MessagingManager.useTransport()` and reset via `MessagingManager.reset()`
 - Broadcasting: WebSocket testing requires running server
 - SSE: Parser has comprehensive unit tests, integration tests use mock streams

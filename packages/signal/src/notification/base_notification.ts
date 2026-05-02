@@ -4,6 +4,7 @@ import type {
   DatabaseEnvelope,
   WebhookEnvelope,
   DiscordEnvelope,
+  MessagingEnvelope,
   NotificationPayload,
 } from './types.ts'
 
@@ -42,6 +43,12 @@ export abstract class BaseNotification {
   toWebhook?(notifiable: Notifiable): WebhookEnvelope
   /** Build the Discord envelope. */
   toDiscord?(notifiable: Notifiable): DiscordEnvelope
+  /** Build the WhatsApp envelope. */
+  toWhatsapp?(notifiable: Notifiable): MessagingEnvelope
+  /** Build the Messenger envelope. */
+  toMessenger?(notifiable: Notifiable): MessagingEnvelope
+  /** Build the LINE envelope. */
+  toLine?(notifiable: Notifiable): MessagingEnvelope
 
   /** Whether this notification should be queued for async delivery. */
   shouldQueue(): boolean {
@@ -62,6 +69,9 @@ export abstract class BaseNotification {
       database: this.toDatabase?.(notifiable),
       webhook: this.toWebhook?.(notifiable),
       discord: this.toDiscord?.(notifiable),
+      whatsapp: this.toWhatsapp?.(notifiable),
+      messenger: this.toMessenger?.(notifiable),
+      line: this.toLine?.(notifiable),
     }
   }
 }
