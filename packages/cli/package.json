@@ -1,6 +1,6 @@
 {
   "name": "@strav/cli",
-  "version": "0.3.30",
+  "version": "0.3.31",
   "type": "module",
   "description": "CLI framework and code generators for the Strav framework",
   "license": "MIT",
