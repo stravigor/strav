@@ -116,6 +116,40 @@ export const encrypt = {
   },
 
   /**
+   * Deterministic HMAC fingerprint for indexing encrypted columns.
+   *
+   * Pair with `encrypt.encrypt(value)` to support equality lookups against
+   * encrypted PII (e.g. find a user by email without storing the email in
+   * plaintext). `context` separates the index space across columns so two
+   * tables can't be correlated even by an attacker holding the database.
+   *
+   * @example
+   * const email = formData.email.trim().toLowerCase()
+   * await db.sql`
+   *   INSERT INTO users (email_encrypted, email_index)
+   *   VALUES (${encrypt.encrypt(email)}, ${encrypt.blindIndex(email, 'users.email')})
+   * `
+   */
+  blindIndex(value: string, context: string = 'default', options: { length?: number } = {}): string {
+    return EncryptionManager.blindIndex(value, context, options)
+  },
+
+  /**
+   * Encrypt a value AND compute its blind index in one call. Convenience
+   * for the searchable-encryption pattern.
+   *
+   * @example
+   * const { encrypted, index } = encrypt.searchablePair(email, 'users.email')
+   */
+  searchablePair(
+    value: string,
+    context: string = 'default',
+    options: { length?: number } = {}
+  ): { encrypted: string; index: string } {
+    return EncryptionManager.searchablePair(value, context, options)
+  },
+
+  /**
    * SHA-256 hash. Returns a hex string.
    *
    * @example

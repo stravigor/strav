@@ -26,6 +26,29 @@ export interface JobMeta {
   job: string
   attempts: number
   maxAttempts: number
+  /**
+   * Report progress for a long-running job. `value` is `0..1`. The reported
+   * value is persisted to the job row so external consumers can poll via
+   * {@link Queue.progressOf}, and a `queue:progress` event is emitted for
+   * live consumers (e.g. SSE).
+   *
+   * Returns immediately after persisting; safe to call from a tight loop
+   * but throttle to avoid hammering the database (e.g. every N rows or
+   * every 1 s).
+   */
+  progress: (value: number, message?: string) => Promise<void>
+}
+
+/** Snapshot of a job's current progress, returned by {@link Queue.progressOf}. */
+export interface JobProgress {
+  /** Job id. */
+  id: number
+  /** 0..1, last reported by the handler. */
+  value: number
+  /** Optional human-readable message attached to the last update. */
+  message: string | null
+  /** Current attempt count. */
+  attempts: number
 }
 
 /** A raw job row from the _strav_jobs table. */
@@ -116,8 +139,21 @@ export default class Queue {
         "timeout" INT NOT NULL DEFAULT 60000,
         "available_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         "reserved_at" TIMESTAMPTZ,
-        "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        "progress" NUMERIC NOT NULL DEFAULT 0,
+        "progress_message" TEXT
       )
+    `
+
+    // Additive migrations for progress columns — for tables that existed
+    // before progress reporting was introduced.
+    await sql`
+      ALTER TABLE "_strav_jobs"
+        ADD COLUMN IF NOT EXISTS "progress" NUMERIC NOT NULL DEFAULT 0
+    `
+    await sql`
+      ALTER TABLE "_strav_jobs"
+        ADD COLUMN IF NOT EXISTS "progress_message" TEXT
     `
 
     await sql`
@@ -166,6 +202,57 @@ export default class Queue {
     }
 
     return id
+  }
+
+  /**
+   * Persist progress for an in-flight job and emit a `queue:progress` event.
+   * Called by the `JobMeta.progress` callback that workers hand to handlers,
+   * but exposed statically so other code (e.g. retry replay tools) can update
+   * progress directly. `value` is clamped to `[0, 1]`.
+   */
+  static async reportProgress(
+    id: number,
+    value: number,
+    message?: string
+  ): Promise<void> {
+    const sql = Queue.db.sql
+    const clamped = Math.max(0, Math.min(1, value))
+    const msg = message ?? null
+    await sql`
+      UPDATE "_strav_jobs"
+      SET "progress" = ${clamped}, "progress_message" = ${msg}
+      WHERE "id" = ${id}
+    `
+    if (Emitter.listenerCount('queue:progress') > 0) {
+      Emitter.emit('queue:progress', {
+        id,
+        value: clamped,
+        message: msg,
+      }).catch(() => {})
+    }
+  }
+
+  /**
+   * Read the latest progress snapshot for a job. Returns `null` once the
+   * job has completed (the row is deleted on success) or if the id is
+   * unknown.
+   */
+  static async progressOf(id: number): Promise<JobProgress | null> {
+    const sql = Queue.db.sql
+    const rows = await sql`
+      SELECT "id", "progress", "progress_message", "attempts"
+      FROM "_strav_jobs"
+      WHERE "id" = ${id}
+      LIMIT 1
+    `
+    if (rows.length === 0) return null
+    const row = rows[0] as Record<string, unknown>
+    return {
+      id: Number(row.id),
+      value: Number(row.progress ?? 0),
+      message: (row.progress_message as string | null) ?? null,
+      attempts: Number(row.attempts ?? 0),
+    }
   }
 
   /**

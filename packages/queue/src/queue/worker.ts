@@ -122,6 +122,7 @@ export default class Worker {
       job: job.job,
       attempts: job.attempts,
       maxAttempts: job.maxAttempts,
+      progress: (value: number, message?: string) => Queue.reportProgress(job.id, value, message),
     }
 
     const start = performance.now()

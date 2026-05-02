@@ -83,9 +83,50 @@ Queue.handle('send-email', async (payload, meta) => {
 
 The handler receives:
 - `payload` — the data passed to `Queue.push()`.
-- `meta` — job metadata: `{ id, queue, job, attempts, maxAttempts }`.
+- `meta` — job metadata: `{ id, queue, job, attempts, maxAttempts, progress }`.
 
 If no handler is registered for a job, it moves directly to the failed jobs table.
+
+### Progress reporting
+
+Long-running jobs can report progress via `meta.progress(value, message?)`. `value` is `0..1`. The reported value is persisted to the job row and a `queue:progress` event fires for live consumers (SSE, WebSocket, dashboards).
+
+```typescript
+Queue.handle('import-contacts', async (payload, meta) => {
+  const rows = await loadRows(payload.fileUrl)
+  for (let i = 0; i < rows.length; i++) {
+    await processRow(rows[i])
+    if (i % 100 === 0) {
+      await meta.progress(i / rows.length, `processed ${i}/${rows.length}`)
+    }
+  }
+  await meta.progress(1, 'done')
+})
+```
+
+Throttle calls to avoid hammering the database — every N rows or every ~1 s is plenty.
+
+#### Polling for progress
+
+```typescript
+const snapshot = await Queue.progressOf(jobId)
+// → { id, value, message, attempts } or null once the job has completed
+```
+
+The job row is deleted on completion, so `progressOf` returns `null` after success — that's the signal the job is done. (For "what was the final result", use the audit log or persist the result yourself.)
+
+#### Subscribing to live progress
+
+```typescript
+import Emitter from '@strav/kernel/events/emitter'
+
+Emitter.on('queue:progress', ({ id, value, message }) => {
+  // forward to your SSE channel, WebSocket room, etc.
+  sse.to('jobs', { jobId: id }).send({ progress: value, message })
+})
+```
+
+The event is fire-and-forget — failed listeners do not affect the job. Don't put critical work on this listener.
 
 ## Worker
 

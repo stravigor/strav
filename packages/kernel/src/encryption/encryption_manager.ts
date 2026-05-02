@@ -63,6 +63,8 @@ export default class EncryptionManager {
   private static _hmacKey: Buffer
   private static _previousEncryptionKeys: Buffer[]
   private static _previousHmacKeys: Buffer[]
+  /** Lazily derived per-context blind-index keys. Cleared on `useKey`. */
+  private static _blindIndexKeys: Map<string, Buffer> = new Map()
 
   constructor(config: Configuration) {
     EncryptionManager._config = {
@@ -95,8 +97,14 @@ export default class EncryptionManager {
 
   /** Swap the application key at runtime (e.g., for testing). */
   static useKey(key: string): void {
+    if (EncryptionManager._config) {
+      EncryptionManager._config.key = key
+    } else {
+      EncryptionManager._config = { key, previousKeys: [] }
+    }
     EncryptionManager._encryptionKey = deriveKey(key, 'aes-256-gcm')
     EncryptionManager._hmacKey = deriveKey(key, 'hmac-sha256')
+    EncryptionManager._blindIndexKeys.clear()
   }
 
   // ---------------------------------------------------------------------------
@@ -169,6 +177,86 @@ export default class EncryptionManager {
       if (prev.length === actual.length && timingSafeEqual(prev, actual)) return true
     }
     return false
+  }
+
+  // ---------------------------------------------------------------------------
+  // Searchable encryption (blind index)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Deterministic HMAC fingerprint suitable for indexing encrypted values.
+   *
+   * Use case: store an email or phone number as `encrypt(value)` for at-rest
+   * confidentiality, plus `blindIndex(value, 'users.email')` in a separate
+   * indexable column. Lookups become `WHERE email_index = $blind_index`,
+   * keeping the plaintext unrecoverable from the database while still
+   * supporting equality queries.
+   *
+   * `context` provides domain separation between blind indexes for different
+   * columns / tables. Two indexes with different contexts cannot be
+   * correlated even by an attacker who has the database — the keys are
+   * derived independently from `APP_KEY` via HKDF.
+   *
+   * Length truncation is supported (in bytes; default = full SHA-256, 32
+   * bytes / 64 hex chars). Truncating reduces collision resistance — at 8
+   * bytes you'd expect a collision around the 4-billionth value, so don't
+   * truncate aggressively for high-cardinality data.
+   *
+   * Important — the caller is responsible for normalizing the input before
+   * calling: lowercase emails, strip phone-number formatting, trim whitespace.
+   * The same input must produce the same index, including from the receive
+   * side (when looking up by user-supplied value).
+   *
+   * Rotation note: blind indexes do NOT support `previousKeys` fallback,
+   * because lookups are direct equality queries against the stored value.
+   * Rotating `APP_KEY` requires re-computing every stored blind index — plan
+   * a migration with parallel index columns.
+   *
+   * @example
+   * const email = formData.email.trim().toLowerCase()
+   * await db.sql`
+   *   INSERT INTO users (email_encrypted, email_index)
+   *   VALUES (${encrypt.encrypt(email)}, ${encrypt.blindIndex(email, 'users.email')})
+   * `
+   *
+   * // Lookup
+   * const idx = encrypt.blindIndex(email, 'users.email')
+   * const rows = await db.sql`SELECT * FROM users WHERE email_index = ${idx}`
+   */
+  static blindIndex(
+    value: string,
+    context: string = 'default',
+    options: { length?: number } = {}
+  ): string {
+    if (!EncryptionManager._config?.key) {
+      throw new ConfigurationError(
+        'EncryptionManager is not configured. Resolve it through the container or call useKey().'
+      )
+    }
+    let key = EncryptionManager._blindIndexKeys.get(context)
+    if (!key) {
+      key = deriveKey(EncryptionManager._config.key, `blind-index:${context}`)
+      EncryptionManager._blindIndexKeys.set(context, key)
+    }
+    const hex = createHmac('sha256', key).update(value).digest('hex')
+    if (options.length === undefined) return hex
+    const charCount = Math.max(2, Math.min(64, options.length * 2))
+    return hex.slice(0, charCount)
+  }
+
+  /**
+   * Convenience: encrypt a value AND compute its blind index in one call.
+   * Returns `{ encrypted, index }` ready to be stored in a pair of columns.
+   */
+  static searchablePair(
+    value: string,
+    context: string = 'default',
+    options: { length?: number } = {}
+  ): { encrypted: string; index: string } {
+    return {
+      encrypted: EncryptionManager.encrypt(value),
+      index: EncryptionManager.blindIndex(value, context, options),
+    }
   }
 
   // ---------------------------------------------------------------------------
