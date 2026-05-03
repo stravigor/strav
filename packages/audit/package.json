@@ -1,6 +1,6 @@
 {
   "name": "@strav/audit",
-  "version": "0.3.32",
+  "version": "0.3.33",
   "type": "module",
   "description": "Append-only, tamper-evident audit log for the Strav framework",
   "license": "MIT",
