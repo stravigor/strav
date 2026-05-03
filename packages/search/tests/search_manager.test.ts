@@ -76,6 +76,42 @@ describe('SearchManager', () => {
     expect(SearchManager.indexName('articles')).toBe('articles')
   })
 
+  // ── Multi-tenant scope (SR-1) ──────────────────────────────────────
+
+  test('indexName applies tenant scope when provided', () => {
+    bootSearch()
+    expect(SearchManager.indexName('articles', { tenantId: 42 })).toBe('t42_articles')
+    expect(SearchManager.indexName('articles', { tenantId: 'acme' })).toBe('tacme_articles')
+  })
+
+  test('indexName combines prefix + tenant scope', () => {
+    bootSearch({ prefix: 'app_' })
+    expect(SearchManager.indexName('articles', { tenantId: 42 })).toBe('app_t42_articles')
+  })
+
+  test('indexName ignores undefined / null scope', () => {
+    bootSearch({ prefix: 'app_' })
+    expect(SearchManager.indexName('articles')).toBe('app_articles')
+    expect(SearchManager.indexName('articles', null)).toBe('app_articles')
+  })
+
+  test('indexName rejects tenantId values that could escape the namespace', () => {
+    bootSearch()
+    expect(() => SearchManager.indexName('articles', { tenantId: '../etc' })).toThrow(/tenantId/)
+    expect(() => SearchManager.indexName('articles', { tenantId: 'evil; DROP TABLE' })).toThrow(
+      /tenantId/
+    )
+    expect(() => SearchManager.indexName('articles', { tenantId: 'with space' })).toThrow(
+      /tenantId/
+    )
+  })
+
+  test('indexName accepts safe tenantId shapes', () => {
+    bootSearch()
+    expect(SearchManager.indexName('a', { tenantId: 'abc-123' })).toBe('tabc-123_a')
+    expect(SearchManager.indexName('a', { tenantId: 'A_B_42' })).toBe('tA_B_42_a')
+  })
+
   test('extend registers custom driver', () => {
     bootSearch({
       drivers: {

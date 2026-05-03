@@ -115,6 +115,25 @@ describe('FacebookProvider', () => {
       expect(lastFetchCall(0).url).toBe('https://graph.facebook.com/v21.0/oauth/access_token')
     })
 
+    test("defaults tokenEndpointAuthMethod to 'post' (Facebook quirk)", async () => {
+      mockFetch([{ body: { access_token: 'tok' } }, { body: { id: '1', name: 'X' } }])
+
+      const provider = new FacebookProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+
+      await provider.user(ctx)
+
+      // Facebook overrides the default — secret in body, NO Basic header.
+      const tokenCall = lastFetchCall(0)
+      expect(tokenCall.init.headers.Authorization).toBeUndefined()
+      const body = new URLSearchParams(tokenCall.init.body)
+      expect(body.get('client_secret')).toBe('fb-client-secret')
+    })
+
     test('fetches user with fields parameter', async () => {
       mockFetch([{ body: { access_token: 'tok' } }, { body: { id: '1', name: 'X' } }])
 

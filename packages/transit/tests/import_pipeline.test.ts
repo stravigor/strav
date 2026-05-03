@@ -157,4 +157,39 @@ describe('PendingImport', () => {
     expect(() => transit.import('csv').maxDedupKeys(-1)).toThrow(/positive/)
     expect(() => transit.import('csv').maxDedupKeys(NaN)).toThrow(/finite/)
   })
+
+  test('warns once when run() starts with no validators', async () => {
+    const original = console.warn
+    const calls: unknown[][] = []
+    console.warn = (...args: unknown[]) => calls.push(args)
+    try {
+      await transit
+        .import('csv')
+        .from('id\n1\n2\n')
+        .into(() => {})
+        .run()
+      const warned = calls.some(c => String(c[0]).includes('no validators registered'))
+      expect(warned).toBe(true)
+    } finally {
+      console.warn = original
+    }
+  })
+
+  test('does not warn when at least one validator is registered', async () => {
+    const original = console.warn
+    const calls: unknown[][] = []
+    console.warn = (...args: unknown[]) => calls.push(args)
+    try {
+      await transit
+        .import('csv')
+        .from('id\n1\n')
+        .validate(() => null)
+        .into(() => {})
+        .run()
+      const warned = calls.some(c => String(c[0]).includes('no validators registered'))
+      expect(warned).toBe(false)
+    } finally {
+      console.warn = original
+    }
+  })
 })

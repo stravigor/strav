@@ -517,6 +517,28 @@ Emitter.on('social_account:tokens_updated', e => {
 })
 ```
 
+### Token-endpoint authentication
+
+`getAccessToken()` defaults to `client_secret_basic` — the client credentials are sent in an HTTP Basic `Authorization` header (RFC 6749 §2.3.1, MUST-support form). This keeps the client secret out of body-logging surfaces (proxy logs, application traces) where the token-endpoint POST body would otherwise echo it.
+
+Apps can override per-provider via `ProviderConfig.tokenEndpointAuthMethod`:
+
+```typescript
+export default {
+  providers: {
+    legacy: {
+      driver: 'oauth2',
+      clientId: env('LEGACY_CLIENT_ID'),
+      clientSecret: env('LEGACY_CLIENT_SECRET'),
+      redirectUrl: 'https://app.com/auth/legacy/callback',
+      tokenEndpointAuthMethod: 'post',  // secret in POST body
+    },
+  },
+}
+```
+
+Facebook overrides the default to `'post'` because its Graph API token endpoint reads the secret from the body. Google, GitHub, Discord, and LinkedIn all accept Basic.
+
 ### Credentials
 
 Never commit client secrets. Use environment variables and `.env` files with strict permissions.

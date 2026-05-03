@@ -3,6 +3,7 @@ import Configuration from '@strav/kernel/config/configuration'
 import Database from '@strav/database/database/database'
 import Emitter from '@strav/kernel/events/emitter'
 import { ConfigurationError } from '@strav/kernel/exceptions/errors'
+import { configureBreaker, type CircuitBreakerOptions } from './circuit_breaker.ts'
 
 export interface JobOptions {
   queue?: string
@@ -78,6 +79,46 @@ export interface FailedJobRecord {
 export type JobHandler<T = any> = (payload: T, meta: JobMeta) => void | Promise<void>
 
 /**
+ * Minimal "schema-like" shape — anything that exposes `parse(input)`
+ * (Zod, ArkType, Valibot, hand-written validators) works. The schema
+ * is invoked at dequeue time, BEFORE the handler runs, so a tampered
+ * row in the DB or a payload from an older code revision is rejected
+ * loudly instead of executing with a half-formed shape.
+ */
+export interface JobPayloadSchema<T = unknown> {
+  parse(input: unknown): T
+}
+
+/** Per-handler registration options. */
+export interface JobHandlerOptions<T = any> {
+  /**
+   * Optional payload schema. When set, the worker calls `schema.parse(payload)`
+   * before invoking the handler; a parse failure routes the job to
+   * `_strav_failed_jobs` with the validation error message.
+   *
+   * Recommended for any handler whose payload comes from an external
+   * source (HTTP webhook, customer upload) or whose code has churned
+   * since older jobs were enqueued — the parse is a fail-fast invariant
+   * that catches drift before the handler corrupts state.
+   */
+  schema?: JobPayloadSchema<T>
+  /**
+   * Per-handler circuit breaker. Trips when the failure count within
+   * `windowMs` reaches `threshold`, pausing dispatch for `cooldownMs`.
+   * Defends against retry storms — a stale-schema or downed-dependency
+   * handler shouldn't keep eating worker cycles. Defaults: threshold
+   * 10, windowMs 60_000, cooldownMs 30_000.
+   */
+  circuitBreaker?: CircuitBreakerOptions
+}
+
+/** Internal registration record stored in Queue._handlers. */
+export interface JobHandlerRegistration<T = any> {
+  handler: JobHandler<T>
+  schema?: JobPayloadSchema<T>
+}
+
+/**
  * PostgreSQL-backed job queue.
  *
  * Resolved once via the DI container — stores the database reference
@@ -95,7 +136,7 @@ export type JobHandler<T = any> = (payload: T, meta: JobMeta) => void | Promise<
 export default class Queue {
   private static _db: Database
   private static _config: QueueConfig
-  private static _handlers = new Map<string, JobHandler>()
+  private static _handlers = new Map<string, JobHandlerRegistration>()
 
   constructor(db: Database, config: Configuration) {
     Queue._db = db
@@ -120,7 +161,7 @@ export default class Queue {
     return Queue._config
   }
 
-  static get handlers(): Map<string, JobHandler> {
+  static get handlers(): Map<string, JobHandlerRegistration> {
     return Queue._handlers
   }
 
@@ -174,9 +215,27 @@ export default class Queue {
     `
   }
 
-  /** Register a handler for a named job. */
-  static handle<T = any>(name: string, handler: JobHandler<T>): void {
-    Queue._handlers.set(name, handler)
+  /**
+   * Register a handler for a named job. Pass `options.schema` to have
+   * the worker validate the payload (Zod / ArkType / etc.) before
+   * invoking the handler — a parse failure routes the job to
+   * `_strav_failed_jobs` instead of running the handler with bad data.
+   *
+   * @example
+   * import { z } from 'zod'
+   * Queue.handle('send-email', async (payload) => { ... }, {
+   *   schema: z.object({ to: z.string().email(), subject: z.string() }),
+   * })
+   */
+  static handle<T = any>(
+    name: string,
+    handler: JobHandler<T>,
+    options?: JobHandlerOptions<T>
+  ): void {
+    Queue._handlers.set(name, { handler, schema: options?.schema })
+    if (options?.circuitBreaker) {
+      configureBreaker(name, options.circuitBreaker)
+    }
   }
 
   /**

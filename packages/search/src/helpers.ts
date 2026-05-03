@@ -6,6 +6,7 @@ import type {
   SearchResult,
   IndexSettings,
   DriverConfig,
+  SearchScope,
 } from './types.ts'
 
 /**
@@ -67,4 +68,53 @@ export const search = {
   deleteIndex(index: string): Promise<void> {
     return SearchManager.engine().deleteIndex(SearchManager.indexName(index))
   },
+
+  /**
+   * Return a tenant-scoped wrapper of this helper. All index names
+   * resolved through it are namespaced as `${prefix}t${tenantId}_${name}`,
+   * giving two tenants on the same shared engine independent indexes.
+   *
+   * @example
+   * await search.for({ tenantId: 42 }).upsert('articles', 1, { … })
+   * await search.for({ tenantId: 42 }).query('articles', 'lookup')
+   *
+   * Apps that don't need multi-tenant isolation skip `.for()` and call
+   * the top-level helpers directly.
+   */
+  for(scope: SearchScope): ScopedSearch {
+    return makeScoped(scope)
+  },
+}
+
+// ── Scoped helper ────────────────────────────────────────────────────────
+
+export interface ScopedSearch {
+  query(index: string, query: string, options?: SearchOptions): Promise<SearchResult>
+  upsert(index: string, id: string | number, document: Record<string, unknown>): Promise<void>
+  upsertMany(index: string, documents: SearchDocument[]): Promise<void>
+  delete(index: string, id: string | number): Promise<void>
+  deleteMany(index: string, ids: Array<string | number>): Promise<void>
+  flush(index: string): Promise<void>
+  createIndex(index: string, options?: IndexSettings): Promise<void>
+  deleteIndex(index: string): Promise<void>
+}
+
+function makeScoped(scope: SearchScope): ScopedSearch {
+  return {
+    query: (index, query, options) =>
+      SearchManager.engine().search(SearchManager.indexName(index, scope), query, options),
+    upsert: (index, id, document) =>
+      SearchManager.engine().upsert(SearchManager.indexName(index, scope), id, document),
+    upsertMany: (index, documents) =>
+      SearchManager.engine().upsertMany(SearchManager.indexName(index, scope), documents),
+    delete: (index, id) =>
+      SearchManager.engine().delete(SearchManager.indexName(index, scope), id),
+    deleteMany: (index, ids) =>
+      SearchManager.engine().deleteMany(SearchManager.indexName(index, scope), ids),
+    flush: index => SearchManager.engine().flush(SearchManager.indexName(index, scope)),
+    createIndex: (index, options) =>
+      SearchManager.engine().createIndex(SearchManager.indexName(index, scope), options),
+    deleteIndex: index =>
+      SearchManager.engine().deleteIndex(SearchManager.indexName(index, scope)),
+  }
 }

@@ -86,4 +86,53 @@ describe('search helper', () => {
     await search.query('articles', 'test')
     expect(eng.calls[0].args[0]).toBe('prod_articles')
   })
+
+  // ── search.for(scope) — multi-tenant scoping (SR-1) ────────────────
+
+  test('for(scope).upsert namespaces the index with t<tenantId>_', async () => {
+    await search.for({ tenantId: 42 }).upsert('articles', 1, { title: 'Hi' })
+    expect(calls[0].method).toBe('upsert')
+    expect(calls[0].args[0]).toBe('t42_articles')
+  })
+
+  test('for(scope).query namespaces the index', async () => {
+    await search.for({ tenantId: 'acme' }).query('articles', 'lookup')
+    expect(calls[0].method).toBe('search')
+    expect(calls[0].args[0]).toBe('tacme_articles')
+  })
+
+  test('for(scope) covers every method on the helper', async () => {
+    const scoped = search.for({ tenantId: 7 })
+    await scoped.upsert('a', 1, {})
+    await scoped.upsertMany('a', [{ id: 1 }])
+    await scoped.delete('a', 1)
+    await scoped.deleteMany('a', [1])
+    await scoped.flush('a')
+    await scoped.createIndex('a')
+    await scoped.deleteIndex('a')
+    await scoped.query('a', 'q')
+
+    // Every recorded call's index argument is namespaced.
+    for (const call of calls) {
+      expect(call.args[0]).toBe('t7_a')
+    }
+  })
+
+  test('for(scope) combines with the configured prefix', async () => {
+    SearchManager.reset()
+    bootSearch({ prefix: 'app_' })
+    const eng = recordingEngine('meilisearch')
+    SearchManager.useEngine(eng.engine)
+
+    await search.for({ tenantId: 'acme' }).query('articles', 'lookup')
+    expect(eng.calls[0].args[0]).toBe('app_tacme_articles')
+  })
+
+  test('two tenants resolve to independent indexes', async () => {
+    await search.for({ tenantId: 1 }).upsert('articles', 1, { title: 'A' })
+    await search.for({ tenantId: 2 }).upsert('articles', 1, { title: 'B' })
+    expect(calls[0].args[0]).toBe('t1_articles')
+    expect(calls[1].args[0]).toBe('t2_articles')
+    expect(calls[0].args[0]).not.toBe(calls[1].args[0])
+  })
 })

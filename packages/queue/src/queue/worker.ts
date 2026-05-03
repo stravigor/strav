@@ -1,5 +1,6 @@
 import Queue, { hydrateJob } from './queue.ts'
 import Emitter from '@strav/kernel/events/emitter'
+import { checkBreaker, recordFailure, recordSuccess } from './circuit_breaker.ts'
 import type { JobRecord, JobMeta } from './queue.ts'
 
 export interface WorkerOptions {
@@ -109,10 +110,22 @@ export default class Worker {
 
   /** Process a single job: run handler, handle success/failure. */
   private async process(job: JobRecord): Promise<void> {
-    const handler = Queue.handlers.get(job.job)
+    const registration = Queue.handlers.get(job.job)
 
-    if (!handler) {
+    if (!registration) {
       await this.fail(job, new Error(`No handler registered for job "${job.job}"`))
+      return
+    }
+
+    // Q-1: per-handler circuit breaker. If the handler has tripped its
+    // breaker (too many failures in the configured window), defer this
+    // job rather than running it. Push it back to the queue with
+    // `available_at = now + cooldown` so it retries AFTER the breaker
+    // resets — this clears the worker to drain unrelated jobs from the
+    // queue instead of compounding the failure storm.
+    const cooldownRemaining = checkBreaker(job.job)
+    if (cooldownRemaining !== null) {
+      await this.deferForCooldown(job, cooldownRemaining)
       return
     }
 
@@ -125,11 +138,27 @@ export default class Worker {
       progress: (value: number, message?: string) => Queue.reportProgress(job.id, value, message),
     }
 
+    // Re-parse the payload through the registered schema (CC-5). Catches
+    // payloads that drifted from the handler's expected shape — older
+    // enqueues, manual DB edits, malicious tampering. A parse failure
+    // is fatal: the job goes straight to failed_jobs without retry,
+    // because retrying with the same bad payload won't help.
+    let payload = job.payload
+    if (registration.schema) {
+      try {
+        payload = registration.schema.parse(job.payload)
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err)
+        await this.fail(job, new Error(`Job "${job.job}" payload failed validation: ${detail}`))
+        return
+      }
+    }
+
     const start = performance.now()
 
     try {
       await Promise.race([
-        Promise.resolve(handler(job.payload, meta)),
+        Promise.resolve(registration.handler(payload, meta)),
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error(`Job "${job.job}" timed out after ${job.timeout}ms`)),
@@ -138,6 +167,7 @@ export default class Worker {
         ),
       ])
       await this.complete(job)
+      recordSuccess(job.job)
 
       if (Emitter.listenerCount('queue:processed') > 0) {
         const duration = performance.now() - start
@@ -150,6 +180,9 @@ export default class Worker {
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error))
+      // Update breaker state regardless of retry decision so a job that
+      // exhausts its retries still counts toward the trip threshold.
+      recordFailure(job.job)
       if (job.attempts >= job.maxAttempts) {
         await this.fail(job, err)
 
@@ -194,6 +227,24 @@ export default class Worker {
     await Queue.db.sql`
       UPDATE "_strav_jobs"
       SET "reserved_at" = NULL, "available_at" = ${availableAt}
+      WHERE "id" = ${job.id}
+    `
+  }
+
+  /**
+   * Push a tripped-circuit job back to the queue with `available_at`
+   * scheduled past the cooldown. Also rolls back the attempts counter
+   * the fetcher incremented so a circuit trip doesn't eat retry
+   * budget — the job genuinely never executed.
+   */
+  private async deferForCooldown(job: JobRecord, cooldownMs: number): Promise<void> {
+    const availableAt = new Date(Date.now() + Math.max(cooldownMs, 1_000))
+
+    await Queue.db.sql`
+      UPDATE "_strav_jobs"
+      SET "reserved_at" = NULL,
+          "available_at" = ${availableAt},
+          "attempts" = GREATEST("attempts" - 1, 0)
       WHERE "id" = ${job.id}
     `
   }

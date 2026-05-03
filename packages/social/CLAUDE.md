@@ -38,6 +38,10 @@ OAuth 2.0 social authentication with a fluent, driver-based API. Built-in provid
 
 The OAuth `state` parameter is non-optional (the previously-available `provider.stateless()` opt-out was removed because it silently disabled CSRF protection). `userFromToken()` remains stateless by design — it is for cases where the access token was obtained out-of-band (e.g., a mobile client that ran its own OAuth dance).
 
+## Token-endpoint authentication
+
+`getAccessToken()` defaults to `client_secret_basic` (HTTP Basic auth — RFC 6749 §2.3.1) so the client secret stays out of body-logging surfaces. Apps can override per-provider via `ProviderConfig.tokenEndpointAuthMethod: 'post'`. Facebook overrides the default to `'post'` because its Graph API token endpoint reads the secret from the body. Other built-in providers (Google, GitHub, Discord, LinkedIn) accept Basic.
+
 ## Token storage at rest
 
 `SocialAccount.create()` and `updateTokens()` encrypt the access token and refresh token via `EncryptionManager` before they hit the database; `hydrate()` decrypts them on read. Encrypted values are stored with an `enc:v1:` sentinel prefix. Legacy plaintext rows (predating this change) are returned as-is by `hydrate()` — they migrate to ciphertext on the next `updateTokens()` call. Tests must initialize encryption (e.g., `EncryptionManager.useKey('test-key')` in `beforeEach`) before calling `create()` or `updateTokens()`.

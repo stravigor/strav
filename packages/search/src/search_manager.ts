@@ -1,6 +1,6 @@
 import { inject, Configuration, ConfigurationError } from '@strav/kernel'
 import type { SearchEngine } from './search_engine.ts'
-import type { SearchConfig, DriverConfig } from './types.ts'
+import type { SearchConfig, DriverConfig, SearchScope } from './types.ts'
 import { MeilisearchDriver } from './drivers/meilisearch_driver.ts'
 import { TypesenseDriver } from './drivers/typesense_driver.ts'
 import { AlgoliaDriver } from './drivers/algolia_driver.ts'
@@ -53,9 +53,34 @@ export default class SearchManager {
     return SearchManager._config?.prefix ?? ''
   }
 
-  /** Resolve a full index name by applying the configured prefix. */
-  static indexName(name: string): string {
-    return SearchManager.prefix ? `${SearchManager.prefix}${name}` : name
+  /**
+   * Resolve a full index name by applying the configured prefix and
+   * optional per-tenant scope. Per-tenant scoping namespaces the index
+   * as `${prefix}t${tenantId}_${name}` so two tenants on the same
+   * shared engine cannot read or overwrite each other's documents.
+   *
+   * Apps that don't need multi-tenant isolation can omit the scope.
+   * The driver layer is unchanged — namespacing happens here at the
+   * manager boundary.
+   */
+  static indexName(name: string, scope?: SearchScope | null): string {
+    const base = SearchManager.prefix ? `${SearchManager.prefix}${name}` : name
+    if (!scope || scope.tenantId === undefined || scope.tenantId === null) return base
+    // Validate tenant identifier — anything that ends up in an index
+    // name lands in URL paths / SQL identifiers downstream, so refuse
+    // values that could escape the namespace. Letters, digits, dashes,
+    // underscores only.
+    const tenantId = String(scope.tenantId)
+    if (!/^[a-zA-Z0-9_-]+$/.test(tenantId)) {
+      throw new ConfigurationError(
+        `SearchManager.indexName: invalid tenantId ${JSON.stringify(tenantId)} — ` +
+          `must match /^[a-zA-Z0-9_-]+$/.`
+      )
+    }
+    if (SearchManager.prefix) {
+      return `${SearchManager.prefix}t${tenantId}_${name}`
+    }
+    return `t${tenantId}_${name}`
   }
 
   /** Register a custom driver factory. */

@@ -30,6 +30,7 @@ export type { SearchableInstance, SearchableModel } from './searchable.ts'
 
 // Helper
 export { search } from './helpers.ts'
+export type { ScopedSearch } from './helpers.ts'
 
 // Errors
 export { SearchError, IndexNotFoundError, SearchQueryError } from './errors.ts'
@@ -43,4 +44,5 @@ export type {
   SearchResult,
   SearchHit,
   IndexSettings,
+  SearchScope,
 } from './types.ts'

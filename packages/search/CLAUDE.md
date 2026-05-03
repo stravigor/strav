@@ -27,3 +27,14 @@ Full-text search with a unified API across multiple engines. Built-in drivers fo
 - Drivers implement the search engine interface in search_engine.ts
 - Use searchable() mixin on ORM models — don't call drivers directly
 - Index operations go through CLI commands for bulk operations
+
+## Multi-tenant scoping
+
+`SearchManager.indexName(name, scope?)` accepts an optional `{ tenantId }` scope and rewrites the resolved index to `${prefix}t${tenantId}_${name}`. The driver layer is unchanged — namespacing happens at the manager boundary so two tenants on the same shared engine read independent indexes.
+
+The convenience wrapper `search.for({ tenantId }).upsert(...)` / `.query(...)` / etc. applies the scope automatically. `tenantId` must match `/^[a-zA-Z0-9_-]+$/`; anything that could escape the namespace (slashes, spaces, SQL meta-chars) throws a `ConfigurationError`.
+
+```ts
+await search.for({ tenantId: 42 }).upsert('articles', 1, { … })
+await search.for({ tenantId: 42 }).query('articles', 'lookup')
+```

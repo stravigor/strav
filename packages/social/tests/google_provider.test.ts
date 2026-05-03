@@ -181,12 +181,40 @@ describe('GoogleProvider', () => {
       expect(tokenCall.url).toBe('https://oauth2.googleapis.com/token')
       expect(tokenCall.init.method).toBe('POST')
 
+      // Default token-endpoint auth is HTTP Basic (RFC 6749 §2.3.1) —
+      // client_secret lives in the Authorization header, NOT the body.
+      const expectedAuth =
+        'Basic ' + Buffer.from('google-client-id:google-client-secret', 'utf8').toString('base64')
+      expect(tokenCall.init.headers.Authorization).toBe(expectedAuth)
+
       const body = new URLSearchParams(tokenCall.init.body)
       expect(body.get('grant_type')).toBe('authorization_code')
       expect(body.get('client_id')).toBe('google-client-id')
-      expect(body.get('client_secret')).toBe('google-client-secret')
+      expect(body.get('client_secret')).toBeNull() // not in body when Basic
       expect(body.get('code')).toBe('the-code')
       expect(body.get('redirect_uri')).toBe('http://localhost:3000/auth/google/callback')
+    })
+
+    test('respects tokenEndpointAuthMethod=post (puts client_secret in body)', async () => {
+      mockFetch([
+        { body: { access_token: 'tok', expires_in: 3600 } },
+        { body: { sub: '1' } },
+      ])
+
+      const provider = new GoogleProvider({ ...config, tokenEndpointAuthMethod: 'post' })
+      const state = 'test-state'
+      const ctx = mockContext({
+        query: { code: 'the-code', state },
+        sessionData: { social_state: state },
+      })
+
+      await provider.user(ctx)
+
+      const tokenCall = lastFetchCall(0)
+      expect(tokenCall.init.headers.Authorization).toBeUndefined()
+
+      const body = new URLSearchParams(tokenCall.init.body)
+      expect(body.get('client_secret')).toBe('google-client-secret')
     })
 
     test('verifies state parameter', async () => {

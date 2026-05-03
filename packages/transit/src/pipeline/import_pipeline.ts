@@ -162,6 +162,27 @@ export class PendingImport<I = Record<string, string>, O = I> {
       throw new Error('transit.import: call .upsertInto(...) or .into(...)')
     }
 
+    // T-2: warn (once per run) when no validators are registered. Catches
+    // the common bug of running an import without any row-level checks
+    // and silently writing every malformed row. Apps that genuinely
+    // want unvalidated imports can suppress this with a no-op
+    // `.validate(() => null)`.
+    if (this._validators.length === 0) {
+      console.warn(
+        '[transit.import] running with no validators registered — every row will be written unchecked. ' +
+          "Add `.validate(row => …)` calls or pass `.validate(() => null)` to suppress this warning."
+      )
+    }
+
+    // T-3: when upsertInto is configured, confirm a UNIQUE / PK
+    // constraint covers the conflict columns. Without one, ON CONFLICT
+    // silently degrades to plain INSERT and duplicates rows. The check
+    // queries pg_indexes through the Database singleton, so it only
+    // works against postgres — fail-soft for other backends.
+    if (this._upsertTarget) {
+      await assertConflictIndex(this._upsertTarget)
+    }
+
     const reporter = new ProgressReporter()
     if (this._onProgress) reporter.on(this._onProgress)
     const errors: RowError[] = []
@@ -265,6 +286,49 @@ export class PendingImport<I = Record<string, string>, O = I> {
     }
     yield* readCsv(source, this._csvOpts)
   }
+}
+
+/**
+ * Confirm a UNIQUE / PK constraint covers exactly the conflict columns.
+ * Without one, `INSERT ... ON CONFLICT (col) DO UPDATE` silently
+ * degrades to plain INSERT and the import duplicates rows on every
+ * re-run — exactly the kind of bug that's costly to discover later.
+ *
+ * Queries `pg_indexes.indexdef` and matches the `(col1, col2, ...)`
+ * column list out of the raw definition. This is enough for the common
+ * forms (`UNIQUE INDEX … ON tbl (col)` / `PRIMARY KEY (col, col2)`).
+ */
+async function assertConflictIndex(target: UpsertTarget): Promise<void> {
+  const sql = Database.raw
+  const conflictCols = Array.isArray(target.conflict) ? target.conflict : [target.conflict]
+  const wanted = conflictCols.map(c => c.trim()).join(',')
+
+  type IndexRow = { indexdef: string }
+  const indexes = (await sql`
+    SELECT indexdef FROM pg_indexes WHERE tablename = ${target.table}
+  `) as IndexRow[]
+
+  for (const row of indexes) {
+    const def = row.indexdef
+    // Only consider UNIQUE indexes / primary keys.
+    if (!/UNIQUE/i.test(def) && !/PRIMARY KEY/i.test(def)) continue
+    const match = def.match(/\(([^)]+)\)/)
+    if (!match) continue
+    const cols = match[1]!
+      .split(',')
+      .map(c => c.trim().replace(/^"(.*)"$/, '$1'))
+      .join(',')
+    if (cols === wanted) return
+  }
+
+  throw new Error(
+    `transit.upsertInto: no UNIQUE or PRIMARY KEY index on ` +
+      `${target.table}(${conflictCols.join(', ')}). ON CONFLICT requires one ` +
+      `or every row will silently INSERT (and duplicate on re-run). Create ` +
+      `the index first, e.g. \`CREATE UNIQUE INDEX ... ON "${target.table}" (${conflictCols
+        .map(c => `"${c}"`)
+        .join(', ')});\``
+  )
 }
 
 async function upsertBatch(

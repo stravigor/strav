@@ -5,6 +5,21 @@ export interface SearchDocument {
   [key: string]: unknown
 }
 
+// ── Multi-tenant scope ────────────────────────────────────────────────────
+
+/**
+ * Per-tenant scope applied at index-name resolution. Drivers don't see
+ * the scope directly — `SearchManager.indexName(name, scope)` rewrites
+ * the index name to `${prefix}t${tenantId}_${name}` so two tenants on
+ * the same shared engine read independent indexes.
+ *
+ * The tenantId must match `/^[a-zA-Z0-9_-]+$/`; anything else throws
+ * (the value lands in URL paths and SQL identifiers downstream).
+ */
+export interface SearchScope {
+  tenantId: string | number
+}
+
 // ── Index settings ────────────────────────────────────────────────────────
 
 export interface IndexSettings {

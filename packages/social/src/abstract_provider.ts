@@ -105,20 +105,44 @@ export abstract class AbstractProvider {
   // Internal
   // ---------------------------------------------------------------------------
 
+  /**
+   * Per-provider override of the default token-endpoint auth method.
+   * Override this in subclasses for providers that require a non-`basic`
+   * default (e.g. Facebook prefers `post`).
+   */
+  protected defaultTokenEndpointAuthMethod(): 'basic' | 'post' {
+    return 'basic'
+  }
+
   protected async getAccessToken(code: string): Promise<TokenResponse> {
+    const method = this.config.tokenEndpointAuthMethod ?? this.defaultTokenEndpointAuthMethod()
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    }
+
+    const body: Record<string, string> = {
+      grant_type: 'authorization_code',
+      client_id: this.config.clientId,
+      code,
+      redirect_uri: this.config.redirectUrl,
+    }
+
+    if (method === 'basic') {
+      // RFC 6749 §2.3.1 — MUST-support form. Keeps client_secret out of
+      // body-logging surfaces.
+      const credentials = `${this.config.clientId}:${this.config.clientSecret}`
+      headers.Authorization = `Basic ${Buffer.from(credentials, 'utf8').toString('base64')}`
+    } else {
+      // Fallback for providers that only accept secret-in-body.
+      body.client_secret = this.config.clientSecret
+    }
+
     const response = await fetch(this.getTokenUrl(), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-        code,
-        redirect_uri: this.config.redirectUrl,
-      }),
+      headers,
+      body: new URLSearchParams(body),
     })
 
     if (!response.ok) {

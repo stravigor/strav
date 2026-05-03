@@ -11,6 +11,16 @@ export class FacebookProvider extends AbstractProvider {
     return ['email', 'public_profile']
   }
 
+  /**
+   * Facebook's Graph API token endpoint reads `client_secret` from the
+   * request body (its docs don't advertise HTTP Basic support reliably),
+   * so default to `'post'` here. Apps can still override via
+   * `ProviderConfig.tokenEndpointAuthMethod`.
+   */
+  protected override defaultTokenEndpointAuthMethod(): 'basic' | 'post' {
+    return 'post'
+  }
+
   protected getAuthUrl(): string {
     return `https://www.facebook.com/${API_VERSION}/dialog/oauth`
   }

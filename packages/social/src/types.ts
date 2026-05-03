@@ -25,6 +25,15 @@ export interface ProviderConfig {
   clientSecret: string
   redirectUrl: string
   scopes?: string[]
+  /**
+   * How to authenticate with the provider's token endpoint. Default
+   * `'basic'` (HTTP Basic auth — RFC 6749 §2.3.1, MUST-support, keeps
+   * `client_secret` out of body-logging surfaces). `'post'` falls back
+   * to `client_secret` in the request body for providers that don't
+   * accept Basic (e.g. Facebook). The `social` package picks the right
+   * default per provider but you can override here if needed.
+   */
+  tokenEndpointAuthMethod?: 'basic' | 'post'
 }
 
 export interface SocialConfig {

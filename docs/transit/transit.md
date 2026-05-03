@@ -89,6 +89,8 @@ Return a string to reject the row with that reason — it becomes a `RowError` (
 
 Multiple `.validate()` calls chain in order; the first one that returns a reason ends validation.
 
+`.run()` emits a `console.warn` once when no validators are registered — the import will write every row unchecked, which is rarely the intent. Pass an explicit `.validate(() => null)` if you genuinely want unvalidated imports.
+
 ### `dedupBy(key | extractor)`
 
 Drop the second (and subsequent) rows with the same key:
@@ -113,7 +115,7 @@ For data sets where uniqueness is genuinely unbounded, prefer DB-native deduplic
 
 #### `upsertInto({ table, conflict, updateColumns?, batchSize? })`
 
-PostgreSQL `INSERT … ON CONFLICT (col) DO UPDATE` against the target table. Requires a UNIQUE index on the conflict column(s). Auto-detects column order from the first observed row.
+PostgreSQL `INSERT … ON CONFLICT (col) DO UPDATE` against the target table. Requires a UNIQUE / PRIMARY KEY index on the conflict column(s). Auto-detects column order from the first observed row.
 
 ```typescript
 .upsertInto({
@@ -123,6 +125,14 @@ PostgreSQL `INSERT … ON CONFLICT (col) DO UPDATE` against the target table. Re
   // updateColumns: ['name', 'company', 'updated_at'], // default: all non-conflict
   // batchSize: 1000,                                  // default: 500
 })
+```
+
+`.run()` queries `pg_indexes` at start-up time and refuses to proceed when no UNIQUE / PRIMARY KEY index covers the conflict columns — without one, `ON CONFLICT` silently degrades to plain INSERT and every re-run duplicates rows. Create the index first:
+
+```sql
+CREATE UNIQUE INDEX contacts_email_uq ON "contacts" ("email");
+-- or for composite keys:
+CREATE UNIQUE INDEX contacts_tenant_email_uq ON "contacts" ("tenant_id", "email");
 ```
 
 Returns inserted-vs-updated counts via `RETURNING (xmax = 0) AS inserted` (the Postgres trick for "was this an INSERT or did it UPDATE?").

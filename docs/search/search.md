@@ -336,6 +336,20 @@ SEARCH_PREFIX=dev_
 
 With this config, `Article.searchableAs()` returning `'articles'` resolves to the index `dev_articles`.
 
+## Multi-tenant scoping
+
+When two tenants share the same engine, `search.for({ tenantId })` namespaces every operation under `${prefix}t${tenantId}_${name}` so they read independent indexes:
+
+```typescript
+await search.for({ tenantId: 42 }).upsert('articles', 1, { title: 'Hi' })
+await search.for({ tenantId: 42 }).query('articles', 'lookup')
+// Resolves to index `t42_articles` (or `${prefix}t42_articles` if a prefix is configured)
+```
+
+The `tenantId` may be a string or number but must match `/^[a-zA-Z0-9_-]+$/` — anything that could escape the namespace (slashes, spaces, SQL meta-characters) throws a `ConfigurationError`. Index names land in URL paths and SQL identifiers downstream; this regex is the gatekeeper.
+
+The driver layer is unchanged — namespacing happens at the manager boundary, so every built-in driver (Meilisearch, Typesense, Algolia, embedded, postgres-fts) and every custom driver picks up scoping for free. Apps that don't need multi-tenancy skip `.for()` and call the top-level helpers directly.
+
 ## Multiple engines
 
 You can configure and use multiple engines simultaneously:

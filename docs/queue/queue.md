@@ -87,6 +87,62 @@ The handler receives:
 
 If no handler is registered for a job, it moves directly to the failed jobs table.
 
+### Payload validation
+
+Pass an optional `schema` to `Queue.handle()` and the worker re-parses the payload through it before invoking the handler. A parse failure routes the job straight to `_strav_failed_jobs` without retry — retrying with the same bad payload won't help.
+
+```typescript
+import { z } from 'zod'
+
+Queue.handle(
+  'send-email',
+  async (payload, meta) => { /* … */ },
+  {
+    schema: z.object({
+      to: z.string().email(),
+      subject: z.string(),
+      body: z.string(),
+    }),
+  }
+)
+```
+
+The `schema` only needs `parse(input)` — Zod, ArkType, Valibot, or hand-written validators all qualify. Recommended whenever the payload comes from an external source (HTTP webhook, customer upload) or whose code has churned since older jobs were enqueued.
+
+### Per-handler circuit breaker
+
+When a handler is failing repeatedly — downed dependency, stale schema, expired credentials — every fresh job of that type just eats another worker cycle and DB connection. Opt into the circuit breaker to pause dispatch automatically once the failure rate spikes:
+
+```typescript
+Queue.handle('charge-card', chargeHandler, {
+  circuitBreaker: {
+    threshold: 5,        // 5 failures within…
+    windowMs: 30_000,    // …a 30 s rolling window…
+    cooldownMs: 60_000,  // …trips the breaker for 60 s.
+  },
+})
+```
+
+Defaults: `threshold: 10`, `windowMs: 60_000`, `cooldownMs: 30_000`.
+
+When the circuit trips, the worker pushes the in-flight job back to the queue with `available_at = now + cooldownMs`, rolls back the `attempts` counter (the handler never ran), and emits `queue:circuit_tripped`. Cool-down expiry emits `queue:circuit_reset`. Recommended audit hook:
+
+```typescript
+import { Emitter } from '@strav/kernel'
+import { audit } from '@strav/audit'
+
+Emitter.on('queue:circuit_tripped', e => {
+  audit
+    .bySystem('queue')
+    .on('handler', e.handler)
+    .action('circuit_tripped')
+    .meta({ threshold: e.threshold, cooldownMs: e.cooldownMs })
+    .log()
+})
+```
+
+State is per-process — each worker tracks independently. A handler failing for a global reason will trip every worker quickly.
+
 ### Progress reporting
 
 Long-running jobs can report progress via `meta.progress(value, message?)`. `value` is `0..1`. The reported value is persisted to the job row and a `queue:progress` event fires for live consumers (SSE, WebSocket, dashboards).

@@ -17,6 +17,19 @@ export interface IngestOptions {
   chunkSize?: number
   overlap?: number
   strategy?: string
+  /**
+   * Optional per-chunk sanitizer applied AFTER chunking, BEFORE
+   * embedding. Use to scrub PII, secrets, or prompt-injection markers
+   * out of untrusted source content before it lands in the vector
+   * store. Return `null` to drop a chunk; otherwise return the
+   * (possibly modified) text.
+   *
+   * The hook is the caller's escape valve — RAG cannot judge what's
+   * sensitive in your domain. See `docs/rag/rag.md` "Content trust
+   * model" for the threat surface (prompt injection at retrieval
+   * time, indexed PII, accidental secret indexing).
+   */
+  sanitize?: (chunk: { content: string; index: number }) => string | null | Promise<string | null>
 }
 
 export const rag = {
@@ -43,9 +56,22 @@ export const rag = {
       separators: config.chunking.separators,
     }
     const chunker = createChunker(chunkerConfig)
-    const chunks = chunker.chunk(content)
+    let chunks = chunker.chunk(content)
 
     if (chunks.length === 0) return []
+
+    // Apply the optional sanitize hook before embedding. Drops chunks
+    // where the hook returns null (e.g., a chunk that's all PII).
+    if (options.sanitize) {
+      const sanitized: typeof chunks = []
+      for (const chunk of chunks) {
+        const result = await options.sanitize({ content: chunk.content, index: chunk.index })
+        if (result === null) continue
+        sanitized.push({ ...chunk, content: result })
+      }
+      chunks = sanitized
+      if (chunks.length === 0) return []
+    }
 
     const chunkTexts = chunks.map(c => c.content)
     let embeddings: number[][]
