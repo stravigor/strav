@@ -12,7 +12,6 @@ Bun monorepo. Run `bun install` from root.
   - queue — background: job processing, task scheduling
   - cli — developer tooling: CLI framework, code generators
   - auth, flag, stripe, devtools, mcp, machine, oauth2, brain, search, social, testing, workflow, rag
-- apps/ — products (platform, vault)
 - docs/ — ecosystem-wide documentation
 - deprecated/ — archived, do not reference for active work
 
@@ -85,36 +84,50 @@ DB_DATABASE=strav_testing
 
 ## Multi-tenant Database Support
 
-### Schema Organization
-Database schemas and migrations are separated by scope:
-- `database/schemas/public/` — System-wide schemas (users, organizations, etc.)
-- `database/schemas/tenants/` — Tenant-specific schemas (application data)
-- `database/migrations/public/` — Migrations for public schema
-- `database/migrations/tenants/` — Migrations for tenant schemas
+Multi-tenancy uses PostgreSQL row-level security (RLS) with a `tenant_id`
+column on each tenant-scoped table. One database, one schema, one set of
+migrations. Full guide: `docs/database/multitenant.md`.
 
-### Migration Commands
-Generate and run migrations with scope:
-```bash
-# Generate public schema migrations
-bun strav generate:migration --scope=public --message="add user table"
+### How it works
+- Mark a table `tenanted: true` in `defineSchema(...)`. The schema builder
+  injects `tenant_id UUID NOT NULL DEFAULT current_setting('app.tenant_id', true)::uuid`
+  with FK to `tenant(id) ON DELETE CASCADE`.
+- The migration generator emits `ENABLE`/`FORCE ROW LEVEL SECURITY` and a
+  `tenant_isolation` policy.
+- `withTenant(uuid, fn)` wraps `fn`'s queries in transactions whose first
+  statement is `SELECT set_config('app.tenant_id', $1, true)`.
+- `withoutTenant(fn)` routes through a separate connection bound to a role
+  with `BYPASSRLS` (used by migrations and `TenantManager`).
 
-# Generate tenant schema migrations
-bun strav generate:migration --scope=tenants --message="add orders table"
-
-# Run public migrations
-bun strav migrate --scope=public
-
-# Run tenant migrations (applies to all tenants)
-bun strav migrate --scope=tenants
-
-# Rollback migrations
-bun strav rollback --scope=public
-bun strav rollback --scope=tenants
+### Configuration
+```typescript
+// config/database.ts
+export default {
+  username: env('DB_USER', 'strav_app'),       // NOBYPASSRLS role
+  tenant: {
+    enabled: true,
+    bypass: {
+      username: env('DB_BYPASS_USER', 'strav_admin'),  // BYPASSRLS role
+      password: env('DB_BYPASS_PASSWORD', ''),
+    },
+  },
+}
 ```
 
-### Migration Tracking
-- Public migrations tracked in `_strav_migrations` table
-- Tenant migrations tracked in `_strav_tenant_migrations` table
+### Commands
+```bash
+bun strav db:setup-roles --apply       # provision app + bypass roles
+bun strav generate:migration -m "msg"  # one tracker table, no --scope
+bun strav migrate
+bun strav rollback [--batch=N]
+bun strav fresh                        # APP_ENV=local only
+bun strav tenant:create --slug=acme --name="Acme Corp"
+bun strav tenant:list
+bun strav tenant:delete <uuid>
+```
+
+### Migration tracking
+- Single `_strav_migrations` table, run via the bypass connection.
 
 ## Publishing
 - **Command:** Run `./scripts/publish.sh` to publish packages to npm

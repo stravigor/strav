@@ -37,6 +37,7 @@ export default function defineSchema(name: string, input: SchemaInput): SchemaDe
     parents: input.parents,
     associates: input.associates,
     as: input.as,
+    tenanted: input.tenanted ?? false,
     fields,
   }
 }

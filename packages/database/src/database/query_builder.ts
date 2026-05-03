@@ -6,7 +6,6 @@ import { getReferenceMeta, getAssociates, getCasts } from '../orm/decorators'
 import type { ReferenceMetadata, AssociateMetadata, CastDefinition } from '../orm/decorators'
 import { hydrateRow } from '../orm/base_model'
 import Database from './database'
-import { getCurrentSchema, hasSchemaContext } from './domain/context'
 
 type ModelStatic<T extends BaseModel> = (new (...args: any[]) => T) & typeof BaseModel
 
@@ -1013,7 +1012,10 @@ export function query<T extends BaseModel>(model: ModelStatic<T>, trx?: any): Qu
  * Run a callback inside a database transaction.
  *
  * The transaction automatically commits on success and rolls back on error.
- * In multi-tenant mode, the transaction preserves the current tenant context.
+ * In multi-tenant mode the underlying `Database.raw` getter routes through
+ * a tenant-aware proxy that injects `set_config('app.tenant_id', ...)` as
+ * the first statement of the transaction, so RLS policies see the active
+ * tenant for every query inside the callback.
  *
  * @example
  * const user = await transaction(async (trx) => {
@@ -1024,23 +1026,12 @@ export function query<T extends BaseModel>(model: ModelStatic<T>, trx?: any): Qu
  *
  * @example
  * // In multi-tenant context
- * await withTenant('tenant_123', async () => {
+ * await withTenant('a3b1c4d5-...', async () => {
  *   await transaction(async (trx) => {
- *     // All queries use tenant_123 schema
  *     await User.create({ name: 'Bob' }, trx)
  *   })
  * })
  */
 export async function transaction<T>(fn: (trx: any) => Promise<T>): Promise<T> {
-  const schema = hasSchemaContext() ? getCurrentSchema() : null
-
-  return Database.raw.begin(async (trx: any) => {
-    // Set search_path for this transaction if in tenant context
-    if (schema) {
-      await trx.unsafe(`SET search_path TO "${schema}", public`)
-    }
-
-    // Execute the user's transaction callback
-    return fn(trx)
-  })
+  return Database.raw.begin((trx: any) => fn(trx))
 }

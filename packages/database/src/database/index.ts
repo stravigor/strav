@@ -7,7 +7,7 @@ export { default as DatabaseIntrospector } from './introspector'
 export { default as QueryBuilder, query, transaction } from './query_builder'
 export type { PaginationResult, PaginationMeta } from './query_builder'
 export * from './migration/index'
-export * from './domain/index'
+export * from './tenant/index'
 
 /**
  * Pre-configured SQL tagged-template client.

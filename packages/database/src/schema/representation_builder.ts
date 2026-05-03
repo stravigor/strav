@@ -78,30 +78,82 @@ export default class RepresentationBuilder {
     // 1. Primary key
     const pk = this.addPrimaryKey(schema, columns)
 
-    // 2. Parent FK (for dependent archetypes)
+    // 2. Tenant column (tenant-scoped tables only) — must come before
+    //    other FK/parent columns so it appears near the top of the table.
+    if (schema.tenanted) {
+      this.addTenantColumn(columns, foreignKeys, indexes, pk)
+    }
+
+    // 3. Parent FK (for dependent archetypes)
     this.addParentFK(schema, columns, foreignKeys, indexes)
 
-    // 3. Association FKs
+    // 4. Association FKs
     this.addAssociationFKs(schema, columns, foreignKeys, uniqueConstraints, indexes)
 
-    // 4. User-defined fields (non-reference fields)
-    // 5. Reference fields resolved to FK columns
+    // 5. User-defined fields (non-reference fields)
+    // 6. Reference fields resolved to FK columns
     this.addUserFields(schema, columns, foreignKeys, indexes)
 
-    // 6. Timestamps
+    // 7. Timestamps
     this.addTimestamps(schema, columns)
 
-    // 7. NOT NULL defaults (skip FK columns — they must never have defaults)
+    // 8. NOT NULL defaults (skip FK columns — they must never have defaults)
     this.applyNotNullDefaults(columns, foreignKeys)
 
     return {
       name: toSnakeCase(schema.name),
       archetype: schema.archetype,
+      tenanted: schema.tenanted ?? false,
       columns,
       primaryKey: pk,
       foreignKeys,
       uniqueConstraints,
       indexes,
+    }
+  }
+
+  /**
+   * Inject the `tenant_id` column for tenant-scoped tables.
+   *
+   * The column is NOT NULL with a DEFAULT of `current_setting('app.tenant_id', true)::uuid`,
+   * which the application populates inside a `withTenant(...)` block. Falls
+   * back to FK CASCADE on `tenant(id)` so deleting a tenant cleans up rows.
+   *
+   * The matching RLS policy DDL is emitted by the SQL generator.
+   */
+  private addTenantColumn(
+    columns: ColumnDefinition[],
+    foreignKeys: ForeignKeyConstraint[],
+    indexes: IndexDefinition[],
+    pk: PrimaryKeyConstraint | null
+  ): void {
+    columns.push({
+      name: 'tenant_id',
+      pgType: 'uuid',
+      notNull: true,
+      defaultValue: { kind: 'expression', sql: `current_setting('app.tenant_id', true)::uuid` },
+      unique: false,
+      primaryKey: false,
+      autoIncrement: false,
+      index: true,
+      sensitive: false,
+      isArray: false,
+      arrayDimensions: 1,
+    })
+
+    foreignKeys.push({
+      columns: ['tenant_id'],
+      referencedTable: 'tenant',
+      referencedColumns: ['id'],
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE',
+    })
+
+    // Composite index aligned with RLS predicate (tenant_id, pk)
+    if (pk && pk.columns.length > 0) {
+      indexes.push({ columns: ['tenant_id', ...pk.columns], unique: false })
+    } else {
+      indexes.push({ columns: ['tenant_id'], unique: false })
     }
   }
 

@@ -15,16 +15,8 @@ CLI framework and code generators for the Strav framework. Provides the `strav` 
 
 ## Architecture
 - src/cli/ — CLI bootstrap, command loader, strav.ts entry point
-- src/commands/ — Built-in commands (migrations, queue, scheduler, generators, db seed)
+- src/commands/ — Built-in commands (migrations, queue, scheduler, generators, db seed, tenant management)
 - src/generators/ — Code generators (model, route, API, test, doc)
-
-## Domain Support
-CLI commands now support dynamic domains instead of hardcoded 'public'/'tenants':
-- Commands auto-discover available domains from schema directories (configurable via `config/generators.ts`)
-- Domains: public (always exists), plus any custom domains (tenant, factory, marketing, etc.)
-- Migration commands: `--scope` parameter accepts any discovered domain
-- Model generation: `--scope` parameter accepts any domain or 'all'
-- Model prefixes: public = no prefix, others = PascalCase by default (configurable)
 
 ## Database Path Configuration
 Database paths for schemas and migrations are configurable via `config/generators.ts`:
@@ -32,8 +24,17 @@ Database paths for schemas and migrations are configurable via `config/generator
 - Default migrations path: `database/migrations`
 - Override in config to use custom locations (e.g., `src/db/schemas`, `src/db/migrations`)
 
+## Multi-tenant Commands
+- `bun strav db:setup-roles [--apply]` — emit/apply the SQL to create the
+  app + bypass PostgreSQL roles required for the RLS workflow.
+- `bun strav tenant:create --slug=... --name=...` — insert a new row in
+  the built-in `tenant` registry.
+- `bun strav tenant:list` — list registered tenants.
+- `bun strav tenant:delete <uuid>` — delete a tenant (cascades to all
+  rows in tenant-scoped tables via the FK on `tenant_id`).
+
 ## Conventions
 - Commands are auto-loaded by command_loader.ts
 - Generators output code that imports from the split packages (@strav/kernel, @strav/http, etc.)
 - The `strav` binary is declared in package.json bin field
-- Domains are validated against filesystem discovery to prevent invalid domain names
+- Migration commands route through the bypass connection so RLS policies do not filter migrations themselves.

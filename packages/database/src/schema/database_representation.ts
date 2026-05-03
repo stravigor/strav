@@ -30,6 +30,8 @@ export interface TableDefinition {
   name: string
   /** The archetype this table was derived from (absent when introspected from DB). */
   archetype?: Archetype
+  /** Whether this table is tenant-scoped (carries `tenant_id` + RLS policy). */
+  tenanted?: boolean
   /** Ordered list of columns. */
   columns: ColumnDefinition[]
   /** Primary key constraint, or null for associations. */

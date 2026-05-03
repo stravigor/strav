@@ -4,7 +4,6 @@ import SchemaRegistry from '@strav/database/schema/registry'
 import DatabaseIntrospector from '@strav/database/database/introspector'
 import Application from '@strav/kernel/core/application'
 import type ServiceProvider from '@strav/kernel/core/service_provider'
-import { discoverDomains } from '@strav/database'
 import { getDatabasePaths } from '../config/loader.ts'
 
 export interface BootstrapResult {
@@ -19,32 +18,16 @@ export interface BootstrapResult {
  *
  * Loads configuration, connects to the database, discovers and validates
  * schemas, and creates an introspector instance.
- *
- * @param scope - Optional domain to discover schemas from (e.g., 'public', 'tenant', 'factory')
  */
-export async function bootstrap(scope?: string): Promise<BootstrapResult> {
+export async function bootstrap(): Promise<BootstrapResult> {
   const config = new Configuration('./config')
   await config.load()
 
   const db = new Database(config)
 
   const registry = new SchemaRegistry()
-
-  // Get the configured database paths
   const dbPaths = await getDatabasePaths()
-
-  if (scope && scope !== 'public') {
-    // For non-public domains, we need to load public schemas first since they may reference them
-    await registry.discover(dbPaths.schemas, 'public')
-    await registry.discover(dbPaths.schemas, scope)
-  } else if (scope === 'public') {
-    // For public schemas, only load public
-    await registry.discover(dbPaths.schemas, 'public')
-  } else {
-    // Default: discover all schemas (backward compatibility)
-    await registry.discover(dbPaths.schemas)
-  }
-
+  await registry.discover(dbPaths.schemas)
   registry.validate()
 
   const introspector = new DatabaseIntrospector(db)

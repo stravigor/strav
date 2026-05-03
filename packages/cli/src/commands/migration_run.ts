@@ -3,7 +3,6 @@ import chalk from 'chalk'
 import { bootstrap, shutdown } from '../cli/bootstrap.ts'
 import MigrationTracker from '@strav/database/database/migration/tracker'
 import MigrationRunner from '@strav/database/database/migration/runner'
-import { discoverDomains } from '@strav/database'
 import { getDatabasePaths } from '../config/loader.ts'
 
 export function register(program: Command): void {
@@ -11,26 +10,15 @@ export function register(program: Command): void {
     .command('migrate')
     .alias('migration:run')
     .description('Run pending migrations')
-    .option('-s, --scope <scope>', 'Domain (e.g., public, tenant, factory, marketing)', 'public')
-    .action(async (opts: { scope: string }) => {
+    .action(async () => {
       let db
       try {
-        // Get configured database paths
         const dbPaths = await getDatabasePaths()
-
-        // Validate scope against available domains
-        const availableDomains = discoverDomains(dbPaths.schemas)
-        if (!availableDomains.includes(opts.scope)) {
-          throw new Error(`Invalid domain: ${opts.scope}. Available domains: ${availableDomains.join(', ')}`)
-        }
-        const scope = opts.scope
-
         const { db: database } = await bootstrap()
         db = database
 
-        const scopedPath = `${dbPaths.migrations}/${scope}`
-        const tracker = new MigrationTracker(db, scope)
-        const runner = new MigrationRunner(db, tracker, scopedPath, scope)
+        const tracker = new MigrationTracker(db)
+        const runner = new MigrationRunner(db, tracker, dbPaths.migrations)
 
         console.log(chalk.cyan('Running pending migrations...'))
 

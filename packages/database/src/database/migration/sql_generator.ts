@@ -1,5 +1,6 @@
 import type { ColumnDefinition, DefaultValue } from '../../schema/database_representation'
 import type { PostgreSQLType } from '../../schema/postgres'
+import { enableRLSStatements, createTenantPolicyStatement } from '../tenant/policies'
 import type {
   SchemaDiff,
   GeneratedSql,
@@ -87,7 +88,8 @@ export default class SqlGenerator {
           up: this.generateCreateTable(
             d.table.name,
             d.table.columns,
-            d.table.primaryKey?.columns ?? []
+            d.table.primaryKey?.columns ?? [],
+            d.table.tenanted ?? false
           ),
           down: `-- Drop table: ${d.table.name}\nDROP TABLE IF EXISTS "${d.table.name}" CASCADE;`,
         })
@@ -97,7 +99,8 @@ export default class SqlGenerator {
           down: this.generateCreateTable(
             d.table.name,
             d.table.columns,
-            d.table.primaryKey?.columns ?? []
+            d.table.primaryKey?.columns ?? [],
+            d.table.tenanted ?? false
           ),
         })
       } else if (d.kind === 'modify') {
@@ -114,7 +117,8 @@ export default class SqlGenerator {
   private generateCreateTable(
     name: string,
     columns: ColumnDefinition[],
-    pkColumns: string[]
+    pkColumns: string[],
+    tenanted: boolean = false
   ): string {
     const lines: string[] = []
     lines.push(`-- Create table: ${name}`)
@@ -130,6 +134,16 @@ export default class SqlGenerator {
     }
     lines.push(colDefs.join(',\n'))
     lines.push(');')
+
+    if (tenanted) {
+      lines.push('')
+      lines.push(`-- Enable row-level security for tenant isolation`)
+      for (const stmt of enableRLSStatements(name)) {
+        lines.push(stmt)
+      }
+      lines.push(createTenantPolicyStatement(name))
+    }
+
     return lines.join('\n')
   }
 

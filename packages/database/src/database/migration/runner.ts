@@ -4,7 +4,8 @@ import type Database from '../database'
 import type MigrationTracker from './tracker'
 import type { MigrationManifest } from './types'
 import { DatabaseError } from '@strav/kernel/exceptions/errors'
-import { getMigrationTableName } from '../../schema/domain_discovery'
+
+const TABLE_NAME = '_strav_migrations'
 
 export interface RunResult {
   applied: string[]
@@ -17,22 +18,18 @@ export interface RollbackResult {
 }
 
 /**
- * Executes migration SQL files against the database.
+ * Executes migration SQL files against the database via the bypass
+ * connection so RLS policies do not filter the migration itself.
  *
- * Each migration version is run inside a transaction so a failure
+ * Each migration version runs inside a transaction so a partial failure
  * rolls back the entire version (not just the failing file).
  */
 export default class MigrationRunner {
-  private domain: string
-
   constructor(
     private db: Database,
     private tracker: MigrationTracker,
-    private migrationsPath: string,
-    domain: string = 'public'
-  ) {
-    this.domain = domain
-  }
+    private migrationsPath: string
+  ) {}
 
   /** Apply all pending migrations. */
   async run(): Promise<RunResult> {
@@ -62,7 +59,6 @@ export default class MigrationRunner {
     const records = await this.tracker.getMigrationsByBatch(targetBatch)
     if (records.length === 0) return { rolledBack: [], batch: targetBatch }
 
-    // Records are already ordered DESC by version from the tracker
     const rolledBack: string[] = []
     for (const record of records) {
       await this.rollbackMigration(record.version)
@@ -81,16 +77,14 @@ export default class MigrationRunner {
     const files = manifest.executionOrder.up
 
     try {
-      await this.db.sql.begin(async tx => {
+      await this.db.bypass.begin(async tx => {
         for (const file of files) {
           const sqlContent = await Bun.file(join(this.migrationsPath, version, file)).text()
           if (sqlContent.trim()) {
             await tx.unsafe(sqlContent)
           }
         }
-        // Use the appropriate tracking table based on domain
-        const tableName = getMigrationTableName(this.domain)
-        await tx.unsafe(`INSERT INTO ${tableName} (version, batch) VALUES ($1, $2)`, [
+        await tx.unsafe(`INSERT INTO ${TABLE_NAME} (version, batch) VALUES ($1, $2)`, [
           version,
           batch,
         ])
@@ -107,16 +101,14 @@ export default class MigrationRunner {
     const files = manifest.executionOrder.down
 
     try {
-      await this.db.sql.begin(async tx => {
+      await this.db.bypass.begin(async tx => {
         for (const file of files) {
           const sqlContent = await Bun.file(join(this.migrationsPath, version, file)).text()
           if (sqlContent.trim()) {
             await tx.unsafe(sqlContent)
           }
         }
-        // Use the appropriate tracking table based on domain
-        const tableName = getMigrationTableName(this.domain)
-        await tx.unsafe(`DELETE FROM ${tableName} WHERE version = $1`, [version])
+        await tx.unsafe(`DELETE FROM ${TABLE_NAME} WHERE version = $1`, [version])
       })
     } catch (err) {
       throw new DatabaseError(

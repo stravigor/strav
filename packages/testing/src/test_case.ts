@@ -148,8 +148,8 @@ export class TestCase {
 
       // Monkey-patch Database to use the reserved connection.
       // TypeScript `private` is compile-time only — runtime access works.
-      ;(this.db as any).connection = this._reserved
-      ;(Database as any)._connection = this._reserved
+      ;(this.db as any).appConnection = this._reserved
+      ;(Database as any)._appConnection = this._reserved
     }
   }
 
@@ -160,8 +160,8 @@ export class TestCase {
       this._reserved.release()
 
       // Restore original connection
-      ;(this.db as any).connection = this._originalSql
-      ;(Database as any)._connection = this._originalSql
+      ;(this.db as any).appConnection = this._originalSql
+      ;(Database as any)._appConnection = this._originalSql
       this._reserved = null
       this._originalSql = null
     }

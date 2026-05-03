@@ -13,7 +13,12 @@ import {
 } from './decorators'
 import type { ReferenceMetadata, AssociateMetadata } from './decorators'
 import Database from '../database/database'
-import { ConfigurationError, ModelNotFoundError } from '@strav/kernel/exceptions/errors'
+import { hasTenantContext, isBypassingTenant } from '../database/tenant/context'
+import {
+  ConfigurationError,
+  DatabaseError,
+  ModelNotFoundError,
+} from '@strav/kernel/exceptions/errors'
 
 type ModelStatic<T extends BaseModel> = (new (...args: any[]) => T) & typeof BaseModel
 
@@ -23,6 +28,14 @@ export default class BaseModel {
 
   /** Whether this model supports soft deletes. Override in subclass. */
   static softDeletes: boolean = false
+
+  /**
+   * Whether this model's table is tenant-scoped. When true and
+   * `database.tenant.enabled` is on, the table carries a `tenant_id`
+   * column and an RLS policy. Inserts/updates outside a `withTenant(...)`
+   * or `withoutTenant(...)` block are rejected.
+   */
+  static tenantScoped: boolean = false
 
   constructor(db?: Database) {
     if (db) BaseModel._db = db
@@ -163,6 +176,18 @@ export default class BaseModel {
   /** INSERT or UPDATE depending on whether the record exists. */
   async save(trx?: any): Promise<this> {
     const ctor = this.constructor as typeof BaseModel
+
+    if (
+      ctor.tenantScoped &&
+      BaseModel.db.isMultiTenant &&
+      !hasTenantContext() &&
+      !isBypassingTenant()
+    ) {
+      throw new DatabaseError(
+        `${ctor.name} is tenant-scoped; wrap save() in withTenant(...) or withoutTenant(...).`
+      )
+    }
+
     const conn = trx ?? BaseModel.db.sql
     const table = ctor.tableName
 

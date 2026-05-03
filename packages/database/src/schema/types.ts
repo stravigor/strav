@@ -21,6 +21,12 @@ export interface SchemaInput {
   parents?: string[]
   associates?: string[]
   as?: Record<string, string>
+  /**
+   * Mark the table as tenant-scoped. The schema builder injects a `tenant_id`
+   * UUID column referencing `tenant(id)` and the migration generator emits
+   * RLS policy DDL so PostgreSQL enforces isolation by `app.tenant_id`.
+   */
+  tenanted?: boolean
   fields: Record<string, FieldBuilder>
 }
 
@@ -31,5 +37,7 @@ export interface SchemaDefinition {
   parents?: string[]
   associates?: string[]
   as?: Record<string, string>
+  /** Whether this table is tenant-scoped (carries `tenant_id` + RLS). */
+  tenanted?: boolean
   fields: Record<string, FieldDefinition>
 }

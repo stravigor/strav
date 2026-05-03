@@ -4,7 +4,6 @@ import { bootstrap, shutdown } from '../cli/bootstrap.ts'
 import SchemaDiffer from '@strav/database/database/migration/differ'
 import SqlGenerator from '@strav/database/database/migration/sql_generator'
 import MigrationFileGenerator from '@strav/database/database/migration/file_generator'
-import { discoverDomains } from '@strav/database'
 import { getDatabasePaths } from '../config/loader.ts'
 
 export function register(program: Command): void {
@@ -13,24 +12,14 @@ export function register(program: Command): void {
     .aliases(['migration:generate', 'g:migration'])
     .description('Generate migration files from schema changes')
     .option('-m, --message <message>', 'Migration message', 'migration')
-    .option('-s, --scope <scope>', 'Domain (e.g., public, tenant, factory, marketing)', 'public')
-    .action(async (opts: { message: string; scope: string }) => {
+    .action(async (opts: { message: string }) => {
       let db
       try {
-        // Get configured database paths
         const dbPaths = await getDatabasePaths()
-
-        // Validate scope against available domains
-        const availableDomains = discoverDomains(dbPaths.schemas)
-        if (!availableDomains.includes(opts.scope)) {
-          throw new Error(`Invalid domain: ${opts.scope}. Available domains: ${availableDomains.join(', ')}`)
-        }
-        const scope = opts.scope
-
-        const { db: database, registry, introspector } = await bootstrap(scope)
+        const { db: database, registry, introspector } = await bootstrap()
         db = database
 
-        console.log(chalk.cyan(`Comparing ${scope} schema with database...`))
+        console.log(chalk.cyan('Comparing schema with database...'))
 
         const desired = registry.buildRepresentation()
         const actual = await introspector.introspect()
@@ -49,16 +38,11 @@ export function register(program: Command): void {
 
         const sql = new SqlGenerator().generate(diff)
         const version = Date.now().toString()
-
-        // Use the table order from the desired representation (already dependency-ordered)
         const tableOrder = desired.tables.map(t => t.name)
 
-        // Use scoped migrations path from configuration
-        const scopedPath = `${dbPaths.migrations}/${scope}`
-        const fileGen = new MigrationFileGenerator(scopedPath)
+        const fileGen = new MigrationFileGenerator(dbPaths.migrations)
         const dir = await fileGen.generate(version, opts.message, sql, diff, tableOrder)
 
-        // Print summary
         console.log(chalk.green(`\nMigration generated: ${version}`))
         console.log(chalk.dim(`  Directory: ${dir}`))
         console.log(chalk.dim(`  Message: ${opts.message}\n`))

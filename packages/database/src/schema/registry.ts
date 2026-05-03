@@ -44,28 +44,20 @@ export default class SchemaRegistry {
   /**
    * Scan a directory for schema files and register all discovered schemas.
    * Each `.ts` file must default-export a {@link SchemaDefinition}.
-   *
-   * @param schemasPath - Base path to schemas directory
-   * @param scope - Optional scope (schema group name like 'public', 'tenant', 'factory', etc.) to discover from subdirectory
    */
-  async discover(schemasPath: string, scope?: string): Promise<void> {
+  async discover(schemasPath: string): Promise<void> {
     const basePath = resolve(schemasPath)
-    const targetPath = scope ? join(basePath, scope) : basePath
 
     let files: string[]
     try {
-      files = readdirSync(targetPath)
+      files = readdirSync(basePath)
     } catch {
-      // If scope is specified and directory doesn't exist, that's okay (no schemas for that scope)
-      if (scope) {
-        return
-      }
       throw new Error(`Schemas directory not found: ${schemasPath}`)
     }
 
     for (const file of files) {
       if (!file.endsWith('.ts')) continue
-      const filePath = join(targetPath, file)
+      const filePath = join(basePath, file)
       const mod = await import(filePath)
       const schema: SchemaDefinition = mod.default
       if (!schema || !schema.name) {
