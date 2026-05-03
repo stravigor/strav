@@ -44,6 +44,16 @@ export interface StoredFeature {
 export interface FlagConfig {
   default: string
   drivers: Record<string, DriverConfig>
+  /**
+   * When true, calls to `value`/`active`/`activate`/`deactivate` that
+   * resolve to a null/undefined scope throw `MissingScopeError` instead
+   * of silently falling back to the global scope. Default: `false`
+   * (backwards-compatible). Apps that derive scope from request state
+   * (e.g., `ctx.get('user')`) should turn this on so a forgotten or
+   * unauthenticated request raises a loud error instead of evaluating
+   * the global flag for everyone.
+   */
+  strictScopes: boolean
 }
 
 export interface DriverConfig {

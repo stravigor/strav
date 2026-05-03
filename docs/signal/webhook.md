@@ -125,7 +125,7 @@ const ok = verifySignature({
 if (!ok) return new Response('forbidden', { status: 403 })
 ```
 
-The verifier is constant-time, tolerates the `sha256=` prefix being stripped, and rejects timestamps older than `maxAgeSeconds` (default 5 minutes — adjust for clients with clock skew).
+The verifier is constant-time, tolerates the `sha256=` prefix being stripped, and rejects timestamps older than `maxAgeSeconds` (default **60 seconds** — narrowly bounded against replay; adjust upward only if you have receivers behind a slow proxy or wide clock skew).
 
 ## Retry policy
 

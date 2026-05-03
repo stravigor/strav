@@ -41,3 +41,27 @@ The OAuth `state` parameter is non-optional (the previously-available `provider.
 ## Token storage at rest
 
 `SocialAccount.create()` and `updateTokens()` encrypt the access token and refresh token via `EncryptionManager` before they hit the database; `hydrate()` decrypts them on read. Encrypted values are stored with an `enc:v1:` sentinel prefix. Legacy plaintext rows (predating this change) are returned as-is by `hydrate()` — they migrate to ciphertext on the next `updateTokens()` call. Tests must initialize encryption (e.g., `EncryptionManager.useKey('test-key')` in `beforeEach`) before calling `create()` or `updateTokens()`.
+
+## Audit hooks
+
+`SocialAccount` mutations emit Emitter events so apps can wire `@strav/audit` (or any other observability sink) without forcing a hard dependency:
+
+- `social_account:linked` — fired by `create()`. Payload: `{ accountId, userId, provider, providerId }`.
+- `social_account:tokens_updated` — fired by `updateTokens()` (also indirectly by `findOrCreate()` on the existing-account path). Payload: `{ accountId, hasRefreshToken, expiresAt }` (raw token values are NOT included).
+- `social_account:unlinked` — fired by `delete()`. Payload: `{ accountId }`.
+- `social_account:unlinked_all` — fired by `deleteByUser()`. Payload: `{ userId }`.
+
+All emits are fire-and-forget (`.catch(() => {})`); subscriber failures don't break account writes. Recommended audit-integration pattern:
+
+```ts
+import { Emitter } from '@strav/kernel'
+import { audit } from '@strav/audit'
+
+Emitter.on('social_account:tokens_updated', e => {
+  audit.bySystem('social')
+    .on('social_account', String(e.accountId))
+    .action('tokens_updated')
+    .meta({ hasRefreshToken: e.hasRefreshToken })
+    .log()
+})
+```

@@ -126,4 +126,35 @@ describe('PendingImport', () => {
   test('throws when source is missing', async () => {
     await expect(transit.import('csv').into(() => {}).run()).rejects.toThrow(/from/)
   })
+
+  test('dedupBy aborts when maxDedupKeys is exceeded', async () => {
+    // 5 distinct keys but cap at 2 — pipeline should fail with a clear
+    // error instead of growing the Set unbounded.
+    await expect(
+      transit
+        .import('csv')
+        .from('id\n1\n2\n3\n4\n5\n')
+        .dedupBy('id')
+        .maxDedupKeys(2)
+        .into(() => {})
+        .run()
+    ).rejects.toThrow(/maxDedupKeys \(2\)/)
+  })
+
+  test('maxDedupKeys(Infinity) opts out of the safeguard', async () => {
+    const result = await transit
+      .import('csv')
+      .from('id\n1\n2\n3\n4\n5\n')
+      .dedupBy('id')
+      .maxDedupKeys(Infinity)
+      .into(() => {})
+      .run()
+    expect(result.processed).toBe(5)
+  })
+
+  test('maxDedupKeys rejects non-positive values', () => {
+    expect(() => transit.import('csv').maxDedupKeys(0)).toThrow(/positive/)
+    expect(() => transit.import('csv').maxDedupKeys(-1)).toThrow(/positive/)
+    expect(() => transit.import('csv').maxDedupKeys(NaN)).toThrow(/finite/)
+  })
 })

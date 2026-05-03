@@ -27,6 +27,10 @@ Feature flags with a unified API, scoped per-user or per-team, with optional ric
 - Drivers implement a common interface defined in types.ts
 - Feature flags are scoped — always provide a scope context when evaluating
 
+## strictScopes
+
+Set `flag.strictScopes: true` in config to make the read path (`value`, `active`, `inactive`, `when`, `values`, `forget`) throw `MissingScopeError` when called without a scope. Defends against the common bug where middleware forgets to pass `ctx.get('user')` and the lookup silently evaluates the global flag for everyone. The write path (`activate`/`deactivate`) keeps the loose `null = global` semantics — for explicit-global writes prefer `activateForEveryone()` / `deactivateForEveryone()`. Default is `false` for backward compatibility; consider turning it on in new apps.
+
 ## Auditability of flag changes
 
 `activate()`, `deactivate()`, `activateForEveryone()`, and `deactivateForEveryone()` accept an optional `actor: { type, id }` parameter. The actor is included in the `flag:updated` Emitter event payload alongside `previous` (the prior stored value) so a subscriber can record who flipped what. The flag package deliberately does NOT depend on `@strav/audit` — wiring is the consumer's choice; the recommended one-liner:

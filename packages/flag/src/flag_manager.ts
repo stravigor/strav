@@ -13,7 +13,7 @@ import { GLOBAL_SCOPE } from './types.ts'
 import type { FeatureStore } from './feature_store.ts'
 import { DatabaseDriver } from './drivers/database_driver.ts'
 import { ArrayDriver } from './drivers/array_driver.ts'
-import { FeatureNotDefinedError } from './errors.ts'
+import { FeatureNotDefinedError, MissingScopeError } from './errors.ts'
 import PendingScopedFeature from './pending_scope.ts'
 
 @inject
@@ -31,6 +31,7 @@ export default class FlagManager {
     FlagManager._config = {
       default: config.get('flag.default', 'database') as string,
       drivers: config.get('flag.drivers', {}) as Record<string, DriverConfig>,
+      strictScopes: config.get('flag.strictScopes', false) as boolean,
     }
   }
 
@@ -75,10 +76,31 @@ export default class FlagManager {
     return `${type}:${scope.id}`
   }
 
+  /**
+   * Resolve a scope to its key, applying the `strictScopes` policy on
+   * the READ path. A null/undefined scope under strict mode raises
+   * `MissingScopeError` so a forgotten request-context lookup doesn't
+   * silently return the global value.
+   *
+   * The WRITE path keeps the loose semantics — `activate(feature)`
+   * with no scope still writes to the global. Callers that want
+   * explicit-global writes should prefer `activateForEveryone()` /
+   * `deactivateForEveryone()`.
+   */
+  private static resolveScopeStrict(
+    feature: string,
+    scope: Scopeable | null | undefined
+  ): ScopeKey {
+    if (!scope && FlagManager._config?.strictScopes) {
+      throw new MissingScopeError(feature)
+    }
+    return FlagManager.serializeScope(scope)
+  }
+
   // ── Core resolution ────────────────────────────────────────────────
 
   static async value(feature: string, scope?: Scopeable | null): Promise<unknown> {
-    const scopeKey = FlagManager.serializeScope(scope)
+    const scopeKey = FlagManager.resolveScopeStrict(feature, scope)
     const cacheKey = FlagManager.cacheKey(feature, scopeKey)
 
     // 1. Check in-memory cache
@@ -202,7 +224,10 @@ export default class FlagManager {
 
   static async values(features: string[], scope?: Scopeable | null): Promise<Map<string, unknown>> {
     const result = new Map<string, unknown>()
-    const scopeKey = FlagManager.serializeScope(scope)
+    // Use the first feature name in the strict-scope error message — every
+    // batch call shares the same scope so the missing-scope diagnosis is
+    // identical regardless of which feature trips the check.
+    const scopeKey = FlagManager.resolveScopeStrict(features[0] ?? '<batch>', scope)
 
     // Collect cache hits and misses
     const misses: string[] = []
@@ -275,7 +300,7 @@ export default class FlagManager {
   // ── Cleanup ────────────────────────────────────────────────────────
 
   static async forget(feature: string, scope?: Scopeable | null): Promise<void> {
-    const scopeKey = FlagManager.serializeScope(scope)
+    const scopeKey = FlagManager.resolveScopeStrict(feature, scope)
     await FlagManager.store().forget(feature, scopeKey)
     FlagManager._cache.delete(FlagManager.cacheKey(feature, scopeKey))
     await Emitter.emit('flag:deleted', { feature, scope: scopeKey })

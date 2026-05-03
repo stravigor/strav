@@ -171,6 +171,28 @@ class Workspace {
 
 When no scope is passed, features resolve against the `__global__` scope. This is useful for system-wide flags like maintenance mode.
 
+### Strict scopes
+
+Setting `flag.strictScopes: true` in config makes the read path (`value`, `active`, `inactive`, `when`, `values`, `forget`) throw `MissingScopeError` when the scope argument is null or undefined:
+
+```typescript
+// config/flag.ts
+export default {
+  default: 'database',
+  drivers: { /* ... */ },
+  strictScopes: true,
+}
+```
+
+```typescript
+// With strictScopes enabled:
+await flag.value('feat')                  // ✗ throws MissingScopeError
+await flag.value('feat', user)            // ✓
+await flag.activateForEveryone('feat')    // ✓ — explicit-global write
+```
+
+This catches the common bug where middleware forgets to pass `ctx.get('user')` and the lookup silently evaluates the global flag for every visitor. Default is `false` for backward compatibility — turn it on in new apps. The write path (`activate`/`deactivate`) keeps the loose `null = global` semantics; for explicit-global writes prefer `activateForEveryone()` / `deactivateForEveryone()`.
+
 ## Manual activation
 
 Override the resolver and store a specific value:

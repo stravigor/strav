@@ -21,3 +21,22 @@ Declarative state machines for domain models — define states, transitions, gua
 - State machines are defined declaratively as configuration objects
 - Use stateful() mixin to bind a machine to an ORM model
 - Guards run before transitions, side effects run after
+
+## Audit hook
+
+Every successful `apply()` emits a generic `machine:transition` event with `{ entity, field, from, to, transition }`. Apps wire it once to capture transitions across every machine without each definition declaring an `events.*` entry:
+
+```ts
+import { Emitter } from '@strav/kernel'
+import { audit } from '@strav/audit'
+
+Emitter.on('machine:transition', e => {
+  audit.bySystem('machine')
+    .on(e.entity?.constructor?.name ?? 'entity', String(e.entity?.id ?? ''))
+    .action(e.transition)
+    .diff({ [e.field]: e.from }, { [e.field]: e.to })
+    .log()
+})
+```
+
+The emit is zero-cost when no listener is registered (`Emitter.listenerCount` guard).

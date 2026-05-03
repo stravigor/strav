@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { ExternalServiceError } from '@strav/kernel'
+import { ExternalServiceError, scrubProviderError } from '@strav/kernel'
 import type { MailTransport, MailMessage, MailResult, AlibabaConfig } from '../types.ts'
 
 /**
@@ -61,7 +61,11 @@ export class AlibabaTransport implements MailTransport {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new ExternalServiceError('Alibaba DirectMail', response.status, error)
+      throw new ExternalServiceError(
+        'Alibaba DirectMail',
+        response.status,
+        scrubProviderError(error)
+      )
     }
 
     const data = (await response.json()) as { EnvId?: string; RequestId?: string }

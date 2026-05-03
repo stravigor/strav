@@ -102,12 +102,35 @@ function mapMedia(type: string, msg: Record<string, unknown>): MessagingMedia[] 
   const id = stringProp(media, 'id')
   if (id) item.mediaId = id
   const filename = stringProp(media, 'filename')
-  if (filename) item.filename = filename
+  if (filename) item.filename = sanitizeFilename(filename)
   const contentType = stringProp(media, 'mime_type')
   if (contentType) item.contentType = contentType
   const caption = stringProp(media, 'caption')
   if (caption) item.caption = caption
   return [item]
+}
+
+/**
+ * Strip path separators and anchor characters from a WhatsApp-supplied
+ * filename. The sender controls this string; if a downstream consumer
+ * uses it as a filesystem / S3 key path component, traversal is
+ * possible without sanitization. We keep the basename, normalize
+ * unsafe characters to `_`, and cap the length so a malicious sender
+ * can't fill the DB with a 1MB filename either.
+ */
+function sanitizeFilename(raw: string): string {
+  // Take the basename — drop any directory path the sender wedged in.
+  const segments = raw.split(/[/\\]/)
+  let name = segments[segments.length - 1] ?? ''
+  // Strip null bytes and replace any character that isn't alphanumeric,
+  // dot, dash, underscore, or space.
+  name = name.replace(/\0/g, '').replace(/[^a-zA-Z0-9._\- ]/g, '_')
+  // Strip leading dots so we don't end up with `.htaccess`-shaped names.
+  name = name.replace(/^\.+/, '')
+  // Cap length — 255 is the typical filesystem limit; we use 200 to
+  // leave headroom for downstream prefixing.
+  if (name.length > 200) name = name.slice(0, 200)
+  return name || 'unnamed'
 }
 
 function decodeJson(service: string, body: Buffer): unknown {

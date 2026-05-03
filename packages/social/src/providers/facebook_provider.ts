@@ -1,4 +1,4 @@
-import { ExternalServiceError } from '@strav/kernel'
+import { ExternalServiceError, scrubProviderError } from '@strav/kernel'
 import { AbstractProvider } from '../abstract_provider.ts'
 import type { SocialUser } from '../types.ts'
 
@@ -26,7 +26,11 @@ export class FacebookProvider extends AbstractProvider {
     )
 
     if (!response.ok) {
-      throw new ExternalServiceError('Facebook', response.status, await response.text())
+      throw new ExternalServiceError(
+        'Facebook',
+        response.status,
+        scrubProviderError(await response.text())
+      )
     }
 
     return (await response.json()) as Record<string, unknown>

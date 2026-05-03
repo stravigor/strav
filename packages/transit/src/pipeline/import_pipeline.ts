@@ -1,5 +1,5 @@
 import { Database } from '@strav/database'
-import { TooManyErrorsError } from '../errors.ts'
+import { DedupKeyLimitError, TooManyErrorsError } from '../errors.ts'
 import { readCsv } from '../csv/reader.ts'
 import { readJsonl } from '../jsonl/reader.ts'
 import { ProgressReporter } from './progress.ts'
@@ -50,6 +50,7 @@ export class PendingImport<I = Record<string, string>, O = I> {
   private _validators: ((row: any, index: number) => string | null | undefined | void)[] = []
   private _dedupKey?: string | ((row: any) => unknown)
   private _seen = new Set<string>()
+  private _maxDedupKeys = 1_000_000
   private _upsertTarget?: UpsertTarget
   private _customSink?: RowSink<any>
   private _batchSize = 500
@@ -86,11 +87,40 @@ export class PendingImport<I = Record<string, string>, O = I> {
     return this
   }
 
-  /** Drop subsequent rows with the same key. Key is a column name or extractor function. */
+  /**
+   * Drop subsequent rows with the same key. Key is a column name or
+   * extractor function.
+   *
+   * The dedup `Set` grows for every distinct key seen, so this is
+   * unsafe for adversarial / unbounded sources. The pipeline aborts
+   * with `Error('dedupBy exceeded maxDedupKeys (...)')` when the set
+   * crosses the configured ceiling — see `maxDedupKeys()`. For data
+   * sets where uniqueness is genuinely unbounded, prefer DB-native
+   * deduplication (UNIQUE index + `upsertInto`, or
+   * `SELECT DISTINCT ON`).
+   */
   dedupBy(key: keyof O & string): this
   dedupBy(extractor: (row: O) => unknown): this
   dedupBy(arg: string | ((row: O) => unknown)): this {
     this._dedupKey = arg as string | ((row: any) => unknown)
+    return this
+  }
+
+  /**
+   * Cap on the number of distinct dedup keys held in memory. Default:
+   * 1,000,000 (≈100 MB at 100 bytes per key). When the cap is exceeded,
+   * the pipeline aborts the run with a clear error so callers don't
+   * silently OOM on adversarial input. Pass `Infinity` to opt out
+   * (unbounded — explicit acknowledgement of the trade-off).
+   */
+  maxDedupKeys(max: number): this {
+    if (!Number.isFinite(max) && max !== Infinity) {
+      throw new Error('maxDedupKeys must be a finite number or Infinity')
+    }
+    if (max <= 0) {
+      throw new Error('maxDedupKeys must be positive')
+    }
+    this._maxDedupKeys = max
     return this
   }
 
@@ -192,12 +222,22 @@ export class PendingImport<I = Record<string, string>, O = I> {
             reporter.recordSkipped()
             continue
           }
+          if (this._seen.size >= this._maxDedupKeys) {
+            // Memory safeguard: the dedup Set is unbounded by design,
+            // but a malicious / very large source can exhaust RAM. Fail
+            // loudly rather than silently OOM. Callers who genuinely
+            // need unbounded dedup must opt in via `maxDedupKeys(Infinity)`.
+            // The dedicated error class is re-thrown by the catch
+            // block below rather than being swallowed into row errors.
+            throw new DedupKeyLimitError(this._maxDedupKeys)
+          }
           this._seen.add(key)
         }
         buffer.push(mapped)
         if (buffer.length >= this._batchSize) await flush()
       } catch (err) {
         if (err instanceof TooManyErrorsError) throw err
+        if (err instanceof DedupKeyLimitError) throw err
         errors.push({ row: i, reason: (err as Error).message, data: raw })
         reporter.recordError()
         if (errors.length > this._maxErrors) throw new TooManyErrorsError(this._maxErrors)

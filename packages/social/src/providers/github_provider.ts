@@ -1,4 +1,4 @@
-import { ExternalServiceError } from '@strav/kernel'
+import { ExternalServiceError, scrubProviderError } from '@strav/kernel'
 import { AbstractProvider } from '../abstract_provider.ts'
 import type { SocialUser } from '../types.ts'
 
@@ -30,7 +30,11 @@ export class GitHubProvider extends AbstractProvider {
     ])
 
     if (!userResponse.ok) {
-      throw new ExternalServiceError('GitHub', userResponse.status, await userResponse.text())
+      throw new ExternalServiceError(
+        'GitHub',
+        userResponse.status,
+        scrubProviderError(await userResponse.text())
+      )
     }
 
     const user = (await userResponse.json()) as Record<string, unknown>

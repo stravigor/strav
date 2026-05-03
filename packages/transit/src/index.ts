@@ -8,7 +8,12 @@ export { writeCsv, writeCsvRow } from './csv/writer.ts'
 export { readJsonl } from './jsonl/reader.ts'
 export { writeJsonl } from './jsonl/writer.ts'
 
-export { TransitError, TooManyErrorsError, CsvParseError } from './errors.ts'
+export {
+  TransitError,
+  TooManyErrorsError,
+  CsvParseError,
+  DedupKeyLimitError,
+} from './errors.ts'
 
 export type {
   ReadSource,

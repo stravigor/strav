@@ -122,10 +122,22 @@ export function defineMachine<TState extends string, TTransition extends string>
         await effect(entity, meta)
       }
 
-      // Emit event
+      // Emit user-defined per-transition event (zero-cost when no listener).
       const eventName = definition.events?.[transition]
       if (eventName && Emitter.listenerCount(eventName) > 0) {
         Emitter.emit(eventName, { entity, ...meta }).catch(() => {})
+      }
+
+      // Emit a generic state-transition event so a single audit hook can
+      // observe every transition across every machine without each
+      // definition wiring an `events.*` entry. Zero-cost when no
+      // listener is registered.
+      if (Emitter.listenerCount('machine:transition') > 0) {
+        Emitter.emit('machine:transition', {
+          entity,
+          field: definition.field,
+          ...meta,
+        }).catch(() => {})
       }
 
       return meta

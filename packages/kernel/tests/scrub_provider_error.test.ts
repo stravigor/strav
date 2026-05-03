@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { scrubProviderError } from '../src/utils/error_scrub.ts'
+import { scrubProviderError } from '../src/helpers/scrub_provider_error.ts'
 
 describe('scrubProviderError', () => {
-  test('redacts JSON bodies via @strav/kernel redact()', () => {
+  test('redacts JSON bodies via redact()', () => {
     const text = JSON.stringify({
       error: { type: 'auth_error', message: 'invalid api_key' },
       request: {
@@ -58,12 +58,19 @@ describe('scrubProviderError', () => {
     expect(scrubProviderError(undefined as any)).toBe('')
   })
 
-  test('JSON path catches even short field values that the regex would miss', () => {
+  test('JSON path catches short field values the regex would miss', () => {
     // A short key like 'abc' wouldn't match the {6,} regex floors, but
     // the JSON-path uses redact() which matches by KEY name.
     const text = JSON.stringify({ token: 'abc', other: 'x' })
     const parsed = JSON.parse(scrubProviderError(text))
     expect(parsed.token).toBe('[REDACTED]')
     expect(parsed.other).toBe('x')
+  })
+
+  test('idempotent — applying twice is safe', () => {
+    const text = 'Bearer sk-abc123def456'
+    const once = scrubProviderError(text)
+    const twice = scrubProviderError(once)
+    expect(twice).toBe(once)
   })
 })

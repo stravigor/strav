@@ -1,4 +1,4 @@
-import { EncryptionManager } from '@strav/kernel'
+import { EncryptionManager, Emitter } from '@strav/kernel'
 import { extractUserId } from '@strav/database'
 import SocialManager from './social_manager.ts'
 import type { SocialUser } from './types.ts'
@@ -88,7 +88,9 @@ export default class SocialAccount {
   }
 
   /**
-   * Create a new social account link.
+   * Create a new social account link. Emits `social_account:linked`
+   * after a successful insert so apps can wire `@strav/audit` (or any
+   * other observability sink) without forcing a hard dependency.
    */
   static async create(data: {
     user: unknown
@@ -113,7 +115,14 @@ export default class SocialAccount {
         data.expiresAt ?? null,
       ]
     )
-    return SocialAccount.hydrate(rows[0] as Record<string, unknown>)
+    const account = SocialAccount.hydrate(rows[0] as Record<string, unknown>)
+    void Emitter.emit('social_account:linked', {
+      accountId: account.id,
+      userId: account.userId,
+      provider: account.provider,
+      providerId: account.providerId,
+    }).catch(() => {})
+    return account
   }
 
   /**
@@ -162,6 +171,8 @@ export default class SocialAccount {
   /**
    * Update OAuth tokens for an existing social account. Tokens are
    * encrypted at rest — pass plaintext values; the column stores ciphertext.
+   * Emits `social_account:tokens_updated` so an audit hook can record the
+   * token swap.
    */
   static async updateTokens(
     id: number,
@@ -179,13 +190,22 @@ export default class SocialAccount {
           "updated_at" = NOW()
       WHERE "id" = ${id}
     `
+    void Emitter.emit('social_account:tokens_updated', {
+      accountId: id,
+      hasRefreshToken: refreshToken != null,
+      expiresAt,
+    }).catch(() => {})
   }
 
-  /** Delete a social account by its database ID. */
+  /**
+   * Delete a social account by its database ID. Emits
+   * `social_account:unlinked` for the audit trail.
+   */
   static async delete(id: number): Promise<void> {
     await SocialAccount.sql`
       DELETE FROM "social_account" WHERE "id" = ${id}
     `
+    void Emitter.emit('social_account:unlinked', { accountId: id }).catch(() => {})
   }
 
   /** Delete all social accounts for a user. */
@@ -193,6 +213,7 @@ export default class SocialAccount {
     const userId = extractUserId(user)
     const fk = SocialAccount.fk
     await SocialAccount.sql.unsafe(`DELETE FROM "social_account" WHERE "${fk}" = $1`, [userId])
+    void Emitter.emit('social_account:unlinked_all', { userId }).catch(() => {})
   }
 
   // ---------------------------------------------------------------------------

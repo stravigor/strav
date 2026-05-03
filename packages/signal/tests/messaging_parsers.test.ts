@@ -159,6 +159,75 @@ describe('WhatsAppInboundParser', () => {
   test('throws ConfigurationError when appSecret is missing', () => {
     expect(() => new WhatsAppInboundParser({ appSecret: '' })).toThrow(ConfigurationError)
   })
+
+  test('sanitizes media filenames against path traversal', async () => {
+    const parser = new WhatsAppInboundParser({ appSecret: APP_SECRET })
+    const cases = [
+      { input: '../../etc/passwd', expected: 'passwd' },
+      { input: '..\\windows\\system32\\evil', expected: 'evil' },
+      { input: '/absolute/path/file.pdf', expected: 'file.pdf' },
+      { input: '.htaccess', expected: 'htaccess' },
+      { input: 'normal-file_v2.pdf', expected: 'normal-file_v2.pdf' },
+      { input: 'name with spaces.txt', expected: 'name with spaces.txt' },
+      { input: 'has\0null.txt', expected: 'hasnull.txt' },
+      { input: 'unicode-éñ.txt', expected: 'unicode-__.txt' },
+    ]
+    for (const { input, expected } of cases) {
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  metadata: { phone_number_id: '111' },
+                  messages: [
+                    {
+                      from: '15553334444',
+                      id: 'wamid.X',
+                      type: 'document',
+                      document: { id: 'm', filename: input, mime_type: 'application/pdf' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }
+      const result = await parser.parse(metaWebhook(payload))
+      expect(result[0]!.media[0]!.filename).toBe(expected)
+    }
+  })
+
+  test('caps absurdly long filenames', async () => {
+    const parser = new WhatsAppInboundParser({ appSecret: APP_SECRET })
+    const long = 'a'.repeat(5000)
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: '111' },
+                messages: [
+                  {
+                    from: '15553334444',
+                    id: 'wamid.X',
+                    type: 'document',
+                    document: { id: 'm', filename: long, mime_type: 'application/pdf' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+    const result = await parser.parse(metaWebhook(payload))
+    expect(result[0]!.media[0]!.filename!.length).toBeLessThanOrEqual(200)
+  })
 })
 
 describe('MessengerInboundParser', () => {

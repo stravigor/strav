@@ -292,6 +292,83 @@ describe('SocialAccount', () => {
     })
   })
 
+  // ── Audit hooks (SO-5) ────────────────────────────────────────────
+
+  describe('audit events', () => {
+    test('create() emits social_account:linked', async () => {
+      const db = {
+        sql: Object.assign(() => Promise.resolve([]), {
+          unsafe: () => Promise.resolve([sampleRow]),
+        }),
+      } as any
+      new SocialManager(db, mockConfig({ social: { providers: {} } }))
+
+      const events: any[] = []
+      const { Emitter } = await import('@strav/kernel')
+      Emitter.on('social_account:linked', (e: any) => events.push(e))
+
+      await SocialAccount.create({
+        user: '42',
+        provider: 'github',
+        providerId: 'gh-999',
+        token: 'tok',
+      })
+
+      // Allow microtasks to flush
+      await new Promise(r => setTimeout(r, 0))
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({
+        accountId: 1,
+        provider: 'github',
+        providerId: 'gh-999',
+      })
+      Emitter.removeAllListeners('social_account:linked')
+    })
+
+    test('updateTokens() emits social_account:tokens_updated', async () => {
+      setupManager()
+      const events: any[] = []
+      const { Emitter } = await import('@strav/kernel')
+      Emitter.on('social_account:tokens_updated', (e: any) => events.push(e))
+
+      await SocialAccount.updateTokens(42, 'new-tok', 'new-refresh', new Date('2027-01-01'))
+
+      await new Promise(r => setTimeout(r, 0))
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({
+        accountId: 42,
+        hasRefreshToken: true,
+      })
+      Emitter.removeAllListeners('social_account:tokens_updated')
+    })
+
+    test('delete() emits social_account:unlinked', async () => {
+      setupManager()
+      const events: any[] = []
+      const { Emitter } = await import('@strav/kernel')
+      Emitter.on('social_account:unlinked', (e: any) => events.push(e))
+
+      await SocialAccount.delete(7)
+
+      await new Promise(r => setTimeout(r, 0))
+      expect(events).toEqual([{ accountId: 7 }])
+      Emitter.removeAllListeners('social_account:unlinked')
+    })
+
+    test('deleteByUser() emits social_account:unlinked_all', async () => {
+      setupManager()
+      const events: any[] = []
+      const { Emitter } = await import('@strav/kernel')
+      Emitter.on('social_account:unlinked_all', (e: any) => events.push(e))
+
+      await SocialAccount.deleteByUser('user-123')
+
+      await new Promise(r => setTimeout(r, 0))
+      expect(events).toEqual([{ userId: 'user-123' }])
+      Emitter.removeAllListeners('social_account:unlinked_all')
+    })
+  })
+
   describe('userFkColumn defaults', () => {
     test('defaults to user_id when no userKey configured', () => {
       setupManager()

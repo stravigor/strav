@@ -213,6 +213,26 @@ Emitter.on('order:shipped', ({ entity, from, to, transition }) => {
 
 Events are fire-and-forget — errors in listeners don't affect the transition.
 
+### Generic `machine:transition` event
+
+Every successful `apply()` also emits a generic `machine:transition` event with `{ entity, field, from, to, transition }` — independent of the per-transition `events.*` mapping. Use it to wire a single audit / observability hook that captures every transition across every machine in the app:
+
+```typescript
+import { Emitter } from '@strav/kernel'
+import { audit } from '@strav/audit'
+
+Emitter.on('machine:transition', e => {
+  audit
+    .bySystem('machine')
+    .on(e.entity?.constructor?.name ?? 'entity', String(e.entity?.id ?? ''))
+    .action(e.transition)
+    .diff({ [e.field]: e.from }, { [e.field]: e.to })
+    .log()
+})
+```
+
+The emit is zero-cost when no listener is registered (`Emitter.listenerCount` guard).
+
 ## ORM mixin
 
 The `stateful()` mixin adds state machine methods directly to a `BaseModel` subclass, with automatic persistence via `.save()`.

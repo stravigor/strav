@@ -22,7 +22,7 @@ export { default as PendingScopedFeature } from './pending_scope.ts'
 export { ensureFeature } from './middleware/ensure_feature.ts'
 
 // Errors
-export { FlagError, FeatureNotDefinedError } from './errors.ts'
+export { FlagError, FeatureNotDefinedError, MissingScopeError } from './errors.ts'
 
 // Types
 export type {

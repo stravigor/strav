@@ -1,4 +1,4 @@
-import { ExternalServiceError } from '@strav/kernel'
+import { ExternalServiceError, scrubProviderError } from '@strav/kernel'
 import type { MailTransport, MailMessage, MailResult, ResendConfig } from '../types.ts'
 
 /**
@@ -49,7 +49,7 @@ export class ResendTransport implements MailTransport {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new ExternalServiceError('Resend', response.status, error)
+      throw new ExternalServiceError('Resend', response.status, scrubProviderError(error))
     }
 
     const data = (await response.json()) as { id: string }

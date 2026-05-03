@@ -900,16 +900,12 @@ BrainManager.useProvider(new OllamaProvider())
 
 ### Error scrubbing in providers
 
-Built-in providers (Anthropic, OpenAI, Google, DeepSeek) route all error paths through `retryableFetch()` from `@strav/brain/utils/retry`, which scrubs error text via `scrubProviderError()` before wrapping in `ExternalServiceError`. The scrubber:
+Built-in providers (Anthropic, OpenAI, Google, DeepSeek) route all error paths through `retryableFetch()` from `@strav/brain/utils/retry`, which scrubs error text via `scrubProviderError()` from `@strav/kernel` before wrapping in `ExternalServiceError`. The scrubber JSON-parses + runs through `redact()`, falling back to regex passes for Bearer / `sk-` / query-string / header-style credential shapes — see [`@strav/kernel` helpers — `scrubProviderError()`](../kernel/helpers.md#scrubprovidererror--error-text-credential-scrubber).
 
-- Tries to JSON-parse the body and runs it through `redact()` from `@strav/kernel` (catches structured fields named `password`/`token`/`secret`/`api_key`/`authorization`/etc., case-insensitive).
-- Falls back to regex passes for plain-text bodies — Bearer tokens, `sk-` / `sk_` prefixed keys, `?api_key=…` query strings, and header-style `x-api-key: value` embeds all become `[REDACTED]`.
-
-If you implement a custom provider that throws errors derived from response bodies, reuse the helper:
+If you implement a custom provider that throws errors derived from response bodies, reuse the helper directly:
 
 ```typescript
-import { ExternalServiceError } from '@strav/kernel'
-import { scrubProviderError } from '@strav/brain/utils/error_scrub'
+import { ExternalServiceError, scrubProviderError } from '@strav/kernel'
 
 if (!response.ok) {
   const text = await response.text()
@@ -917,7 +913,7 @@ if (!response.ok) {
 }
 ```
 
-The scrubber is deterministic and idempotent — it's safe to apply twice if you wrap an already-scrubbed message.
+The same helper is also wired into `@strav/signal`'s mail transports (SendGrid, Resend, Mailgun, Alibaba) and every `@strav/social` provider's `getAccessToken` / `getUserByToken` paths.
 
 ## Testing
 

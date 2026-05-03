@@ -35,8 +35,12 @@ export function signRequest(
  * use this on the receive side. Constant-time compare; tolerates the
  * `sha256=` prefix being absent.
  *
- * `maxAgeSeconds` rejects timestamps too far in the past — defaults to 5
- * minutes to bound replay windows.
+ * `maxAgeSeconds` rejects timestamps too far in the past — defaults to 60
+ * seconds. The previous default of 300 s was loose enough to make replay
+ * a real concern; modern provider implementations (Stripe / GitHub) cluster
+ * around 5 min upper bound but most legitimate retries land within 30 s.
+ * If you have receivers behind a slow proxy or wide clock skew, opt into
+ * a wider window per call — don't change the default.
  */
 export function verifySignature(opts: {
   secret: string
@@ -46,7 +50,7 @@ export function verifySignature(opts: {
   maxAgeSeconds?: number
   now?: Date
 }): boolean {
-  const maxAge = opts.maxAgeSeconds ?? 300
+  const maxAge = opts.maxAgeSeconds ?? 60
   const now = opts.now ?? new Date()
   const ts = Number(opts.timestamp)
   if (!Number.isFinite(ts)) return false

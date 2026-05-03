@@ -216,6 +216,26 @@ import { redact } from '@strav/kernel'
 Logger.warn('payment failed', redact(rawWebhookPayload))
 ```
 
+## scrubProviderError() — error-text credential scrubber
+
+Sister of `redact()` for the case where the input is *free-form text* rather than a structured object — typically the response body of an upstream-provider HTTP failure that's about to be wrapped in `ExternalServiceError`. Used by `@strav/brain`, `@strav/signal`, and `@strav/social` provider error paths.
+
+```typescript
+import { scrubProviderError, ExternalServiceError } from '@strav/kernel'
+
+if (!response.ok) {
+  const text = await response.text()
+  throw new ExternalServiceError(this.name, response.status, scrubProviderError(text))
+}
+```
+
+The scrubber:
+
+1. **JSON path:** if the text parses as JSON, run it through `redact()` and re-stringify so structured fields named `password` / `token` / `secret` / `api_key` / `authorization` become `[REDACTED]`.
+2. **Regex fallback** for plain text: replace Bearer tokens, `sk-` / `sk_` prefixed keys, header-style `x-api-key: value` embeds, and `?api_key=…` query-string credentials with the same `[REDACTED]` marker.
+
+Empty / null / undefined inputs return `''`. The scrubber is deterministic and idempotent — applying it twice is safe.
+
 ## Identity
 
 ```typescript

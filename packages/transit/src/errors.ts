@@ -13,3 +13,17 @@ export class CsvParseError extends TransitError {
     super(`CSV parse error: ${message}${position !== undefined ? ` at position ${position}` : ''}`)
   }
 }
+
+/**
+ * Thrown when `dedupBy()`'s in-memory set exceeds `maxDedupKeys()`.
+ * Memory safeguard against unbounded growth on adversarial input.
+ */
+export class DedupKeyLimitError extends TransitError {
+  constructor(public readonly limit: number) {
+    super(
+      `dedupBy exceeded maxDedupKeys (${limit}). ` +
+        `Either tighten the source, raise the cap with .maxDedupKeys(N), ` +
+        `or use DB-native deduplication (UNIQUE index + upsertInto, or DISTINCT ON).`
+    )
+  }
+}

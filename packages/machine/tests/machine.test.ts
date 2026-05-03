@@ -256,4 +256,38 @@ describe('defineMachine', () => {
     await machine.apply(project, 'promote')
     expect(project.phase).toBe('beta')
   })
+
+  test('emits machine:transition for every successful apply (audit hook)', async () => {
+    Emitter.reset()
+    const events: any[] = []
+    Emitter.on('machine:transition', (e: any) => events.push(e))
+
+    const order = { status: 'pending' as const }
+    await orderMachine.apply(order, 'process')
+    await orderMachine.apply(order, 'ship')
+
+    expect(events).toHaveLength(2)
+    expect(events[0]).toMatchObject({
+      field: 'status',
+      from: 'pending',
+      to: 'processing',
+      transition: 'process',
+    })
+    expect(events[1]).toMatchObject({
+      field: 'status',
+      from: 'processing',
+      to: 'shipped',
+      transition: 'ship',
+    })
+    // The full entity is included so audit hooks can serialize it
+    expect(events[0].entity).toBe(order)
+  })
+
+  test('machine:transition is zero-cost when no listener is registered', async () => {
+    Emitter.reset()
+    // No listener — apply should not throw or emit synchronously.
+    const order = { status: 'pending' as const }
+    await orderMachine.apply(order, 'process')
+    expect(order.status).toBe('processing')
+  })
 })

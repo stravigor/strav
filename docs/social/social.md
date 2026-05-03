@@ -492,6 +492,31 @@ const user = await User.findBy('email', socialUser.email) // ✗
 
 Tests that exercise `SocialAccount.create()` or `updateTokens()` must initialize encryption first (e.g., `EncryptionManager.useKey('test-key')` in `beforeEach`).
 
+### Audit hooks
+
+`SocialAccount` mutations emit Emitter events for accountability. Wire them once at bootstrap to capture token swaps and account-link changes:
+
+| Event | Payload | Fired by |
+|-------|---------|----------|
+| `social_account:linked` | `{ accountId, userId, provider, providerId }` | `create()` / first-time `findOrCreate()` |
+| `social_account:tokens_updated` | `{ accountId, hasRefreshToken, expiresAt }` (raw token NOT included) | `updateTokens()` / repeat `findOrCreate()` |
+| `social_account:unlinked` | `{ accountId }` | `delete()` |
+| `social_account:unlinked_all` | `{ userId }` | `deleteByUser()` |
+
+```typescript
+import { Emitter } from '@strav/kernel'
+import { audit } from '@strav/audit'
+
+Emitter.on('social_account:tokens_updated', e => {
+  audit
+    .bySystem('social')
+    .on('social_account', String(e.accountId))
+    .action('tokens_updated')
+    .meta({ hasRefreshToken: e.hasRefreshToken })
+    .log()
+})
+```
+
 ### Credentials
 
 Never commit client secrets. Use environment variables and `.env` files with strict permissions.

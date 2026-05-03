@@ -1,4 +1,4 @@
-import { ExternalServiceError } from '@strav/kernel'
+import { ExternalServiceError, scrubProviderError } from '@strav/kernel'
 import type { MailTransport, MailMessage, MailResult, SendGridConfig } from '../types.ts'
 
 /**
@@ -71,7 +71,7 @@ export class SendGridTransport implements MailTransport {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new ExternalServiceError('SendGrid', response.status, error)
+      throw new ExternalServiceError('SendGrid', response.status, scrubProviderError(error))
     }
 
     const messageId = response.headers.get('X-Message-Id') ?? undefined

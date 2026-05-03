@@ -1,5 +1,5 @@
 import type { Context, Session } from '@strav/http'
-import { randomHex, ExternalServiceError } from '@strav/kernel'
+import { randomHex, ExternalServiceError, scrubProviderError } from '@strav/kernel'
 import type { ProviderConfig, SocialUser, TokenResponse } from './types.ts'
 
 const STATE_KEY = 'social_state'
@@ -123,7 +123,7 @@ export abstract class AbstractProvider {
 
     if (!response.ok) {
       const text = await response.text()
-      throw new ExternalServiceError(this.name, response.status, text)
+      throw new ExternalServiceError(this.name, response.status, scrubProviderError(text))
     }
 
     const data = (await response.json()) as Record<string, unknown>

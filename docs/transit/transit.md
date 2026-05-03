@@ -100,6 +100,15 @@ Drop the second (and subsequent) rows with the same key:
 
 Deduplication is **within the import run**, not against the database. (For "don't insert if already exists in the table", use `upsertInto` — `ON CONFLICT` handles it.)
 
+The dedup `Set` is held in memory and grows for every distinct key seen, so adversarial / unbounded sources can exhaust RAM. The pipeline aborts with `DedupKeyLimitError` when the set crosses `maxDedupKeys()` — default **1,000,000** (≈100 MB at 100 bytes per key).
+
+```typescript
+.dedupBy('email').maxDedupKeys(500_000)   // tighten for tighter memory budgets
+.dedupBy('email').maxDedupKeys(Infinity)   // opt out (explicit acknowledgement)
+```
+
+For data sets where uniqueness is genuinely unbounded, prefer DB-native deduplication (UNIQUE index + `upsertInto`, or `SELECT DISTINCT ON`).
+
 ### Destination
 
 #### `upsertInto({ table, conflict, updateColumns?, batchSize? })`

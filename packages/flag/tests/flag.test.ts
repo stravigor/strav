@@ -416,6 +416,47 @@ describe('FlagManager', () => {
     Emitter.removeAllListeners('flag:updated')
   })
 
+  // ── strictScopes ───────────────────────────────────────────────────
+
+  test('strictScopes throws MissingScopeError on value() with no scope', async () => {
+    bootFlag({ strictScopes: true })
+    FlagManager.define('feat', false)
+    await expect(FlagManager.value('feat')).rejects.toThrow(/strictScopes is enabled/)
+  })
+
+  test('strictScopes throws on values() (batch) with no scope', async () => {
+    bootFlag({ strictScopes: true })
+    FlagManager.define('a', false)
+    FlagManager.define('b', false)
+    await expect(FlagManager.values(['a', 'b'])).rejects.toThrow(/strictScopes is enabled/)
+  })
+
+  test('strictScopes allows reads when an explicit scope is provided', async () => {
+    bootFlag({ strictScopes: true })
+    FlagManager.define('feat', true)
+    const user = mockScope('User', 1)
+    const value = await FlagManager.value('feat', user)
+    expect(value).toBe(true)
+  })
+
+  test('strictScopes does NOT block activate() with no scope (write path stays loose)', async () => {
+    bootFlag({ strictScopes: true })
+    FlagManager.define('feat', false)
+    // Writes still allow null — explicit-global writes use this path,
+    // and activateForEveryone() is the recommended way to do it.
+    await FlagManager.activate('feat', true)
+    // But the read-back via value() needs a scope, so test against
+    // for(scope) or activateForEveryone path:
+    await FlagManager.activateForEveryone('feat', true)
+  })
+
+  test('strictScopes default is false — null scope falls back to global', async () => {
+    bootFlag()
+    FlagManager.define('feat', () => 'global-value')
+    const value = await FlagManager.value('feat')
+    expect(value).toBe('global-value')
+  })
+
   // ── Batch operations ───────────────────────────────────────────────
 
   test('values() resolves multiple features', async () => {
