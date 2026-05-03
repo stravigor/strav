@@ -250,6 +250,49 @@ describe('AuthCode', () => {
       )
       expect(consumed).not.toBeNull()
     })
+
+    test('atomic single-use: concurrent consumes — exactly one wins', async () => {
+      const client = await createTestClient()
+      const user = createMockUser()
+
+      const { code } = await AuthCode.create({
+        clientId: client.id,
+        userId: String(user.id),
+        redirectUri: 'https://example.com/callback',
+        scopes: [],
+      })
+
+      const [a, b] = await Promise.all([
+        AuthCode.consume(code, client.id, 'https://example.com/callback'),
+        AuthCode.consume(code, client.id, 'https://example.com/callback'),
+      ])
+
+      const winners = [a, b].filter(r => r !== null)
+      expect(winners).toHaveLength(1)
+    })
+
+    test('failed validation still burns the code (replay-prevention)', async () => {
+      // The atomic UPDATE marks the row as used BEFORE post-checks
+      // (expired / redirect_uri / PKCE). A subsequent legitimate
+      // consume must still get null — the code is one-shot.
+      const client = await createTestClient()
+      const user = createMockUser()
+
+      const { code } = await AuthCode.create({
+        clientId: client.id,
+        userId: String(user.id),
+        redirectUri: 'https://example.com/callback',
+        scopes: [],
+      })
+
+      // First call: wrong redirect_uri → null AND code is now burned.
+      const first = await AuthCode.consume(code, client.id, 'https://attacker.example/callback')
+      expect(first).toBeNull()
+
+      // Second call: correct redirect_uri → still null, code already used.
+      const second = await AuthCode.consume(code, client.id, 'https://example.com/callback')
+      expect(second).toBeNull()
+    })
   })
 
   describe('prune', () => {

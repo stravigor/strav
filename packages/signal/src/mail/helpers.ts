@@ -1,5 +1,6 @@
 import MailManager from './mail_manager.ts'
 import { ViewEngine } from '@strav/view'
+import { TemplateError } from '@strav/kernel'
 import { inlineCss } from './css_inliner.ts'
 import { Queue, Scheduler, type Schedule } from '@strav/queue'
 import { ImapInboundDriver } from './inbound/imap_driver.ts'
@@ -8,6 +9,16 @@ import type {
   InboundMailHandler,
 } from './inbound/types.ts'
 import type { MailMessage, MailResult, MailAttachment } from './types.ts'
+
+/**
+ * Strict template-name pattern for mail. Allowed: alphanumeric segments
+ * separated by `.`, `_`, or `-`. No leading dot, no path separators, no
+ * `..`, no absolute paths. The ViewEngine treats `.` as a path
+ * separator, so legitimate templates like `auth.password-reset` are
+ * still allowed; anything that could escape the mail-template directory
+ * is rejected here at the boundary.
+ */
+const VALID_TEMPLATE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/
 
 /**
  * Fluent email builder. Returned by `mail.to()`.
@@ -92,6 +103,20 @@ export class PendingMail {
 
   /** Build the MailMessage, rendering template + inlining CSS if needed. */
   async build(): Promise<MailMessage> {
+    // Validate the template name BEFORE touching MailManager so a bad
+    // input fails fast and predictably regardless of init order.
+    // Catches `../`, absolute paths, backslashes, leading dots, and
+    // embedded slashes — none of which a legitimate template name
+    // should ever contain.
+    if (this._template !== undefined) {
+      if (!VALID_TEMPLATE_NAME.test(this._template) || this._template.includes('..')) {
+        throw new TemplateError(
+          `Invalid mail template name: ${JSON.stringify(this._template)}. ` +
+            `Names must match ${VALID_TEMPLATE_NAME.source} and cannot contain '..'.`
+        )
+      }
+    }
+
     const config = MailManager.config
     let html = this._html
     const text = this._text

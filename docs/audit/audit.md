@@ -180,6 +180,56 @@ const recent = await auditQuery
 
 `since` / `until` accept a `Date`, an ISO string, or `-Nd|h|m|s` shorthand (e.g. `'-30d'`, `'-2h'`, `'-15m'`). Results come back in chronological order (id ASC).
 
+## Redaction
+
+`AuditManager.append()` automatically scrubs `metadata` and `diff` through `redact()` from `@strav/kernel` before the chain hash is computed. The deny-list catches common secret keys — `password`, `token`, `secret`, `api_key`, `authorization`, `cookie`, `set-cookie`, `x-api-key`, `x-auth-token`, plus camelCase variants — case-insensitive, exact-match. Matched values become the literal string `[REDACTED]`.
+
+```typescript
+await audit
+  .by({ type: 'user', id: '1' })
+  .on('account', '42')
+  .action('login')
+  .meta({ password: 'p4ss', userAgent: 'curl/7.0' })
+  .log()
+
+// Persisted metadata.password === '[REDACTED]'
+// Persisted metadata.userAgent === 'curl/7.0'
+```
+
+Redaction also walks the diff structure — `added`, `removed`, and `changed.{before,after}` — so accidentally calling `.diff(beforeState, afterState)` with sensitive fields doesn't leak them either:
+
+```typescript
+await audit
+  .by({ type: 'user', id: '1' })
+  .on('account', '42')
+  .action('updated')
+  .diff(
+    { name: 'A', api_key: 'old-key' },
+    { name: 'B', api_key: 'new-key', token: 't' }
+  )
+  .log()
+
+// Persisted diff:
+//   changed.name = { before: 'A', after: 'B' }
+//   changed.api_key = { before: '[REDACTED]', after: '[REDACTED]' }
+//   added.token = '[REDACTED]'
+```
+
+Because `redact()` is deterministic — same input always produces the same output — the chain hash is stable across appends and `verifyChain()` runs. Tamper-evidence is preserved.
+
+To extend the deny-list with app-specific names, call the kernel helper directly before passing data in:
+
+```typescript
+import { redact } from '@strav/kernel'
+
+await audit
+  .by(actor).on('order', orderId).action('created')
+  .meta(redact(rawMeta, { extraKeys: ['internalCode'] }))
+  .log()
+```
+
+See [`@strav/kernel` helpers — `redact()`](../kernel/helpers.md#redact--secret-redaction) for the full deny-list and option reference.
+
 ## Integrity verification
 
 `verifyChain()` walks the log, recomputes each row's HMAC, and confirms each row's `prev_hash` matches the previous row's `hash`:

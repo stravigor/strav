@@ -26,7 +26,9 @@ export async function authorizeHandler(ctx: Context): Promise<Response> {
   const scopeParam = ctx.qs('scope')
   const state = ctx.qs('state')
   const codeChallenge = ctx.qs('code_challenge')
-  const codeChallengeMethod = ctx.qs('code_challenge_method') ?? 'plain'
+  // Default to S256 (RFC 7636 §4.3 — recommended). Plain is accepted
+  // only when the deployment opts in via `oauth2.allowPlainPkce`.
+  const codeChallengeMethod = ctx.qs('code_challenge_method') ?? 'S256'
 
   // Validate required params
   if (responseType !== 'code') {
@@ -73,14 +75,26 @@ export async function authorizeHandler(ctx: Context): Promise<Response> {
     )
   }
 
-  // Validate code_challenge_method
-  if (codeChallenge && codeChallengeMethod !== 'S256' && codeChallengeMethod !== 'plain') {
-    return errorRedirect(
-      redirectUri,
-      state,
-      'invalid_request',
-      'Unsupported code_challenge_method. Use "S256" or "plain".'
-    )
+  // Validate code_challenge_method. Plain PKCE is gated behind a
+  // config flag because it transmits the verifier in the clear and is
+  // strictly weaker than S256.
+  if (codeChallenge) {
+    if (codeChallengeMethod !== 'S256' && codeChallengeMethod !== 'plain') {
+      return errorRedirect(
+        redirectUri,
+        state,
+        'invalid_request',
+        'Unsupported code_challenge_method. Use "S256".'
+      )
+    }
+    if (codeChallengeMethod === 'plain' && !OAuth2Manager.config.allowPlainPkce) {
+      return errorRedirect(
+        redirectUri,
+        state,
+        'invalid_request',
+        'code_challenge_method=plain is disabled on this server. Use "S256".'
+      )
+    }
   }
 
   // Validate scopes

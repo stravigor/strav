@@ -132,6 +132,8 @@ await mail.to('user@example.com')           // required
 
 Templates support full `.strav` syntax — `@layout`, `@block`, `@include`, `@if`, `@each`, `{{ expr }}`, `{!! raw !!}`.
 
+**Template name validation.** The `name` argument must match `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` and cannot contain `..`. Validation runs synchronously at the top of `build()`, before MailManager / ViewEngine are touched, so a bad name fails fast with a `TemplateError`. This is a security guard — even though the template-prefix concatenation makes traversal hard to exploit in current code, a future contributor changing either side could re-open the path-traversal vector. Names like `welcome`, `auth.password-reset`, `invoice_v2` are accepted; absolute paths, embedded slashes, leading dots, and anything containing `..` are rejected. The view engine applies a defense-in-depth `path.resolve()` + `startsWith(directory + sep)` check on top.
+
 ### Raw content
 
 Use `.html()` and `.text()` instead of `.template()` for raw content:

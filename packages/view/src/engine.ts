@@ -1,4 +1,4 @@
-import { resolve, join } from 'node:path'
+import { resolve, join, sep } from 'node:path'
 import { watch as fsWatch, type FSWatcher } from 'node:fs'
 import { inject } from '@strav/kernel/core/inject'
 import Configuration from '@strav/kernel/config/configuration'
@@ -194,8 +194,25 @@ export default class ViewEngine {
   }
 
   private resolvePath(name: string): string {
+    // Reject names that look like absolute paths or contain explicit
+    // traversal segments before they reach `join`. The dot-to-slash
+    // transform below also collapses `..` to `//`, but we don't rely on
+    // that incidental safety — explicit rejection is clearer and
+    // survives future refactors.
+    if (name.startsWith('/') || name.startsWith('\\') || name.includes('\0')) {
+      throw new TemplateError(`Invalid template name: ${JSON.stringify(name)}`)
+    }
     const relativePath = name.replace(/\./g, '/') + '.strav'
-    return join(this.directory, relativePath)
+    const resolved = resolve(join(this.directory, relativePath))
+    // Defense-in-depth: confirm the resolved file path is still inside
+    // the configured view directory. `join` + dot-to-slash is incidentally
+    // safe today but a future change to either could re-open traversal.
+    if (resolved !== this.directory && !resolved.startsWith(this.directory + sep)) {
+      throw new TemplateError(
+        `Template "${name}" resolves outside the configured view directory.`
+      )
+    }
+    return resolved
   }
 
   private createRenderFunction(code: string): RenderFunction {

@@ -126,6 +126,15 @@ export interface OAuth2Config {
     token: RateLimitConfig
   }
   pruneRevokedAfterDays: number
+  /**
+   * Allow `code_challenge_method=plain` PKCE. RFC 7636 permits it but
+   * S256 is strictly stronger — plain transmits the verifier in the
+   * clear in a single HTTPS request, while S256 only sends a hash.
+   * Default: `false` (S256-only). Enable only when interoperability
+   * with a legacy client requires it; document the deployment
+   * environment in your CHANGELOG when you do.
+   */
+  allowPlainPkce: boolean
 }
 
 // ---------------------------------------------------------------------------

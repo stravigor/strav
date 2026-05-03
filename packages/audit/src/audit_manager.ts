@@ -1,10 +1,10 @@
 import { inject } from '@strav/kernel'
-import { ConfigurationError, EncryptionManager } from '@strav/kernel'
+import { ConfigurationError, EncryptionManager, redact } from '@strav/kernel'
 import { Configuration } from '@strav/kernel'
 import { Database } from '@strav/database'
 import { DatabaseAuditDriver } from './drivers/database_driver.ts'
 import { MemoryAuditDriver } from './drivers/memory_driver.ts'
-import type { AuditConfig, AuditEvent, AuditStore } from './types.ts'
+import type { AuditConfig, AuditDiff, AuditEvent, AuditStore } from './types.ts'
 
 /**
  * Central audit log configuration hub.
@@ -72,13 +72,25 @@ export default class AuditManager {
    * Append a new event to the chain, computing the HMAC over the previous
    * hash and the canonical event payload. Returns the persisted event with
    * `id`, `prevHash`, `hash`, and `createdAt` populated by the store.
+   *
+   * `metadata` and `diff` are scrubbed via `redact()` from `@strav/kernel`
+   * BEFORE the chain hash is computed. The redactor's deny-list catches
+   * `password`/`token`/`secret`/`api_key`/auth-header keys with their
+   * common casing variants — see `packages/kernel/src/helpers/redact.ts`.
+   * Redaction happens before hashing so `verifyChain()` (which canonicalizes
+   * the same way) recomputes identical hashes; chain integrity is preserved.
    */
   static async append(event: AuditEvent): Promise<AuditEvent> {
+    const scrubbed: AuditEvent = {
+      ...event,
+      diff: event.diff ? redactDiff(event.diff) : undefined,
+      metadata: event.metadata ? redact(event.metadata) : undefined,
+    }
     const prevHash = AuditManager._config.chain ? await AuditManager.store.lastHash() : null
     const enriched: AuditEvent = {
-      ...event,
+      ...scrubbed,
       prevHash,
-      hash: AuditManager._config.chain ? hashFor(event, prevHash) : undefined,
+      hash: AuditManager._config.chain ? hashFor(scrubbed, prevHash) : undefined,
     }
     return AuditManager.store.insert(enriched)
   }
@@ -112,4 +124,33 @@ export function canonicalize(event: AuditEvent, prevHash: string | null): string
 /** Compute the HMAC for an event row. Used on insert and on integrity check. */
 export function hashFor(event: AuditEvent, prevHash: string | null): string {
   return EncryptionManager.sign(canonicalize(event, prevHash))
+}
+
+/**
+ * Walk the AuditDiff structure and redact secrets in every value bucket.
+ * `redact()` is deterministic, so applying it here keeps the HMAC chain
+ * verifiable across appends and verification passes.
+ *
+ * For `changed`, we apply the redactor to a one-key wrapper for each
+ * field so the deny-list logic (case-insensitive name match) catches
+ * the field name itself and the values are recursively scrubbed in
+ * case they're nested objects.
+ */
+function redactDiff(input: AuditDiff): AuditDiff {
+  const out: AuditDiff = {}
+  if (input.added) out.added = redact(input.added)
+  if (input.removed) out.removed = redact(input.removed)
+  if (input.changed) {
+    const changed: Record<string, { before: unknown; after: unknown }> = {}
+    for (const [field, { before, after }] of Object.entries(input.changed)) {
+      const beforeWrapped = redact({ [field]: before })
+      const afterWrapped = redact({ [field]: after })
+      changed[field] = {
+        before: beforeWrapped[field],
+        after: afterWrapped[field],
+      }
+    }
+    out.changed = changed
+  }
+  return out
 }

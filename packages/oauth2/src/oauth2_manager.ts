@@ -39,6 +39,7 @@ const DEFAULTS: OAuth2Config = {
     token: { max: 20, window: 60 },
   },
   pruneRevokedAfterDays: 7,
+  allowPlainPkce: false,
 }
 
 // ---------------------------------------------------------------------------

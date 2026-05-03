@@ -7,6 +7,11 @@ export { default as Server } from './server.ts'
 export { compose } from './middleware.ts'
 export { serializeCookie, parseCookies, withCookie, clearCookie } from './cookie.ts'
 export { rateLimit, MemoryStore } from './rate_limit.ts'
+export { securityHeaders } from './security_headers.ts'
+export type {
+  SecurityHeadersOptions,
+  SecurityHeadersHstsOptions,
+} from './security_headers.ts'
 export {
   idempotency,
   MemoryIdempotencyStore,

@@ -419,13 +419,22 @@ function createMockSql() {
       return Promise.resolve(result)
     }
 
-    // ── UPDATE _strav_oauth_auth_codes SET "used_at" ──────────────────
+    // ── UPDATE _strav_oauth_auth_codes SET "used_at" RETURNING * ───────
     if (query.includes('_strav_oauth_auth_codes') && query.includes('update')) {
-      const id = values[0] as string
-      const found = authCodeStore.find(c => c.id === id)
-      if (found) found.used_at = new Date()
-      const result: any = []
-      result.count = found ? 1 : 0
+      // New atomic consume signature: WHERE code = $1 AND client_id = $2 AND used_at IS NULL
+      const code = values[0] as string
+      const clientId = values[1] as string
+      const found = authCodeStore.find(
+        c => c.code === code && c.client_id === clientId && c.used_at === null
+      )
+      if (!found) {
+        const empty: any = []
+        empty.count = 0
+        return Promise.resolve(empty)
+      }
+      found.used_at = new Date()
+      const result: any = [found]
+      result.count = 1
       return Promise.resolve(result)
     }
 

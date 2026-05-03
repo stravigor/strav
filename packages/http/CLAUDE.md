@@ -12,7 +12,7 @@ HTTP layer for the Strav framework — router, server, middleware, authenticatio
 - bun run typecheck
 
 ## Architecture
-- src/http/ — Router, Server, Context, CORS, rate limiting, cookies
+- src/http/ — Router, Server, Context, CORS, rate limiting, cookies, security headers
 - src/session/ — Session manager and middleware
 - src/validation/ — Validation engine and rules
 - src/policy/ — Authorization policies

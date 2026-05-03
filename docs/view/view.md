@@ -757,6 +757,8 @@ Template names map to file paths:
 | `'layouts/app'` | `views/layouts/app.strav` |
 | `'partials/nav'` | `views/partials/nav.strav` |
 
+The resolver rejects names that look like absolute paths (`/`, `\` prefix) or contain null bytes, and asserts that the resolved file path stays inside the configured view directory via `path.resolve()` + `startsWith(directory + sep)`. Names that fail either check throw a `TemplateError`. This is a defense-in-depth backstop — callers are still expected to validate input before reaching `render()` (the mail helper does this strictly; see [Mail template name validation](../signal/mail.md#template-rendering)).
+
 ## Caching
 
 In production (`VIEW_CACHE=true`), templates are compiled once and cached in memory for the lifetime of the process — subsequent renders skip file I/O and parsing entirely.

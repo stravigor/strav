@@ -61,11 +61,20 @@ export default class AuthCode {
    * Consume an authorization code. Validates and marks it as used.
    *
    * Checks:
-   * - Code exists and belongs to the client
+   * - Code exists, belongs to the client, and has not been used before
+   *   (atomic — see below)
    * - Code is not expired
-   * - Code has not been used before
    * - Redirect URI matches
    * - PKCE code_verifier matches (if code_challenge was set)
+   *
+   * The "mark used" step is fused into the lookup as a single
+   * `UPDATE … SET used_at = NOW() WHERE … AND used_at IS NULL RETURNING *`
+   * so two concurrent requests with the same code can never both
+   * observe `used_at IS NULL` — exactly one wins, the other gets zero
+   * rows back. Post-checks (expired / redirect_uri / PKCE) run AFTER
+   * the row has been claimed; if any fail we still return null and the
+   * code stays burned, which is the right semantic — a failed redemption
+   * attempt prevents replay even if it didn't issue a token.
    *
    * Returns the code data if valid, null otherwise.
    */
@@ -78,16 +87,16 @@ export default class AuthCode {
     const hash = hashCode(plainCode)
 
     const rows = await OAuth2Manager.db.sql`
-      SELECT * FROM "_strav_oauth_auth_codes"
-      WHERE "code" = ${hash} AND "client_id" = ${clientId}
-      LIMIT 1
+      UPDATE "_strav_oauth_auth_codes"
+      SET "used_at" = NOW()
+      WHERE "code" = ${hash}
+        AND "client_id" = ${clientId}
+        AND "used_at" IS NULL
+      RETURNING *
     `
     if (rows.length === 0) return null
 
     const record = AuthCode.hydrate(rows[0] as Record<string, unknown>)
-
-    // Already used — potential replay attack
-    if (record.usedAt) return null
 
     // Expired
     if (record.expiresAt.getTime() < Date.now()) return null
@@ -103,17 +112,10 @@ export default class AuthCode {
         const verifierHash = new Bun.CryptoHasher('sha256').update(codeVerifier).digest('base64url')
         if (verifierHash !== record.codeChallenge) return null
       } else {
-        // plain method
+        // plain method (only stored when allowPlainPkce was set at authorize time)
         if (codeVerifier !== record.codeChallenge) return null
       }
     }
-
-    // Mark as used
-    await OAuth2Manager.db.sql`
-      UPDATE "_strav_oauth_auth_codes"
-      SET "used_at" = NOW()
-      WHERE "id" = ${record.id}
-    `
 
     return record
   }

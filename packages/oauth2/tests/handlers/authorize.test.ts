@@ -199,6 +199,99 @@ describe('authorizeHandler (GET /oauth/authorize)', () => {
     const res = await authorizeHandler(ctx)
     expect(res.status).toBe(400)
   })
+
+  // ── PKCE method gate (default: S256-only) ──────────────────────────
+
+  test('defaults code_challenge_method to S256 when only code_challenge is provided', async () => {
+    const client = await createTestClient({ firstParty: true })
+    const user = createMockUser()
+    const { ctx } = mockAuthenticatedContext(user, {
+      path: '/oauth/authorize',
+      query: {
+        response_type: 'code',
+        client_id: client.id,
+        redirect_uri: 'https://example.com/callback',
+        scope: 'read',
+        code_challenge: 'abc-challenge',
+        // code_challenge_method intentionally omitted
+      },
+    })
+
+    const res = await authorizeHandler(ctx)
+    // First-party clients auto-approve; absence of an error redirect
+    // means the request was accepted under the new S256 default.
+    expect(res.status).toBe(302)
+    const url = new URL(res.headers.get('location')!)
+    expect(url.searchParams.get('error')).toBeNull()
+    expect(url.searchParams.get('code')).toBeTruthy()
+  })
+
+  test('rejects code_challenge_method=plain by default', async () => {
+    const client = await createTestClient({ firstParty: true })
+    const user = createMockUser()
+    const { ctx } = mockAuthenticatedContext(user, {
+      path: '/oauth/authorize',
+      query: {
+        response_type: 'code',
+        client_id: client.id,
+        redirect_uri: 'https://example.com/callback',
+        scope: 'read',
+        code_challenge: 'abc',
+        code_challenge_method: 'plain',
+      },
+    })
+
+    const res = await authorizeHandler(ctx)
+    expect(res.status).toBe(302)
+    const url = new URL(res.headers.get('location')!)
+    expect(url.searchParams.get('error')).toBe('invalid_request')
+    expect(url.searchParams.get('error_description')).toContain('plain')
+    expect(url.searchParams.get('code')).toBeNull()
+  })
+
+  test('accepts code_challenge_method=plain when allowPlainPkce is true', async () => {
+    bootOAuth2({ scopes: { read: 'Read', write: 'Write' }, allowPlainPkce: true })
+    const client = await createTestClient({ firstParty: true })
+    const user = createMockUser()
+    const { ctx } = mockAuthenticatedContext(user, {
+      path: '/oauth/authorize',
+      query: {
+        response_type: 'code',
+        client_id: client.id,
+        redirect_uri: 'https://example.com/callback',
+        scope: 'read',
+        code_challenge: 'abc',
+        code_challenge_method: 'plain',
+      },
+    })
+
+    const res = await authorizeHandler(ctx)
+    expect(res.status).toBe(302)
+    const url = new URL(res.headers.get('location')!)
+    expect(url.searchParams.get('error')).toBeNull()
+    expect(url.searchParams.get('code')).toBeTruthy()
+  })
+
+  test('rejects unknown code_challenge_method values', async () => {
+    const client = await createTestClient({ firstParty: true })
+    const user = createMockUser()
+    const { ctx } = mockAuthenticatedContext(user, {
+      path: '/oauth/authorize',
+      query: {
+        response_type: 'code',
+        client_id: client.id,
+        redirect_uri: 'https://example.com/callback',
+        scope: 'read',
+        code_challenge: 'abc',
+        code_challenge_method: 'sha1',
+      },
+    })
+
+    const res = await authorizeHandler(ctx)
+    expect(res.status).toBe(302)
+    const url = new URL(res.headers.get('location')!)
+    expect(url.searchParams.get('error')).toBe('invalid_request')
+  })
 })
 
 describe('approveHandler (POST /oauth/authorize)', () => {

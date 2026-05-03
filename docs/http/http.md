@@ -929,6 +929,67 @@ class RedisRateLimitStore implements RateLimitStore {
 router.use(rateLimit({ store: new RedisRateLimitStore() }))
 ```
 
+## Security headers
+
+`securityHeaders()` is a defense-in-depth middleware that sets safe-default response headers — the framework equivalent of helmet. Mount it once at the app entry and every response inherits the protections.
+
+```typescript
+import { securityHeaders } from '@strav/http'
+
+router.use(securityHeaders())
+```
+
+### Defaults
+
+The default config sets:
+
+- `X-Content-Type-Options: nosniff` — prevents MIME-sniffing.
+- `X-Frame-Options: SAMEORIGIN` — denies cross-origin framing.
+- `Referrer-Policy: strict-origin-when-cross-origin` — limits referrer leakage.
+- `Cross-Origin-Opener-Policy: same-origin` — isolates the browsing context.
+
+`Strict-Transport-Security` and `Content-Security-Policy` are **off by default**. HSTS is unsafe to enable on non-HTTPS deployments and CSP is too app-specific to ship a meaningful default — opt in explicitly.
+
+### Options
+
+```typescript
+router.use(
+  securityHeaders({
+    frameOptions: 'DENY',
+    hsts: { maxAge: 63_072_000, includeSubDomains: true, preload: true },
+    csp: "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'",
+  })
+)
+```
+
+| Option | Type | Default | Notes |
+|--------|------|---------|-------|
+| `contentTypeOptions` | `boolean` | `true` | Set `false` to suppress the header. |
+| `frameOptions` | `'DENY'` \| `'SAMEORIGIN'` \| `string` \| `false` | `'SAMEORIGIN'` | Pass a custom string for non-standard values, `false` to omit. |
+| `referrerPolicy` | `string` \| `false` | `'strict-origin-when-cross-origin'` | Any valid `Referrer-Policy` token. |
+| `crossOriginOpenerPolicy` | `string` \| `false` | `'same-origin'` | |
+| `hsts` | `boolean` \| `{ maxAge?, includeSubDomains?, preload? }` | `false` | `true` ⇒ `max-age=31536000; includeSubDomains`. Object lets you tune. |
+| `csp` | `string` \| `false` | `false` | Full policy string. Test thoroughly before rolling out. |
+
+### Override-friendly
+
+The middleware uses `headers.has(name)` before setting — per-route handlers that explicitly set one of the managed headers (e.g., a public-embed iframe relaxing `X-Frame-Options` to `ALLOW-FROM`) are not overwritten by the global policy.
+
+### Recommended deployment
+
+```typescript
+// Production: enable HSTS once HTTPS is wired up at the edge
+router.use(
+  securityHeaders({
+    hsts: { maxAge: 31_536_000, includeSubDomains: true },
+    // Ship a minimal CSP and tighten incrementally:
+    csp: "default-src 'self'; img-src 'self' data:; script-src 'self'",
+  })
+)
+```
+
+For a staged CSP rollout, send the policy as `Content-Security-Policy-Report-Only` first via your reverse proxy or a custom middleware, observe report violations, then promote to enforcement.
+
 ## API Resources
 
 Resources are lightweight serializers that control the shape of JSON responses. They sit between your models and `ctx.json()`, letting you pick which fields are exposed, add computed fields, and nest related resources.

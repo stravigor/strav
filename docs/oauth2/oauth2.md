@@ -128,6 +128,12 @@ export default {
 
   // Cleanup: delete revoked tokens older than this many days
   pruneRevokedAfterDays: 7,
+
+  // Allow `code_challenge_method=plain` in addition to `S256`. Default
+  // false — plain transmits the verifier in the clear and is strictly
+  // weaker. Enable only when interoperability with a legacy client
+  // requires it; document the deployment in your CHANGELOG when you do.
+  allowPlainPkce: false,
 }
 ```
 
@@ -149,6 +155,7 @@ export default {
 | `rateLimit.authorize` | `{ max: 30, window: 60 }` | Rate limit for the authorize endpoint. `window` is in seconds. |
 | `rateLimit.token` | `{ max: 20, window: 60 }` | Rate limit for the token endpoint. |
 | `pruneRevokedAfterDays` | `7` | Delete revoked tokens older than this many days during purge. |
+| `allowPlainPkce` | `false` | Allow `code_challenge_method=plain` for PKCE. Default rejects plain at the authorize endpoint and only accepts `S256`. See [Security](#security). |
 
 ## Routes
 
@@ -712,16 +719,15 @@ console.log(error.toJSON())
 
 ## Security
 
-- **Token hashing**: All tokens (access, refresh, authorization codes) are stored as SHA-256 hashes. Plain-text tokens are returned only once at creation time.
-- **Timing-safe comparison**: Token lookups use `crypto.timingSafeEqual` to prevent timing attacks.
-- **PKCE (RFC 7636)**: Public clients must use PKCE with `S256` or `plain` code challenge methods. The code verifier is validated against the stored challenge before issuing tokens.
-- **Code replay prevention**: Authorization codes are single-use. Once consumed, the `used_at` timestamp prevents reuse.
+- **Token hashing**: All tokens (access, refresh, authorization codes) and confidential-client secrets are stored as SHA-256 hashes via `Bun.CryptoHasher`. Plain-text values are returned only once at creation time.
+- **Timing-safe comparison**: Token and client-secret verification uses `crypto.timingSafeEqual` to prevent timing attacks.
+- **PKCE (RFC 7636)**: Public clients must use PKCE. The default `code_challenge_method` is **`S256`-only**. `plain` is rejected with `invalid_request` unless explicitly enabled via the `oauth2.allowPlainPkce: true` config flag (off by default — plain transmits the verifier in the clear in a single HTTPS request and is strictly weaker than S256). The code verifier is validated against the stored challenge before issuing tokens.
+- **Atomic single-use codes**: Authorization codes are claimed via a single `UPDATE … SET used_at = NOW() WHERE used_at IS NULL RETURNING *`. Two concurrent token requests cannot both observe the code as unused — exactly one wins. Post-checks (expiry, redirect_uri, PKCE) run AFTER the row is claimed; a failed validation still burns the code, preventing replay.
 - **Refresh token rotation**: On refresh, the old token pair is revoked and a new pair is issued. Compromised refresh tokens cannot be reused.
 - **Scope narrowing only**: Refreshed tokens can narrow scopes but never widen them beyond the original grant.
 - **Redirect URI validation**: The `redirect_uri` must exactly match one of the client's registered URIs.
 - **CSRF protection**: The authorize POST endpoint uses `csrf()` middleware. The authorization code flow supports the `state` parameter.
 - **Rate limiting**: Both the authorize and token endpoints are rate-limited by default.
-- **Client secret hashing**: Client secrets are stored as bcrypt hashes via `Bun.password.hash`.
 
 ## Integration with existing auth
 
