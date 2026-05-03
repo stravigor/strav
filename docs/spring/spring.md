@@ -153,8 +153,8 @@ DB_DATABASE=my_app
 
 ```bash
 # Generate and run migrations from schemas
-bun strav generate:migration --scope=public --message="initial schema"
-bun strav migrate --scope=public
+bun strav generate:migration --message="initial schema"
+bun strav migrate
 
 # Seed with sample data
 bun strav seed
@@ -172,10 +172,10 @@ Visit `http://localhost:3000` to see your application!
 
 ### Schema-Driven Development
 
-1. **Define schemas** in `database/schemas/public/`:
+1. **Define schemas** in `database/schemas/`:
 
 ```typescript
-// database/schemas/public/post.ts
+// database/schemas/post.ts
 import { defineSchema, t, Archetype } from '@strav/database'
 
 export default defineSchema('post', {
@@ -194,19 +194,19 @@ export default defineSchema('post', {
 2. **Generate migrations**:
 
 ```bash
-bun strav generate:migration --scope=public --message="add post schema"
+bun strav generate:migration --message="add post schema"
 ```
 
 3. **Run migrations**:
 
 ```bash
-bun strav migrate --scope=public
+bun strav migrate
 ```
 
 4. **Generate models** (optional - can be auto-generated):
 
 ```bash
-bun strav generate:models --scope=public
+bun strav generate:models
 ```
 
 ### Vue Islands Development
@@ -305,9 +305,9 @@ Once your application is created, you can use the built-in `strav.ts` CLI:
 ```bash
 # Schema and database
 bun strav make:schema post --archetype=entity
-bun strav generate:migration --scope=public --message="add post schema"
-bun strav migrate --scope=public
-bun strav rollback --scope=public
+bun strav generate:migration --message="add post schema"
+bun strav migrate
+bun strav rollback
 
 # Code generation
 bun strav make:controller post_controller
@@ -428,7 +428,7 @@ bun strav build:islands
 3. **Run migrations**:
 
 ```bash
-bun strav migrate --scope=public
+bun strav migrate
 ```
 
 4. **Start the server**:

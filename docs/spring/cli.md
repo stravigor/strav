@@ -74,7 +74,6 @@ bun strav make:schema <name> [options]
 
 # Options:
 --archetype <type>     # Schema archetype (entity, component, attribute, etc.)
---domain <domain>      # Domain/scope (default: public)
 --parent <schema>      # Parent schema for dependent archetypes
 
 # Examples:
@@ -100,12 +99,11 @@ Generate migration files from schema changes.
 bun strav generate:migration [options]
 
 # Options:
---scope <scope>        # Migration scope (default: public)
 --message <message>    # Migration description
 -m <message>          # Short alias for --message
 
 # Examples:
-bun strav generate:migration --scope=public --message="add user schema"
+bun strav generate:migration --message="add user schema"
 bun strav generate:migration -m "update post fields"
 ```
 
@@ -113,14 +111,10 @@ bun strav generate:migration -m "update post fields"
 Run pending migrations.
 
 ```bash
-bun strav migrate [options]
+bun strav migrate
 
-# Options:
---scope <scope>        # Migration scope (default: public)
-
-# Examples:
-bun strav migrate --scope=public
-bun strav migrate  # defaults to public scope
+# Example:
+bun strav migrate
 ```
 
 #### `rollback`
@@ -130,25 +124,21 @@ Roll back migrations.
 bun strav rollback [options]
 
 # Options:
---scope <scope>        # Migration scope (default: public)
 --batch <number>       # Specific batch to rollback to
 
 # Examples:
-bun strav rollback --scope=public          # rollback last batch
-bun strav rollback --scope=public --batch=3  # rollback to batch 3
+bun strav rollback             # rollback last batch
+bun strav rollback --batch=3   # rollback to batch 3
 ```
 
 #### `compare`
 Compare schema definitions against live database.
 
 ```bash
-bun strav compare [options]
-
-# Options:
---scope <scope>        # Scope to compare (default: public)
+bun strav compare
 
 # Example:
-bun strav compare --scope=public
+bun strav compare
 ```
 
 #### `fresh`
@@ -288,12 +278,10 @@ Generate ORM models from schema definitions.
 bun strav generate:models [options]
 
 # Options:
---scope <scope>        # Generate models for specific scope
 --force                # Overwrite existing models
 
 # Examples:
-bun strav generate:models --scope=public
-bun strav generate:models --scope=all
+bun strav generate:models
 bun strav generate:models --force
 ```
 

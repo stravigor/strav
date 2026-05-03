@@ -6,10 +6,15 @@ This guide walks you through creating your first Strav application using **@stra
 
 Before you begin, ensure you have:
 
+**Required**
+
 - **Bun** installed (latest version)
-- **PostgreSQL** running locally
 - **Basic TypeScript/JavaScript** knowledge
 - **Git** for version control (recommended)
+
+**Conditional**
+
+- **PostgreSQL 14+** running locally — needed for the `--web` template and any stateful package (database, queue, sessions, authentication, notifications, audit, OAuth2, Stripe). Skip if you're scaffolding a fully stateless app.
 
 ### System Requirements
 
@@ -17,8 +22,8 @@ Before you begin, ensure you have:
 # Check Bun version
 bun --version  # Should be 1.0+
 
-# Check PostgreSQL
-psql --version  # Should be 12+
+# Only if you'll use the database — check PostgreSQL
+psql --version  # Should be 14+
 ```
 
 ## Quick Start (5 Minutes)
@@ -61,8 +66,8 @@ DB_DATABASE=blog_db
 
 ```bash
 # Generate and run migrations
-bun strav generate:migration --scope=public --message="initial schema"
-bun strav migrate --scope=public
+bun strav generate:migration --message="initial schema"
+bun strav migrate
 
 # Seed with sample data
 bun strav seed
@@ -161,7 +166,7 @@ Let's add a blog post feature to understand the development workflow:
 bun strav make:schema post --archetype=entity
 ```
 
-This creates `database/schemas/public/post.ts`:
+This creates `database/schemas/post.ts`:
 
 ```typescript
 import { defineSchema, t, Archetype } from '@strav/database'
@@ -182,8 +187,8 @@ export default defineSchema('post', {
 #### 2. Generate and Run Migration
 
 ```bash
-bun strav generate:migration --scope=public --message="add post schema"
-bun strav migrate --scope=public
+bun strav generate:migration --message="add post schema"
+bun strav migrate
 ```
 
 #### 3. Create the Controller
@@ -563,7 +568,7 @@ test('should create post', async () => {
 bun install --production
 
 # 2. Run migrations
-bun strav migrate --scope=public
+bun strav migrate
 
 # 3. Build islands for production
 bun strav build:islands

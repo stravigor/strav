@@ -41,8 +41,8 @@ my-app/
 │   └── services/         # Business logic services
 ├── config/               # Configuration files
 ├── database/
-│   ├── schemas/public/   # Schema definitions
-│   ├── migrations/public/ # Generated migrations
+│   ├── schemas/         # Schema definitions
+│   ├── migrations/      # Generated migrations
 │   ├── seeders/          # Database seeders
 │   └── factories/        # Model factories
 ├── resources/

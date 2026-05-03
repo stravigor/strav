@@ -26,10 +26,6 @@ export default {
     // Database paths (for schemas and migrations)
     // schemas: 'database/schemas',      // Where schema definitions are located
     // migrations: 'database/migrations'  // Where migration files are generated
-  },
-  modelNaming: {
-    public: null,      // No prefix for public models: User, Project
-    tenants: 'Tenant'  // "Tenant" prefix for tenant models: TenantExperiment, TenantBelief
   }
 }
 ```
@@ -53,29 +49,6 @@ export default {
   }
 }
 ```
-
-### Model Naming
-
-The optional `modelNaming` configuration allows you to add prefixes to generated model class names. This is useful in multi-tenant architectures to avoid naming conflicts:
-
-```typescript
-// config/generators.ts
-export default {
-  modelNaming: {
-    public: null,        // Public models: User, Project (no prefix)
-    tenants: 'Tenant'    // Tenant models: TenantExperiment, TenantBelief
-  }
-}
-```
-
-When prefixes are configured:
-- **Class names** get prefixed: `class TenantExperiment extends BaseModel`
-- **Type references** use correct prefixes: `declare project: Project` (public) vs `declare experiment: TenantExperiment` (tenant)
-- **Cross-scope references** work automatically: tenant models can reference public models without prefixes
-- **Decorator strings** use the appropriate model names: `@reference({ model: 'TenantProject', ... })`
-- **Barrel exports** reflect the prefixed names: `export { default as TenantExperiment }`
-
-File names remain unchanged (`experiment.ts`), only the class names are prefixed.
 
 ## Barrel exports
 
@@ -102,18 +75,8 @@ Generates model classes and enum files from schemas. It operates entirely in mem
 ### Usage via CLI
 
 ```bash
-# Generate models for all scopes
 bun strav generate:models
-
-# Generate models for specific scope
-bun strav generate:models --scope=public    # Only public models
-bun strav generate:models --scope=tenants   # Only tenant models
-bun strav generate:models --scope=all       # Both scopes (default)
 ```
-
-When using multi-tenant architecture with separate schemas, models are generated in scoped directories:
-- `app/models/public/` - System-wide models (users, organizations, etc.)
-- `app/models/tenants/` - Tenant-specific models (application data)
 
 ### Programmatic usage
 
@@ -122,26 +85,20 @@ import { ModelGenerator } from '@strav/cli'
 import type { GeneratorConfig } from '@strav/cli'
 
 const config: GeneratorConfig = {
-  paths: { models: 'app/models', enums: 'app/enums' },
-  modelNaming: {
-    public: null,      // No prefix for public models
-    tenants: 'Tenant'  // "Tenant" prefix for tenant models
-  }
+  paths: { models: 'app/models', enums: 'app/enums' }
 }
 
-// Generate for a specific scope
-const generator = new ModelGenerator(schemas, representation, config, 'public')
-// Or: new ModelGenerator(schemas, representation, config, 'tenants', allSchemasMap)
+const generator = new ModelGenerator(schemas, representation, config)
 
 // Generate in memory
 const files = generator.generate()
-// files = [{ path: 'app/models/public/user.ts', content: '...' }, ...]
+// files = [{ path: 'app/models/user.ts', content: '...' }, ...]
 
 // Generate and write to disk
 const written = await generator.writeAll()
 ```
 
-The `config` parameter is optional — defaults are used when omitted. The `scope` parameter appends `/public` or `/tenants` to the configured model and enum paths.
+The `config` parameter is optional — defaults are used when omitted.
 
 ## What gets generated
 

@@ -30,9 +30,9 @@ my-app/
 │   ├── session.ts                  # Session management
 │   └── view.ts                     # View engine settings
 ├── database/
-│   ├── schemas/public/
+│   ├── schemas/
 │   │   └── user.ts                 # User schema definition
-│   ├── migrations/public/          # Auto-generated migrations
+│   ├── migrations/                 # Auto-generated migrations
 │   ├── seeders/
 │   │   ├── database_seeder.ts      # Main seeder
 │   │   └── user_seeder.ts          # User seeder
@@ -188,8 +188,8 @@ my-api/
 │   ├── encryption.ts               # Encryption configuration
 │   └── http.ts                     # HTTP/CORS configuration
 ├── database/                       # Same structure as web template
-│   ├── schemas/public/
-│   ├── migrations/public/
+│   ├── schemas/
+│   ├── migrations/
 │   ├── seeders/
 │   └── factories/
 ├── routes/
@@ -326,7 +326,7 @@ Both templates share these foundational elements:
 
 **Schema Definition (TypeScript DSL):**
 ```typescript
-// database/schemas/public/user.ts
+// database/schemas/user.ts
 import { defineSchema, t, Archetype } from '@strav/database'
 
 export default defineSchema('user', {

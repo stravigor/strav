@@ -17,7 +17,7 @@ cd blog-platform
 #### 1. Schema Design
 
 ```typescript
-// database/schemas/public/post.ts
+// database/schemas/post.ts
 export default defineSchema('post', {
   archetype: Archetype.Entity,
   fields: {
@@ -37,7 +37,7 @@ export default defineSchema('post', {
   },
 })
 
-// database/schemas/public/category.ts
+// database/schemas/category.ts
 export default defineSchema('category', {
   archetype: Archetype.Reference,
   fields: {
@@ -49,7 +49,7 @@ export default defineSchema('category', {
   },
 })
 
-// database/schemas/public/tag.ts
+// database/schemas/tag.ts
 export default defineSchema('tag', {
   archetype: Archetype.Reference,
   fields: {
@@ -59,12 +59,12 @@ export default defineSchema('tag', {
   },
 })
 
-// database/schemas/public/post_tag.ts (many-to-many)
+// database/schemas/post_tag.ts (many-to-many)
 export default defineAssociation(['post', 'tag'], {
   as: { post: 'tags', tag: 'posts' },
 })
 
-// database/schemas/public/comment.ts
+// database/schemas/comment.ts
 export default defineSchema('comment', {
   archetype: Archetype.Contribution,
   parents: ['post'],
@@ -270,7 +270,7 @@ cd ecommerce-api
 #### Schema Design
 
 ```typescript
-// database/schemas/public/product.ts
+// database/schemas/product.ts
 export default defineSchema('product', {
   archetype: Archetype.Entity,
   fields: {
@@ -295,7 +295,7 @@ export default defineSchema('product', {
   },
 })
 
-// database/schemas/public/order.ts
+// database/schemas/order.ts
 export default defineSchema('order', {
   archetype: Archetype.Entity,
   fields: {
@@ -325,7 +325,7 @@ export default defineSchema('order', {
   },
 })
 
-// database/schemas/public/order_item.ts
+// database/schemas/order_item.ts
 export default defineSchema('order_item', {
   archetype: Archetype.Component,
   parents: ['order'],
@@ -339,7 +339,7 @@ export default defineSchema('order_item', {
   },
 })
 
-// database/schemas/public/cart.ts
+// database/schemas/cart.ts
 export default defineSchema('cart', {
   archetype: Archetype.Component,
   parents: ['user'],
@@ -349,7 +349,7 @@ export default defineSchema('cart', {
   },
 })
 
-// database/schemas/public/cart_item.ts
+// database/schemas/cart_item.ts
 export default defineSchema('cart_item', {
   archetype: Archetype.Component,
   parents: ['cart'],
@@ -544,7 +544,7 @@ export default class CartController extends Controller {
 A comprehensive task management API with real-time features:
 
 ```typescript
-// database/schemas/public/workspace.ts
+// database/schemas/workspace.ts
 export default defineSchema('workspace', {
   archetype: Archetype.Entity,
   fields: {
@@ -557,7 +557,7 @@ export default defineSchema('workspace', {
   },
 })
 
-// database/schemas/public/project.ts
+// database/schemas/project.ts
 export default defineSchema('project', {
   archetype: Archetype.Component,
   parents: ['workspace'],
@@ -572,7 +572,7 @@ export default defineSchema('project', {
   },
 })
 
-// database/schemas/public/task.ts
+// database/schemas/task.ts
 export default defineSchema('task', {
   archetype: Archetype.Component,
   parents: ['project'],

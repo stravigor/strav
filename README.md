@@ -34,13 +34,12 @@ Visit `http://localhost:3000` — you'll see your Strav application running with
 - **[Getting Started Guide](docs/spring/getting-started.md)** — Complete walkthrough with database setup, migrations, and your first feature
 - **[Spring Documentation](docs/spring/spring.md)** — Full framework documentation
 - **[Package Documentation](docs/)** — Individual package guides for all 20+ modules
-- **[Examples](apps/)** — Real-world application examples
 
 ## Quick Links
 
-- **Prerequisites:** Bun 1.0+, PostgreSQL 12+
+- **Prerequisites:** Bun 1.0+ (PostgreSQL 14+ required only when using stateful packages — database, queue, auth, sessions, etc.)
 - **License:** MIT
-- **Support:** [GitHub Issues](https://github.com/strav/framework/issues)
+- **Support:** [GitHub Issues](https://github.com/stravigor/strav/issues)
 
 ---
 

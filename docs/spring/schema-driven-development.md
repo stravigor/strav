@@ -14,7 +14,7 @@ In traditional development, you often write:
 With Strav's schema-driven approach, you define your schema **once** and everything else is generated:
 
 ```typescript
-// database/schemas/public/user.ts - Single source of truth
+// database/schemas/user.ts - Single source of truth
 import { defineSchema, t, Archetype } from '@strav/database'
 
 export default defineSchema('user', {
@@ -44,7 +44,7 @@ Strav defines 8 archetypes that capture common database patterns:
 Top-level business objects that exist independently.
 
 ```typescript
-// database/schemas/public/user.ts
+// database/schemas/user.ts
 export default defineSchema('user', {
   archetype: Archetype.Entity,
   fields: {
@@ -56,7 +56,7 @@ export default defineSchema('user', {
   },
 })
 
-// database/schemas/public/post.ts
+// database/schemas/post.ts
 export default defineSchema('post', {
   archetype: Archetype.Entity,
   fields: {
@@ -82,7 +82,7 @@ export default defineSchema('post', {
 Parts of an entity that don't exist independently.
 
 ```typescript
-// database/schemas/public/address.ts
+// database/schemas/address.ts
 export default defineSchema('address', {
   archetype: Archetype.Component,
   parents: ['user'], // Automatically adds user_id foreign key
@@ -107,7 +107,7 @@ export default defineSchema('address', {
 Configuration or metadata attached to entities.
 
 ```typescript
-// database/schemas/public/user_preferences.ts
+// database/schemas/user_preferences.ts
 export default defineSchema('user_preferences', {
   archetype: Archetype.Attribute,
   parents: ['user'],
@@ -131,7 +131,7 @@ export default defineSchema('user_preferences', {
 Many-to-many relationships between entities.
 
 ```typescript
-// database/schemas/public/user_role.ts - Pivot table
+// database/schemas/user_role.ts - Pivot table
 export default defineAssociation(['user', 'role'], {
   as: { user: 'roles', role: 'users' }, // Relationship names
   fields: {
@@ -153,7 +153,7 @@ export default defineAssociation(['user', 'role'], {
 Immutable audit logs and event records.
 
 ```typescript
-// database/schemas/public/audit_log.ts
+// database/schemas/audit_log.ts
 export default defineSchema('audit_log', {
   archetype: Archetype.Event,
   fields: {
@@ -178,7 +178,7 @@ export default defineSchema('audit_log', {
 Lookup tables and reference data.
 
 ```typescript
-// database/schemas/public/country.ts
+// database/schemas/country.ts
 export default defineSchema('country', {
   archetype: Archetype.Reference,
   fields: {
@@ -190,7 +190,7 @@ export default defineSchema('country', {
   },
 })
 
-// database/schemas/public/category.ts
+// database/schemas/category.ts
 export default defineSchema('category', {
   archetype: Archetype.Reference,
   fields: {
@@ -213,7 +213,7 @@ export default defineSchema('category', {
 System and application settings.
 
 ```typescript
-// database/schemas/public/app_setting.ts
+// database/schemas/app_setting.ts
 export default defineSchema('app_setting', {
   archetype: Archetype.Configuration,
   fields: {
@@ -236,7 +236,7 @@ export default defineSchema('app_setting', {
 User-generated content and community features.
 
 ```typescript
-// database/schemas/public/comment.ts
+// database/schemas/comment.ts
 export default defineSchema('comment', {
   archetype: Archetype.Contribution,
   parents: ['post'], // Comments belong to posts
@@ -361,7 +361,7 @@ Always start with the schema:
 bun strav make:schema order --archetype=entity
 
 # Define the schema fields
-# database/schemas/public/order.ts
+# database/schemas/order.ts
 ```
 
 ```typescript
@@ -385,13 +385,13 @@ export default defineSchema('order', {
 
 ```bash
 # Generate migration from schema
-bun strav generate:migration --scope=public --message="add order schema"
+bun strav generate:migration --message="add order schema"
 ```
 
 Review the generated migration:
 
 ```sql
--- database/migrations/public/20240410_100000_add_order_schema/01_tables/order/up.sql
+-- database/migrations/20240410_100000_add_order_schema/01_tables/order/up.sql
 CREATE TABLE "order" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "customer_id" UUID NOT NULL REFERENCES "user"("id"),
@@ -414,7 +414,7 @@ CREATE INDEX "order_status_idx" ON "order"("status");
 ### 3. Run Migration
 
 ```bash
-bun strav migrate --scope=public
+bun strav migrate
 ```
 
 ### 4. Generate Model (Optional)
@@ -422,7 +422,7 @@ bun strav migrate --scope=public
 Models can be auto-generated or hand-crafted:
 
 ```bash
-bun strav generate:models --scope=public
+bun strav generate:models
 ```
 
 ```typescript
@@ -508,7 +508,7 @@ export default defineSchema('user', {
 
 ```bash
 # Generate migration
-bun strav generate:migration --scope=public --message="add phone and 2FA to users"
+bun strav generate:migration --message="add phone and 2FA to users"
 ```
 
 ### Changing Field Types
@@ -598,22 +598,6 @@ export default defineSchema('user', {
 })
 ```
 
-### Multi-Domain Support
-
-```typescript
-// database/schemas/tenant/subscription.ts
-export default defineSchema('subscription', {
-  archetype: Archetype.Entity,
-  domain: 'tenant', // Tenant-specific schema
-  fields: {
-    id: t.uuid().primaryKey(),
-    plan: t.enum(['basic', 'pro', 'enterprise']).required(),
-    billing_cycle: t.enum(['monthly', 'yearly']).required(),
-    // ... other fields
-  },
-})
-```
-
 ## Schema Validation
 
 ### Runtime Validation
@@ -642,7 +626,7 @@ async function createUser(ctx: Context) {
 ```typescript
 // tests/schemas/user.test.ts
 import { test, expect } from 'bun:test'
-import UserSchema from '../../database/schemas/public/user.ts'
+import UserSchema from '../../database/schemas/user.ts'
 
 test('user schema validates email', () => {
   const valid = UserSchema.validate({
