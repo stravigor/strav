@@ -306,6 +306,8 @@ async function weeklyReport(userId: string) {
 
 If you're backfilling from a legacy system, `chain: false` lets you bulk-insert without breaking the future chain. Re-enable chaining for new events going forward.
 
+`AuditManager` refuses to boot with `chain: false` unless `app.env` is one of `local`, `development`, or `test` — in any other environment (including unset `app.env`, which defaults to `production`) it throws a `ConfigurationError`. The boot also emits a `console.warn` whenever chain is disabled, so the operator sees the loss of tamper-evidence in startup logs. Backfill scripts should run with `app.env=test` (or in a dedicated environment) and switch back to chained mode for the production cutover.
+
 ## Schema
 
 `_strav_audit_log`:

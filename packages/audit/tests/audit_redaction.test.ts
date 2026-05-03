@@ -5,8 +5,14 @@ import { audit } from '../src/helpers.ts'
 import { verifyChain } from '../src/integrity.ts'
 import { MemoryAuditDriver } from '../src/drivers/memory_driver.ts'
 
-function mockConfig(overrides: Record<string, unknown> = {}) {
-  const data: Record<string, unknown> = { audit: { driver: 'memory', chain: true, ...overrides } }
+function mockConfig(
+  overrides: Record<string, unknown> = {},
+  appEnv: string = 'test'
+) {
+  const data: Record<string, unknown> = {
+    app: { env: appEnv },
+    audit: { driver: 'memory', chain: true, ...overrides },
+  }
   return {
     get(key: string, def?: unknown) {
       const parts = key.split('.')

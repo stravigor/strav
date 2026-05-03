@@ -6,15 +6,20 @@ export interface CorsOptions {
   /**
    * Allowed origins. Determines Access-Control-Allow-Origin.
    *
+   * - `false` — disable CORS entirely (no headers emitted) — **default**
    * - `'*'` — allow all origins (incompatible with credentials)
    * - `string` — a single exact origin
    * - `string[]` — an allow-list of exact origins
    * - `RegExp` — pattern tested against the request Origin header
    * - `(origin: string) => boolean` — callback for custom logic
    *
-   * @default '*'
+   * The default of `false` is deliberately strict — apps must opt-in
+   * with an explicit allow-list. Passing `'*'` opens the API to
+   * cross-origin reads from any site.
+   *
+   * @default false
    */
-  origin?: string | string[] | RegExp | ((origin: string) => boolean)
+  origin?: false | string | string[] | RegExp | ((origin: string) => boolean)
 
   /**
    * Allowed HTTP methods for preflight responses.
@@ -47,7 +52,7 @@ export interface CorsOptions {
 
 /** Resolved config with defaults applied. */
 export interface ResolvedCorsConfig {
-  origin: string | string[] | RegExp | ((origin: string) => boolean)
+  origin: false | string | string[] | RegExp | ((origin: string) => boolean)
   methods: string[]
   allowedHeaders?: string[]
   exposedHeaders?: string[]
@@ -60,11 +65,22 @@ export interface ResolvedCorsConfig {
 // ---------------------------------------------------------------------------
 
 const DEFAULTS: ResolvedCorsConfig = {
-  origin: '*',
+  // Strict-by-default: refuse all cross-origin requests until the app
+  // explicitly opts in with an allow-list. Public APIs that want
+  // wide-open CORS must pass `cors({ origin: '*' })`.
+  origin: false,
   methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
   credentials: false,
   maxAge: 86400,
 }
+
+/**
+ * Real Origin headers are URL-shaped (`scheme://host[:port]`) and
+ * comfortably under 253 characters (DNS name max). Anything longer is
+ * either malformed or an attacker probing a regex matcher for a ReDoS
+ * window — reject before regex/array iteration.
+ */
+const MAX_ORIGIN_LENGTH = 253
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -85,7 +101,14 @@ export function resolveOrigin(
 ): string | null {
   const { origin, credentials } = config
 
+  // Strict default: CORS is off entirely.
+  if (origin === false) return null
+
   if (!requestOrigin) return credentials ? null : '*'
+
+  // Bound the origin length before any regex/array iteration to defend
+  // against ReDoS via pathological inputs.
+  if (requestOrigin.length > MAX_ORIGIN_LENGTH) return null
 
   if (origin === '*') return credentials ? requestOrigin : '*'
   if (typeof origin === 'string') return origin === requestOrigin ? origin : null

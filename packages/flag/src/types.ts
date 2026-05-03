@@ -50,3 +50,32 @@ export interface DriverConfig {
   driver: string
   [key: string]: unknown
 }
+
+// ── Actor ────────────────────────────────────────────────────────────────
+
+/**
+ * Who initiated a flag write. Optional, but recommended for accountability.
+ * Carried through to `flag:updated` event payloads so an audit hook can
+ * record the change. See `@strav/flag` CLAUDE.md for the recommended
+ * audit-integration pattern.
+ */
+export interface FlagActor {
+  type: string
+  id: string | number
+}
+
+// ── Events ───────────────────────────────────────────────────────────────
+
+/**
+ * Payload for the `flag:updated` Emitter event. Fired when `activate()`
+ * or `deactivate()` writes to the store.
+ */
+export interface FlagUpdatedEvent {
+  feature: string
+  scope: ScopeKey
+  value: unknown
+  /** Previous stored value (if any) — undefined when the flag had no prior store entry. */
+  previous: unknown
+  /** Who initiated the change. `null` when the caller did not provide an actor. */
+  actor: FlagActor | null
+}

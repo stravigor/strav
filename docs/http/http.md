@@ -798,16 +798,19 @@ router.cors({ origin: 'https://app.example.com', credentials: true })
 
 Call `router.cors()` once during bootstrap (after routes are loaded, before the server starts).
 
+**Strict-by-default.** When `router.cors()` is not called — or when called with `{ origin: false }` — no CORS headers are emitted and cross-origin browser requests are rejected. Apps must explicitly opt-in to whatever cross-origin policy they want. Public APIs that genuinely need open access pass `origin: '*'`.
+
 ### Options
 
 ```typescript
 router.cors({
-  // Allowed origins — string, array, RegExp, or callback
+  // Allowed origins — false (default), string, array, RegExp, or callback
+  origin: false,                // default — CORS disabled
   origin: 'https://app.example.com',
   origin: ['https://app.example.com', 'https://admin.example.com'],
   origin: /\.example\.com$/,
   origin: (origin) => allowedOrigins.has(origin),
-  origin: '*',                  // default — allow all
+  origin: '*',                  // public — any origin
 
   methods: ['GET', 'POST'],    // default: GET, HEAD, PUT, PATCH, POST, DELETE
   allowedHeaders: ['X-Custom'], // default: mirrors request's Access-Control-Request-Headers
@@ -818,6 +821,10 @@ router.cors({
 ```
 
 When `credentials: true` and origin is `'*'`, the actual request origin is reflected instead of a literal `*` (as required by the spec).
+
+### Origin-length bound (ReDoS guard)
+
+When you pass a `RegExp` (or any matcher), the resolver caps the request `Origin` header at 253 characters before testing. Real Origin headers are URL-shaped (`scheme://host[:port]`) and well under that limit; longer values are rejected up-front so a pathological regex can't exhibit catastrophic backtracking.
 
 ### How it works
 
@@ -832,14 +839,15 @@ When `credentials: true` and origin is `'*'`, the actual request origin is refle
 export default {
   // ...existing config...
   cors: {
-    origin: env('CORS_ORIGIN', '*'),
+    // Strict-by-default — set CORS_ORIGIN explicitly when CORS is needed.
+    origin: env('CORS_ORIGIN', null),
     credentials: env.bool('CORS_CREDENTIALS', false),
   },
 }
 
 // index.ts
 const corsConfig = config.get('http.cors') as CorsOptions | undefined
-if (corsConfig) router.cors(corsConfig)
+if (corsConfig?.origin) router.cors(corsConfig)
 ```
 
 ## Rate limiting

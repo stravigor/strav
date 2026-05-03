@@ -1,4 +1,5 @@
 import { ExternalServiceError } from '@strav/kernel'
+import { scrubProviderError } from './error_scrub.ts'
 
 export interface RetryOptions {
   maxRetries?: number
@@ -36,12 +37,14 @@ export async function retryableFetch(
     try {
       response = await fetch(url, init)
     } catch (err) {
-      // Network error (DNS, connection refused, etc.)
+      // Network error (DNS, connection refused, etc.). Some Bun/Node
+      // network errors include the URL — scrub before surfacing in
+      // case it carries credentials in query params.
       if (attempt === maxRetries) {
         throw new ExternalServiceError(
           service,
           undefined,
-          err instanceof Error ? err.message : String(err)
+          scrubProviderError(err instanceof Error ? err.message : String(err))
         )
       }
       await sleep(backoffDelay(attempt, baseDelay, maxDelay))
@@ -50,16 +53,17 @@ export async function retryableFetch(
 
     if (response.ok) return response
 
-    // Non-retryable status — fail immediately
+    // Non-retryable status — fail immediately. Provider response bodies
+    // can echo request headers or other context; scrub before wrapping.
     if (!retryable.includes(response.status)) {
       const text = await response.text()
-      throw new ExternalServiceError(service, response.status, text)
+      throw new ExternalServiceError(service, response.status, scrubProviderError(text))
     }
 
     // Retryable status — wait and retry (unless last attempt)
     if (attempt === maxRetries) {
       const text = await response.text()
-      throw new ExternalServiceError(service, response.status, text)
+      throw new ExternalServiceError(service, response.status, scrubProviderError(text))
     }
 
     const delay = parseRetryAfter(response) ?? backoffDelay(attempt, baseDelay, maxDelay)

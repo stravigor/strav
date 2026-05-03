@@ -48,7 +48,7 @@ Options:
 |--------|---------|-------------|
 | `ensureTables` | `true` | Auto-create the entries and aggregates tables |
 | `middleware` | `true` | Auto-register the request-tracking middleware on the router |
-| `dashboard` | `true` | Auto-register the dashboard routes at `/_devtools` |
+| `dashboard` | env-aware | Auto-register the dashboard routes at `/_devtools`. **Defaults to ON only when `app.env` is `local`/`development`/`test`**; in any other environment (including unset, which defaults to `production`) the dashboard does NOT mount unless you pass `dashboard: true` explicitly. Pass `false` to skip registration entirely. |
 | `guard` | — | Custom auth guard for the dashboard (see [Dashboard auth](#dashboard-auth)) |
 
 To add a custom dashboard auth guard:
@@ -566,6 +566,26 @@ collectors: {
 ```
 
 Note: stack traces in `ExceptionCollector` are NOT redacted — stack lines are free-form text that key-based redaction can't reach into. Application code must avoid putting secrets in error messages.
+
+## API rate limit + access events
+
+The `/_devtools/api/*` endpoints are rate-limited (120 requests / 60 s, keyed by client IP via `X-Forwarded-For` / `X-Real-IP`) and emit `devtools:access` Emitter events for every call. Wire the event to `@strav/audit` to track who hit the inspector — useful when the dashboard is mounted on a non-local environment behind a custom guard:
+
+```typescript
+import { Emitter } from '@strav/kernel'
+import { audit } from '@strav/audit'
+
+Emitter.on('devtools:access', e => {
+  audit
+    .by(e.actor ?? { type: 'system', id: 'unknown' })
+    .on('devtools', e.path)
+    .action('viewed')
+    .meta({ method: e.method, ip: e.ip })
+    .log()
+})
+```
+
+The access middleware short-circuits via `Emitter.listenerCount('devtools:access')` — zero cost when no listener is wired.
 
 ## Zero-cost when disabled
 

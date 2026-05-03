@@ -1,8 +1,39 @@
-import type { Router, Context } from '@strav/http'
+import type { Router, Context, Middleware, Next } from '@strav/http'
+import { rateLimit } from '@strav/http'
+import { Emitter } from '@strav/kernel'
 import { dashboardAuth } from './middleware.ts'
 import DevtoolsManager from '../devtools_manager.ts'
 import type { EntryType, AggregateFunction } from '../types.ts'
 import { PERIODS } from '../storage/aggregate_store.ts'
+
+/**
+ * Audit-friendly access event for every devtools API call. Apps can wire
+ * this through `@strav/audit` to track who hit the inspector.
+ *
+ * @example
+ * Emitter.on('devtools:access', e => {
+ *   audit.by(e.actor ?? { type: 'system', id: 'unknown' })
+ *     .on('devtools', e.path)
+ *     .action('viewed')
+ *     .meta({ method: e.method, ip: e.ip })
+ *     .log()
+ * })
+ */
+function emitAccessMiddleware(): Middleware {
+  return async (ctx: Context, next: Next) => {
+    if (Emitter.listenerCount('devtools:access') > 0) {
+      const user = ctx.get<{ id?: unknown; auditActorType?: () => string } | undefined>('user')
+      const actor = user?.id !== undefined ? user : null
+      void Emitter.emit('devtools:access', {
+        method: ctx.method,
+        path: ctx.path,
+        ip: ctx.header('x-forwarded-for') ?? ctx.header('x-real-ip') ?? null,
+        actor,
+      }).catch(() => {})
+    }
+    return next()
+  }
+}
 
 /**
  * Register the devtools dashboard routes on a router.
@@ -34,7 +65,19 @@ export function registerDashboard(
     r.group({}, dashboardRoutes).as(dashboardAlias)
 
     // ---- API routes ----
-    r.group({ prefix: '/api' }, apiRoutes).as(apiAlias)
+    // Rate-limit + access-event emit on top of the dashboard guard.
+    // The rate limit defends against log-mining via repeated /entries
+    // hits; the event emit lets apps wire `@strav/audit`.
+    r.group(
+      {
+        prefix: '/api',
+        middleware: [
+          rateLimit({ max: 120, window: 60_000 }),
+          emitAccessMiddleware(),
+        ],
+      },
+      apiRoutes
+    ).as(apiAlias)
   })
 
   function dashboardRoutes(r: Router): void {

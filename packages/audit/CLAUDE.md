@@ -28,7 +28,7 @@ Append-only, tamper-evident audit log. Records `actor → action → subject` ev
 ## Conventions
 - Hash chain is computed over a tuple form to avoid object-key-ordering ambiguity. See `canonicalize()` in audit_manager.ts.
 - Stores must enforce monotonic `id` ordering; chain verification walks `id ASC`.
-- `chain: false` in config disables the HMAC for high-volume non-compliance use cases (the row still inserts, just without a hash).
+- `chain: false` in config disables the HMAC for high-volume non-compliance use cases (the row still inserts, just without a hash). AuditManager refuses to boot with `chain: false` unless `app.env` is `local`/`development`/`test`; in any other env (including unset, which defaults to `production`) it throws a `ConfigurationError`. Also emits `console.warn` at boot when chain is disabled in a permitted env.
 - Subject and actor IDs are stored as VARCHAR(255). Pass numbers — the helper coerces via `String(...)`.
 - `audit.by(...)` accepts `{ type, id }` literals or any object exposing `auditActorType()` / `auditActorId()`.
 - `metadata` and `diff` are auto-scrubbed via `redact()` from `@strav/kernel` inside `AuditManager.append()`. Sensitive keys (`password`, `token`, `secret`, `api_key`, `authorization`, `cookie`, etc., case-insensitive) get their values replaced with `[REDACTED]` BEFORE the chain hash is computed, so `verifyChain()` recomputes identical hashes and integrity is preserved. The redactor is deterministic — same input always produces the same output, which is what the chain depends on.

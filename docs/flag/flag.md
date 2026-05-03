@@ -202,6 +202,34 @@ await flag.deactivateForEveryone('maintenance-mode')
 await flag.activateForEveryone('checkout-variant', 'variant-b')
 ```
 
+### Recording who flipped a flag
+
+`activate`, `deactivate`, and the `forEveryone` variants all accept an optional `actor: { type, id }` parameter. When supplied, the actor is included in the `flag:updated` Emitter event payload alongside the previous stored value:
+
+```typescript
+await flag.activate('maintenance-mode', true, null, { type: 'admin', id: '7' })
+await flag.for(user).deactivate('beta-ui', { type: 'admin', id: '7' })
+```
+
+Apps that want an audit trail of flag changes wire `flag:updated` to `@strav/audit` once at bootstrap:
+
+```typescript
+import { Emitter } from '@strav/kernel'
+import { audit } from '@strav/audit'
+
+Emitter.on('flag:updated', e => {
+  if (!e.actor) return
+  audit.by(e.actor)
+    .on('feature_flag', e.feature)
+    .action(e.value === false ? 'deactivated' : 'activated')
+    .diff({ value: e.previous }, { value: e.value })
+    .meta({ scope: e.scope })
+    .log()
+})
+```
+
+The flag package deliberately does not depend on `@strav/audit` — wiring is the consumer's choice. Calls without an actor still emit the event with `actor: null`, useful for system-driven flips that don't need attribution.
+
 ## Resolution flow
 
 When `flag.value('feature', scope)` is called:

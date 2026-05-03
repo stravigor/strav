@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test'
+import { Emitter } from '@strav/kernel'
 import FlagManager from '../src/flag_manager.ts'
 import { ArrayDriver } from '../src/drivers/array_driver.ts'
 import PendingScopedFeature from '../src/pending_scope.ts'
@@ -347,6 +348,72 @@ describe('FlagManager', () => {
     await FlagManager.value('global-feat') // resolve
     await FlagManager.deactivateForEveryone('global-feat')
     expect(await FlagManager.active('global-feat')).toBe(false)
+  })
+
+  // ── flag:updated event payload (audit hook) ───────────────────────
+
+  test('activate emits flag:updated with actor + previous value', async () => {
+    bootFlag()
+    FlagManager.define('feat', false)
+    const events: any[] = []
+    Emitter.on('flag:updated', (e: any) => events.push(e))
+
+    await FlagManager.activate('feat', true, null, { type: 'admin', id: '7' })
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      feature: 'feat',
+      value: true,
+      actor: { type: 'admin', id: '7' },
+    })
+    Emitter.removeAllListeners('flag:updated')
+  })
+
+  test('activate without actor emits actor: null', async () => {
+    bootFlag()
+    FlagManager.define('feat', false)
+    const events: any[] = []
+    Emitter.on('flag:updated', (e: any) => events.push(e))
+
+    await FlagManager.activate('feat')
+
+    expect(events[0].actor).toBeNull()
+    Emitter.removeAllListeners('flag:updated')
+  })
+
+  test('deactivate emits flag:updated with actor', async () => {
+    bootFlag()
+    FlagManager.define('feat', true)
+    await FlagManager.value('feat') // populate store
+    const events: any[] = []
+    Emitter.on('flag:updated', (e: any) => events.push(e))
+
+    await FlagManager.deactivate('feat', null, { type: 'admin', id: '7' })
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      feature: 'feat',
+      value: false,
+      actor: { type: 'admin', id: '7' },
+    })
+    Emitter.removeAllListeners('flag:updated')
+  })
+
+  test('for(scope).activate forwards the actor', async () => {
+    bootFlag()
+    FlagManager.define('feat', false)
+    const user = { id: 5 }
+    const events: any[] = []
+    Emitter.on('flag:updated', (e: any) => events.push(e))
+
+    await FlagManager.for(user).activate('feat', true, { type: 'admin', id: '99' })
+
+    expect(events[0]).toMatchObject({
+      feature: 'feat',
+      value: true,
+      actor: { type: 'admin', id: '99' },
+    })
+    Emitter.removeAllListeners('flag:updated')
   })
 
   // ── Batch operations ───────────────────────────────────────────────

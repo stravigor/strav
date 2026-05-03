@@ -34,5 +34,7 @@ export type {
   FeatureResolver,
   FeatureClass,
   FeatureClassConstructor,
+  FlagActor,
+  FlagUpdatedEvent,
 } from './types.ts'
 export { GLOBAL_SCOPE } from './types.ts'

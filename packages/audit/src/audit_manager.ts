@@ -30,6 +30,24 @@ export default class AuditManager {
       driver: config.get('audit.driver', 'database') as string,
       chain: config.get('audit.chain', true) as boolean,
     }
+
+    // Loud, fail-closed signal when tamper-evidence is disabled. In any
+    // non-local environment we refuse to boot rather than silently
+    // accept an unchained audit log — the most common way this misfires
+    // is a non-prod config getting copied into prod.
+    if (!AuditManager._config.chain) {
+      const env = (config.get('app.env', 'production') as string).toLowerCase()
+      const message =
+        'AuditManager: chain disabled — tamper-evidence is OFF. ' +
+        'Set `audit.chain: true` (default) for compliance / forensic use.'
+      if (env !== 'local' && env !== 'development' && env !== 'test') {
+        throw new ConfigurationError(
+          message + ` Refusing to boot with chain=false in app.env=${env}.`
+        )
+      }
+      console.warn(message)
+    }
+
     AuditManager._store = AuditManager.createStore(AuditManager._config.driver)
   }
 

@@ -5,6 +5,7 @@ import type {
   DriverConfig,
   FeatureResolver,
   FeatureClassConstructor,
+  FlagActor,
   ScopeKey,
   Scopeable,
 } from './types.ts'
@@ -131,27 +132,70 @@ export default class FlagManager {
 
   // ── Manual activation/deactivation ─────────────────────────────────
 
-  static async activate(feature: string, value?: unknown, scope?: Scopeable | null): Promise<void> {
+  /**
+   * Turn a flag on (or assign a rich value).
+   *
+   * Pass `actor` to record who made the change — the value is included
+   * in the `flag:updated` event payload so an audit hook can wire it
+   * through to `@strav/audit`. See the package CLAUDE.md for the
+   * recommended one-liner pattern.
+   */
+  static async activate(
+    feature: string,
+    value?: unknown,
+    scope?: Scopeable | null,
+    actor?: FlagActor | null
+  ): Promise<void> {
     const scopeKey = FlagManager.serializeScope(scope)
     const resolved = value !== undefined ? value : true
+    const previous = await FlagManager.store().get(feature, scopeKey)
     await FlagManager.store().set(feature, scopeKey, resolved)
     FlagManager._cache.set(FlagManager.cacheKey(feature, scopeKey), resolved)
-    await Emitter.emit('flag:updated', { feature, scope: scopeKey, value: resolved })
+    await Emitter.emit('flag:updated', {
+      feature,
+      scope: scopeKey,
+      value: resolved,
+      previous,
+      actor: actor ?? null,
+    })
   }
 
-  static async deactivate(feature: string, scope?: Scopeable | null): Promise<void> {
+  /**
+   * Turn a flag off.
+   *
+   * Pass `actor` to record who made the change — see {@link activate}.
+   */
+  static async deactivate(
+    feature: string,
+    scope?: Scopeable | null,
+    actor?: FlagActor | null
+  ): Promise<void> {
     const scopeKey = FlagManager.serializeScope(scope)
+    const previous = await FlagManager.store().get(feature, scopeKey)
     await FlagManager.store().set(feature, scopeKey, false)
     FlagManager._cache.set(FlagManager.cacheKey(feature, scopeKey), false)
-    await Emitter.emit('flag:updated', { feature, scope: scopeKey, value: false })
+    await Emitter.emit('flag:updated', {
+      feature,
+      scope: scopeKey,
+      value: false,
+      previous,
+      actor: actor ?? null,
+    })
   }
 
-  static async activateForEveryone(feature: string, value?: unknown): Promise<void> {
-    return FlagManager.activate(feature, value)
+  static async activateForEveryone(
+    feature: string,
+    value?: unknown,
+    actor?: FlagActor | null
+  ): Promise<void> {
+    return FlagManager.activate(feature, value, null, actor)
   }
 
-  static async deactivateForEveryone(feature: string): Promise<void> {
-    return FlagManager.deactivate(feature)
+  static async deactivateForEveryone(
+    feature: string,
+    actor?: FlagActor | null
+  ): Promise<void> {
+    return FlagManager.deactivate(feature, null, actor)
   }
 
   // ── Batch operations ───────────────────────────────────────────────

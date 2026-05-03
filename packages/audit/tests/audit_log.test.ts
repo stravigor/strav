@@ -5,8 +5,14 @@ import { audit } from '../src/helpers.ts'
 import { auditQuery } from '../src/queries.ts'
 import { MemoryAuditDriver } from '../src/drivers/memory_driver.ts'
 
-function mockConfig(overrides: Record<string, unknown> = {}) {
-  const data: Record<string, unknown> = { audit: { driver: 'memory', chain: true, ...overrides } }
+function mockConfig(
+  overrides: Record<string, unknown> = {},
+  appEnv: string = 'test'
+) {
+  const data: Record<string, unknown> = {
+    app: { env: appEnv },
+    audit: { driver: 'memory', chain: true, ...overrides },
+  }
   return {
     get(key: string, def?: unknown) {
       const parts = key.split('.')
@@ -67,13 +73,48 @@ describe('audit.by()/.on()/.action()/.log()', () => {
     expect(new Set([a.hash, b.hash, c.hash]).size).toBe(3)
   })
 
-  test('omits chain hashes when chain is disabled', async () => {
-    new AuditManager(mockConfig({ chain: false }))
-    AuditManager.useStore(new MemoryAuditDriver())
+  test('omits chain hashes when chain is disabled (non-prod env)', async () => {
+    const originalWarn = console.warn
+    const calls: unknown[][] = []
+    console.warn = (...args: unknown[]) => calls.push(args)
+    try {
+      new AuditManager(mockConfig({ chain: false }, 'local'))
+      AuditManager.useStore(new MemoryAuditDriver())
 
-    const event = await audit.by({ type: 'user', id: 1 }).on('lead', '1').action('created').log()
-    expect(event.hash).toBeUndefined()
-    expect(event.prevHash).toBeNull()
+      const event = await audit.by({ type: 'user', id: 1 }).on('lead', '1').action('created').log()
+      expect(event.hash).toBeUndefined()
+      expect(event.prevHash).toBeNull()
+
+      // A warning was emitted at boot — operators must see this in logs.
+      expect(calls.length).toBeGreaterThan(0)
+      const message = String(calls[0]?.[0] ?? '')
+      expect(message).toContain('chain disabled')
+    } finally {
+      console.warn = originalWarn
+    }
+  })
+
+  test('refuses to boot with chain=false in production', () => {
+    expect(() => new AuditManager(mockConfig({ chain: false }, 'production'))).toThrow(
+      /Refusing to boot with chain=false/
+    )
+  })
+
+  test('refuses to boot with chain=false when app.env is unset (defaults to production)', () => {
+    // Build a config that has no app.env key at all
+    const data: Record<string, unknown> = { audit: { driver: 'memory', chain: false } }
+    const cfg = {
+      get(key: string, def?: unknown) {
+        const parts = key.split('.')
+        let cur: any = data
+        for (const p of parts) {
+          if (cur === undefined || cur === null) return def
+          cur = cur[p]
+        }
+        return cur !== undefined ? cur : def
+      },
+    } as any
+    expect(() => new AuditManager(cfg)).toThrow(/Refusing to boot with chain=false/)
   })
 
   test('accepts AuditActorLike objects via .by()', async () => {

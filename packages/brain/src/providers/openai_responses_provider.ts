@@ -1,6 +1,7 @@
 import { parseSSE } from '../utils/sse_parser.ts'
 import { retryableFetch, type RetryOptions } from '../utils/retry.ts'
 import { ExternalServiceError } from '@strav/kernel'
+import { scrubProviderError } from '../utils/error_scrub.ts'
 import type {
   AIProvider,
   CompletionRequest,
@@ -150,7 +151,8 @@ export class OpenAIResponsesProvider implements AIProvider {
 
       // ── Error ─────────────────────────────────────────────────────
       if (eventType === 'error') {
-        throw new ExternalServiceError('OpenAI', undefined, data.message ?? JSON.stringify(data))
+        const message = typeof data.message === 'string' ? data.message : JSON.stringify(data)
+        throw new ExternalServiceError('OpenAI', undefined, scrubProviderError(message))
       }
     }
   }

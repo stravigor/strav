@@ -898,6 +898,27 @@ class OllamaProvider implements AIProvider {
 BrainManager.useProvider(new OllamaProvider())
 ```
 
+### Error scrubbing in providers
+
+Built-in providers (Anthropic, OpenAI, Google, DeepSeek) route all error paths through `retryableFetch()` from `@strav/brain/utils/retry`, which scrubs error text via `scrubProviderError()` before wrapping in `ExternalServiceError`. The scrubber:
+
+- Tries to JSON-parse the body and runs it through `redact()` from `@strav/kernel` (catches structured fields named `password`/`token`/`secret`/`api_key`/`authorization`/etc., case-insensitive).
+- Falls back to regex passes for plain-text bodies — Bearer tokens, `sk-` / `sk_` prefixed keys, `?api_key=…` query strings, and header-style `x-api-key: value` embeds all become `[REDACTED]`.
+
+If you implement a custom provider that throws errors derived from response bodies, reuse the helper:
+
+```typescript
+import { ExternalServiceError } from '@strav/kernel'
+import { scrubProviderError } from '@strav/brain/utils/error_scrub'
+
+if (!response.ok) {
+  const text = await response.text()
+  throw new ExternalServiceError(this.name, response.status, scrubProviderError(text))
+}
+```
+
+The scrubber is deterministic and idempotent — it's safe to apply twice if you wrap an already-scrubbed message.
+
 ## Testing
 
 Swap in a mock provider with `BrainManager.useProvider()`:

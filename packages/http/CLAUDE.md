@@ -13,6 +13,10 @@ HTTP layer for the Strav framework — router, server, middleware, authenticatio
 
 ## Architecture
 - src/http/ — Router, Server, Context, CORS, rate limiting, cookies, security headers
+
+## CORS default
+
+`resolveCorsConfig()` defaults `origin` to `false` (strict-by-default — no CORS headers emitted). Apps must opt-in explicitly via `cors({ origin: 'https://app.example.com' })` or `cors({ origin: '*' })`. The previous default of `'*'` was permissive and unsafe — any site could read API responses. `resolveOrigin()` also bounds the request `Origin` header at 253 characters before regex / array iteration to defend against ReDoS via pathological inputs.
 - src/session/ — Session manager and middleware
 - src/validation/ — Validation engine and rules
 - src/policy/ — Authorization policies

@@ -1,4 +1,4 @@
-import type { Scopeable } from './types.ts'
+import type { FlagActor, Scopeable } from './types.ts'
 import FlagManager from './flag_manager.ts'
 
 /** Fluent scoped feature check — created by `FlagManager.for(scope)`. */
@@ -25,12 +25,12 @@ export default class PendingScopedFeature {
     return FlagManager.when(feature, onActive, onInactive, this.scope)
   }
 
-  activate(feature: string, value?: unknown): Promise<void> {
-    return FlagManager.activate(feature, value, this.scope)
+  activate(feature: string, value?: unknown, actor?: FlagActor | null): Promise<void> {
+    return FlagManager.activate(feature, value, this.scope, actor)
   }
 
-  deactivate(feature: string): Promise<void> {
-    return FlagManager.deactivate(feature, this.scope)
+  deactivate(feature: string, actor?: FlagActor | null): Promise<void> {
+    return FlagManager.deactivate(feature, this.scope, actor)
   }
 
   forget(feature: string): Promise<void> {
