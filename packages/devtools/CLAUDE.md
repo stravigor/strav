@@ -27,3 +27,8 @@ Application debugging and performance monitoring. Combines a request inspector w
 - Collectors capture individual entries, recorders aggregate metrics
 - Dashboard is self-contained in src/dashboard/ — bundled as static assets
 - Should only be enabled in development environments
+
+## Redaction
+- `RequestCollector` (headers) and `LogCollector` (context) pipe captured payloads through `redact()` from `@strav/kernel` before storage. Default deny-list covers Authorization, Cookie, X-Api-Key, X-Auth-Token, X-Csrf-Token, Proxy-Authorization, password/token/secret/api_key fields, and common casing variants — see `packages/kernel/src/helpers/redact.ts`.
+- Both collectors accept a `redactKeys: string[]` option that extends the default deny-list with app-specific names.
+- Stack traces in `ExceptionCollector` are NOT redacted. Stack lines are free-form text; key-based redaction can't reach into them. Application code must avoid putting secrets in error messages.

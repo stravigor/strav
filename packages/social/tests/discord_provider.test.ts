@@ -82,6 +82,36 @@ describe('DiscordProvider', () => {
       expect(user.expiresIn).toBe(604800)
     })
 
+    test('maps verified=true to emailVerified=true', async () => {
+      mockFetch([
+        { body: { access_token: 'tok' } },
+        { body: { id: '1', username: 'x', email: 'a@b.com', verified: true } },
+      ])
+      const provider = new DiscordProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+      const user = await provider.user(ctx)
+      expect(user.emailVerified).toBe(true)
+    })
+
+    test('maps verified=false to emailVerified=false', async () => {
+      mockFetch([
+        { body: { access_token: 'tok' } },
+        { body: { id: '1', username: 'x', email: 'a@b.com', verified: false } },
+      ])
+      const provider = new DiscordProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+      const user = await provider.user(ctx)
+      expect(user.emailVerified).toBe(false)
+    })
+
     test('uses default avatar when no custom avatar', async () => {
       mockFetch([
         { body: { access_token: 'tok' } },

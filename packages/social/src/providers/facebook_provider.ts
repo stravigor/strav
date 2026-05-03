@@ -34,11 +34,15 @@ export class FacebookProvider extends AbstractProvider {
 
   protected mapUserToObject(data: Record<string, unknown>): SocialUser {
     const picture = data.picture as { data?: { url?: string } } | undefined
+    const email = (data.email as string) ?? null
 
     return {
       id: data.id as string,
       name: (data.name as string) ?? null,
-      email: (data.email as string) ?? null,
+      email,
+      // Facebook's Graph API only returns the user's verified primary email;
+      // an unverified address is omitted from the response entirely.
+      emailVerified: email !== null,
       avatar: picture?.data?.url ?? null,
       nickname: null,
       token: '',

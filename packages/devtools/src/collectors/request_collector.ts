@@ -1,4 +1,5 @@
 import type { Context, Middleware, Next } from '@strav/http'
+import { redact } from '@strav/kernel'
 import Collector from './collector.ts'
 import DevtoolsManager from '../devtools_manager.ts'
 import type EntryStore from '../storage/entry_store.ts'
@@ -6,6 +7,8 @@ import type { CollectorOptions } from '../types.ts'
 
 interface RequestCollectorOptions extends CollectorOptions {
   sizeLimit?: number
+  /** Extra header/field names whose values should be redacted before storage. */
+  redactKeys?: string[]
 }
 
 /**
@@ -21,10 +24,12 @@ interface RequestCollectorOptions extends CollectorOptions {
  */
 export default class RequestCollector extends Collector {
   private sizeLimit: number
+  private extraRedactKeys: string[]
 
   constructor(store: EntryStore, options: RequestCollectorOptions) {
     super(store, options)
     this.sizeLimit = (options.sizeLimit ?? 64) * 1024 // KB → bytes
+    this.extraRedactKeys = options.redactKeys ?? []
   }
 
   register(): void {
@@ -72,24 +77,27 @@ export default class RequestCollector extends Collector {
           memory: Math.round((process.memoryUsage.rss() / 1024 / 1024) * 100) / 100,
         }
 
-        // Request headers (redact sensitive ones)
-        const requestHeaders: Record<string, string> = {}
+        // Request headers — redact secrets before storing. The shared
+        // kernel redactor covers Authorization, Cookie, X-Api-Key,
+        // X-Auth-Token, X-Csrf-Token, Proxy-Authorization, etc. The
+        // collector's redactKeys option extends the deny-list per app.
+        const rawRequestHeaders: Record<string, string> = {}
         ctx.headers.forEach((value, key) => {
-          if (key === 'authorization' || key === 'cookie') {
-            requestHeaders[key] = '********'
-          } else {
-            requestHeaders[key] = value
-          }
+          rawRequestHeaders[key] = value
         })
-        content.requestHeaders = requestHeaders
+        content.requestHeaders = redact(rawRequestHeaders, {
+          extraKeys: collector.extraRedactKeys,
+        })
 
         // Response headers
         if (response!) {
-          const responseHeaders: Record<string, string> = {}
+          const rawResponseHeaders: Record<string, string> = {}
           response.headers.forEach((value, key) => {
-            responseHeaders[key] = value
+            rawResponseHeaders[key] = value
           })
-          content.responseHeaders = responseHeaders
+          content.responseHeaders = redact(rawResponseHeaders, {
+            extraKeys: collector.extraRedactKeys,
+          })
           content.status = response.status
         }
 

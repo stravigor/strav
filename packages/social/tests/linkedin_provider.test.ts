@@ -83,6 +83,36 @@ describe('LinkedInProvider', () => {
       expect(user.token).toBe('li-token')
     })
 
+    test('maps email_verified=true to emailVerified=true', async () => {
+      mockFetch([
+        { body: { access_token: 'tok' } },
+        { body: { sub: '1', email: 'a@b.com', email_verified: true } },
+      ])
+      const provider = new LinkedInProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+      const user = await provider.user(ctx)
+      expect(user.emailVerified).toBe(true)
+    })
+
+    test('maps missing email_verified to emailVerified=false', async () => {
+      mockFetch([
+        { body: { access_token: 'tok' } },
+        { body: { sub: '1', email: 'a@b.com' } },
+      ])
+      const provider = new LinkedInProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+      const user = await provider.user(ctx)
+      expect(user.emailVerified).toBe(false)
+    })
+
     test('sends token exchange to correct URL', async () => {
       mockFetch([{ body: { access_token: 'tok' } }, { body: { sub: '1', name: 'X' } }])
 

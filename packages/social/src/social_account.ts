@@ -1,6 +1,28 @@
+import { EncryptionManager } from '@strav/kernel'
 import { extractUserId } from '@strav/database'
 import SocialManager from './social_manager.ts'
 import type { SocialUser } from './types.ts'
+
+const ENC_PREFIX = 'enc:v1:'
+
+/**
+ * Encrypt an OAuth token before persisting it. The `enc:v1:` prefix is the
+ * sentinel that lets reads distinguish encrypted values from legacy
+ * plaintext rows that predate the encryption-at-rest migration.
+ */
+function encryptToken(plain: string): string {
+  return ENC_PREFIX + EncryptionManager.encrypt(plain)
+}
+
+/**
+ * Decrypt a stored token. Values without the `enc:v1:` prefix are assumed
+ * to be legacy plaintext (predate encryption-at-rest); they are returned
+ * as-is and re-encrypted on next write.
+ */
+function decryptToken(stored: string): string {
+  if (!stored.startsWith(ENC_PREFIX)) return stored
+  return EncryptionManager.decrypt(stored.slice(ENC_PREFIX.length))
+}
 
 /** The DB record for a social account link. */
 export interface SocialAccountData {
@@ -86,8 +108,8 @@ export default class SocialAccount {
         userId,
         data.provider,
         data.providerId,
-        data.token,
-        data.refreshToken ?? null,
+        encryptToken(data.token),
+        data.refreshToken != null ? encryptToken(data.refreshToken) : null,
         data.expiresAt ?? null,
       ]
     )
@@ -95,8 +117,15 @@ export default class SocialAccount {
   }
 
   /**
-   * Find an existing social account by provider or create a new one.
-   * If the account already exists, its tokens are updated.
+   * Find an existing social account by `(provider, providerId)` or create a
+   * new one. If the account already exists, its tokens are updated.
+   *
+   * SECURITY: This function does NOT validate the email. If the caller is
+   * passing in an existing application `user` that was located by
+   * `socialUser.email`, the caller MUST first verify
+   * `socialUser.emailVerified === true`. Linking by an unverified
+   * provider email is a known account-takeover vector — see the
+   * "Verified-email gate" section in this package's CLAUDE.md.
    */
   static async findOrCreate(
     provider: string,
@@ -131,7 +160,8 @@ export default class SocialAccount {
   }
 
   /**
-   * Update OAuth tokens for an existing social account.
+   * Update OAuth tokens for an existing social account. Tokens are
+   * encrypted at rest — pass plaintext values; the column stores ciphertext.
    */
   static async updateTokens(
     id: number,
@@ -139,10 +169,12 @@ export default class SocialAccount {
     refreshToken: string | null,
     expiresAt: Date | null
   ): Promise<void> {
+    const encryptedToken = encryptToken(token)
+    const encryptedRefresh = refreshToken != null ? encryptToken(refreshToken) : null
     await SocialAccount.sql`
       UPDATE "social_account"
-      SET "token" = ${token},
-          "refresh_token" = ${refreshToken},
+      SET "token" = ${encryptedToken},
+          "refresh_token" = ${encryptedRefresh},
           "expires_at" = ${expiresAt},
           "updated_at" = NOW()
       WHERE "id" = ${id}
@@ -169,13 +201,14 @@ export default class SocialAccount {
 
   private static hydrate(row: Record<string, unknown>): SocialAccountData {
     const fk = SocialAccount.fk
+    const rawRefresh = (row.refresh_token as string) ?? null
     return {
       id: row.id as number,
       userId: row[fk] as string | number,
       provider: row.provider as string,
       providerId: row.provider_id as string,
-      token: row.token as string,
-      refreshToken: (row.refresh_token as string) ?? null,
+      token: decryptToken(row.token as string),
+      refreshToken: rawRefresh != null ? decryptToken(rawRefresh) : null,
       expiresAt: (row.expires_at as Date) ?? null,
       createdAt: row.created_at as Date,
       updatedAt: row.updated_at as Date,

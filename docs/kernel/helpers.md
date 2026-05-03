@@ -143,6 +143,79 @@ randomHex(32)   // 64-char hex string (32 bytes)
 
 Used internally for CSRF tokens and session IDs.
 
+## redact() — secret redaction
+
+Scrub secrets from any payload before it lands in a log, audit row, devtools capture, or error wrapper. Returns a deep copy of the input with values for sensitive keys replaced by `[REDACTED]`.
+
+```typescript
+import { redact, defaultRedactKeys } from '@strav/kernel'
+```
+
+### Basic usage
+
+```typescript
+redact({ authorization: 'Bearer abc', accept: 'application/json' })
+// → { authorization: '[REDACTED]', accept: 'application/json' }
+
+redact({
+  user: { id: 1, password: 'p4ss', name: 'Alice' },
+  tokens: [{ access_token: 't1' }, { access_token: 't2' }],
+})
+// → {
+//     user: { id: 1, password: '[REDACTED]', name: 'Alice' },
+//     tokens: [{ access_token: '[REDACTED]' }, { access_token: '[REDACTED]' }],
+//   }
+```
+
+Matching is **case-insensitive and exact** (not substring). The default deny-list covers:
+
+- HTTP auth headers: `authorization`, `cookie`, `set-cookie`, `x-api-key`, `x-auth-token`, `x-csrf-token`, `csrf-token`, `proxy-authorization`
+- Common secret fields: `password`, `passwd`, `pwd`, `token`, `access_token`, `refresh_token`, `id_token`, `secret`, `client_secret`, `api_key`, `apikey`
+- Session identifiers: `session`, `session_id`, `sessionid`
+- Common camelCase variants of the above (`accessToken`, `refreshToken`, `clientSecret`, `csrftoken`, etc.)
+
+The full list is exported as `defaultRedactKeys` for inspection.
+
+### Options
+
+```typescript
+interface RedactOptions {
+  extraKeys?: readonly string[]   // Add to the default list (case-insensitive)
+  keys?: readonly string[]        // Replace the default list entirely
+  replacement?: string            // Default '[REDACTED]'
+}
+```
+
+```typescript
+// Extend the default deny-list with app-specific names
+redact(payload, { extraKeys: ['internalCode', 'x-tenant-id'] })
+
+// Replace the deny-list entirely (e.g., for a domain-specific scrubber)
+redact(payload, { keys: ['ssn', 'dob'] })
+
+// Custom replacement string
+redact(payload, { replacement: '***' })
+```
+
+### Behavior
+
+- **Walks** plain objects and arrays.
+- **Skips** (passes through unchanged): `Date`, `Buffer`, typed arrays, `null`, `undefined`, primitives, class instances. Class instances are not traversed — properties of `User`, `Headers`, etc. are not redacted, so flatten to a plain object first if you need recursion.
+- **Does not mutate** the input. The returned object is a new structure.
+- **Replaces only string-shaped values** at deny-listed keys. A null or undefined value at a deny-listed key passes through unchanged.
+
+### Where it's used
+
+- `@strav/devtools` `RequestCollector` (request and response headers) and `LogCollector` (structured `context` payloads).
+- Application code: anywhere a payload originating from user input or external systems will be persisted to an observability surface.
+
+```typescript
+import { Logger } from '@strav/kernel'
+import { redact } from '@strav/kernel'
+
+Logger.warn('payment failed', redact(rawWebhookPayload))
+```
+
 ## Identity
 
 ```typescript

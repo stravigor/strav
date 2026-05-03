@@ -42,6 +42,7 @@ export class DiscordProvider extends AbstractProvider {
       id: data.id as string,
       name: (data.global_name as string) ?? null,
       email: (data.email as string) ?? null,
+      emailVerified: data.verified === true,
       avatar,
       nickname: (data.username as string) ?? null,
       token: '',

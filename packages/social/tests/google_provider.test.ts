@@ -51,17 +51,6 @@ describe('GoogleProvider', () => {
       expect(ctx.session.get('social_state')).toBe(state)
     })
 
-    test('omits state in stateless mode', () => {
-      const provider = new GoogleProvider(config)
-      const ctx = mockContext()
-
-      const response = provider.stateless().redirect(ctx)
-      const location = response.headers.get('Location')!
-      const url = new URL(location)
-
-      expect(url.searchParams.has('state')).toBe(false)
-    })
-
     test('adds extra scopes', () => {
       const provider = new GoogleProvider(config)
       const ctx = mockContext()
@@ -143,6 +132,36 @@ describe('GoogleProvider', () => {
       expect(user.expiresIn).toBe(3600)
     })
 
+    test('maps email_verified=true to emailVerified=true', async () => {
+      mockFetch([
+        { body: { access_token: 'tok', expires_in: 3600 } },
+        { body: { sub: '1', email: 'x@y.com', email_verified: true } },
+      ])
+      const provider = new GoogleProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+      const user = await provider.user(ctx)
+      expect(user.emailVerified).toBe(true)
+    })
+
+    test('maps missing email_verified to emailVerified=false', async () => {
+      mockFetch([
+        { body: { access_token: 'tok', expires_in: 3600 } },
+        { body: { sub: '1', email: 'x@y.com' } },
+      ])
+      const provider = new GoogleProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+      const user = await provider.user(ctx)
+      expect(user.emailVerified).toBe(false)
+    })
+
     test('sends correct token exchange request', async () => {
       mockFetch([
         { body: { access_token: 'tok', expires_in: 3600 } },
@@ -178,21 +197,6 @@ describe('GoogleProvider', () => {
       })
 
       await expect(provider.user(ctx)).rejects.toThrow('Invalid state parameter')
-    })
-
-    test('skips state verification in stateless mode', async () => {
-      mockFetch([
-        { body: { access_token: 'tok', expires_in: 3600 } },
-        { body: { sub: '1', name: 'X', email: 'x@y.com' } },
-      ])
-
-      const provider = new GoogleProvider(config)
-      const ctx = mockContext({
-        query: { code: 'auth-code' },
-      })
-
-      const user = await provider.stateless().user(ctx)
-      expect(user.id).toBe('1')
     })
 
     test('throws on missing authorization code', async () => {

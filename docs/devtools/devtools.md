@@ -148,17 +148,22 @@ Collectors capture individual events and store them as entries.
 
 ### Request
 
-Middleware-based. Captures method, path, status, duration, memory usage, request/response headers, and IP. Sensitive headers (`authorization`, `cookie`) are automatically redacted.
+Middleware-based. Captures method, path, status, duration, memory usage, request/response headers, and IP. Sensitive headers and body fields are automatically redacted before storage — see [Redaction](#redaction).
 
 Tags: `status:<code>`, `slow` (if >1000ms), `user:<id>` (if authenticated).
 
 ```typescript
 collectors: {
-  request: { enabled: true, sizeLimit: 64 },
+  request: {
+    enabled: true,
+    sizeLimit: 64,
+    // App-specific keys to add to the redaction deny-list (extends defaults)
+    redactKeys: ['x-internal-tenant', 'x-employee-id'],
+  },
 }
 ```
 
-The `sizeLimit` option (in KB) controls the maximum body size captured.
+The `sizeLimit` option (in KB) controls the maximum body size captured. The `redactKeys` option appends to the default deny-list (which already covers `authorization`, `cookie`, `x-api-key`, `x-auth-token`, `x-csrf-token`, `proxy-authorization`, plus body fields named `password`, `token`, `secret`, `api_key`, etc.).
 
 ### Query
 
@@ -182,11 +187,16 @@ Tags: error class name (e.g. `TypeError`).
 
 ### Log
 
-Listens to `log:entry` Emitter events. Filters by minimum level.
+Listens to `log:entry` Emitter events. Filters by minimum level. The structured `context` object on each entry is passed through `redact()` before storage — see [Redaction](#redaction).
 
 ```typescript
 collectors: {
-  log: { enabled: true, level: 'debug' },
+  log: {
+    enabled: true,
+    level: 'debug',
+    // App-specific keys to add to the redaction deny-list
+    redactKeys: ['internalCode'],
+  },
 }
 ```
 
@@ -532,6 +542,30 @@ Indexes: `batch_id`, `(type, created_at DESC)`, `family_hash` (partial, where no
 | `count` | `int` | Number of samples in this bucket |
 
 Unique constraint: `(bucket, period, type, aggregate, key)`.
+
+## Redaction
+
+Captured payloads are scrubbed before they hit storage. Both `RequestCollector` (request and response headers) and `LogCollector` (log `context` object) pipe values through `redact()` from `@strav/kernel` — see the [helpers doc](../kernel/helpers.md#redact-secret-redaction).
+
+The default deny-list catches:
+
+- HTTP auth headers: `authorization`, `cookie`, `set-cookie`, `x-api-key`, `x-auth-token`, `x-csrf-token`, `proxy-authorization`
+- Common secret fields: `password`, `passwd`, `pwd`, `token`, `access_token`, `refresh_token`, `id_token`, `secret`, `client_secret`, `api_key`, `apikey`
+- Session identifiers: `session`, `session_id`, `sessionid`
+- Plus common casing variants of all of the above (case-insensitive exact-match)
+
+Matched values are replaced with the literal string `[REDACTED]`. Matching walks nested plain objects and arrays; `Date`, `Buffer`, typed arrays, and class instances pass through unchanged.
+
+To extend the deny-list with app-specific names, pass `redactKeys` to the collector:
+
+```typescript
+collectors: {
+  request: { enabled: true, redactKeys: ['x-internal-tenant'] },
+  log: { enabled: true, redactKeys: ['internalCode'] },
+}
+```
+
+Note: stack traces in `ExceptionCollector` are NOT redacted — stack lines are free-form text that key-based redaction can't reach into. Application code must avoid putting secrets in error messages.
 
 ## Zero-cost when disabled
 

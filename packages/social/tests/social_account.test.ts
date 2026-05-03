@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test'
+import { EncryptionManager } from '@strav/kernel'
 import SocialAccount from '../src/social_account.ts'
 import SocialManager from '../src/social_manager.ts'
 import type { SocialUser } from '../src/types.ts'
@@ -47,6 +48,7 @@ function socialUser(overrides: Partial<SocialUser> = {}): SocialUser {
     id: 'gh-999',
     name: 'Test User',
     email: 'test@example.com',
+    emailVerified: true,
     avatar: null,
     nickname: 'tester',
     token: 'new-token',
@@ -64,6 +66,7 @@ function socialUser(overrides: Partial<SocialUser> = {}): SocialUser {
 
 describe('SocialAccount', () => {
   beforeEach(() => {
+    EncryptionManager.useKey('test-key-for-social-account')
     setupManager()
   })
 
@@ -135,6 +138,82 @@ describe('SocialAccount', () => {
       expect(result.id).toBe(1)
       expect(calls[0].query).toContain('user_id')
       expect(calls[0].params[0]).toBe('42')
+    })
+
+    test('encrypts token and refresh_token before persisting', async () => {
+      const calls: { query: string; params: any[] }[] = []
+      const db = {
+        sql: Object.assign(() => Promise.resolve([]), {
+          unsafe: (query: string, params: any[]) => {
+            calls.push({ query, params })
+            return Promise.resolve([sampleRow])
+          },
+        }),
+      } as any
+      new SocialManager(db, mockConfig({ social: { providers: {} } }))
+
+      await SocialAccount.create({
+        user: '42',
+        provider: 'github',
+        providerId: 'gh-999',
+        token: 'plaintext-access',
+        refreshToken: 'plaintext-refresh',
+      })
+
+      const [, , , storedToken, storedRefresh] = calls[0].params
+      expect(storedToken).toMatch(/^enc:v1:/)
+      expect(storedToken).not.toContain('plaintext-access')
+      expect(storedRefresh).toMatch(/^enc:v1:/)
+      expect(storedRefresh).not.toContain('plaintext-refresh')
+    })
+
+    test('passes null refresh token through unencrypted', async () => {
+      const calls: { params: any[] }[] = []
+      const db = {
+        sql: Object.assign(() => Promise.resolve([]), {
+          unsafe: (_query: string, params: any[]) => {
+            calls.push({ params })
+            return Promise.resolve([sampleRow])
+          },
+        }),
+      } as any
+      new SocialManager(db, mockConfig({ social: { providers: {} } }))
+
+      await SocialAccount.create({
+        user: '42',
+        provider: 'github',
+        providerId: 'gh-999',
+        token: 'tok',
+        refreshToken: null,
+      })
+
+      expect(calls[0].params[4]).toBeNull()
+    })
+  })
+
+  describe('hydrate (encryption round-trip)', () => {
+    test('decrypts an encrypted token on read', async () => {
+      // Encrypt a known plaintext using the test key, then place it in a
+      // sample row and read it back through findByProvider → hydrate.
+      const { EncryptionManager } = await import('@strav/kernel')
+      const stored = 'enc:v1:' + EncryptionManager.encrypt('round-trip-token')
+      const storedRefresh = 'enc:v1:' + EncryptionManager.encrypt('round-trip-refresh')
+
+      setupManager([{ ...sampleRow, token: stored, refresh_token: storedRefresh }])
+      const result = await SocialAccount.findByProvider('github', 'gh-999')
+
+      expect(result!.token).toBe('round-trip-token')
+      expect(result!.refreshToken).toBe('round-trip-refresh')
+    })
+
+    test('passes legacy plaintext tokens through unchanged (backward compat)', async () => {
+      // No 'enc:v1:' prefix → row is from before encryption-at-rest landed.
+      // Must not throw and must return the plaintext as-is.
+      setupManager([{ ...sampleRow, token: 'legacy-plain', refresh_token: 'legacy-refresh' }])
+      const result = await SocialAccount.findByProvider('github', 'gh-999')
+
+      expect(result!.token).toBe('legacy-plain')
+      expect(result!.refreshToken).toBe('legacy-refresh')
     })
   })
 

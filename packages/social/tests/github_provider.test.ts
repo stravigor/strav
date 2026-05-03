@@ -86,6 +86,24 @@ describe('GitHubProvider', () => {
       expect(user.email).toBe('john@example.com')
       expect(user.avatar).toBe('https://avatars.githubusercontent.com/u/12345')
       expect(user.token).toBe('gh-token')
+      expect(user.emailVerified).toBe(true)
+    })
+
+    test('maps null email to emailVerified=false', async () => {
+      mockFetch([
+        { body: { access_token: 'tok' } },
+        { body: { id: 1, login: 'x', name: null, email: null, avatar_url: null } },
+        { body: [] },
+      ])
+      const provider = new GitHubProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+      const user = await provider.user(ctx)
+      expect(user.email).toBeNull()
+      expect(user.emailVerified).toBe(false)
     })
 
     test('falls back to primary email when profile email is null', async () => {

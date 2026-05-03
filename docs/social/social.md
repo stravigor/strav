@@ -4,7 +4,7 @@ The social module (`@strav/social`) provides OAuth 2.0 social authentication wit
 
 Built-in providers: **Google**, **GitHub**, **Discord**, **Facebook**, **LinkedIn**. Custom providers can be added via `extend()`.
 
-Requires the `session()` middleware from the [session module](./session.md) for CSRF state verification (unless running in stateless mode).
+Requires the `session()` middleware from the [session module](./session.md) for CSRF state verification — this is non-optional. The previously-available `provider.stateless()` opt-out has been removed because it silently disabled CSRF protection. If you have an access token from an out-of-band flow (e.g., a mobile client that ran its own OAuth dance), use [`userFromToken()`](#user-from-token) instead.
 
 ## Installation
 
@@ -110,22 +110,28 @@ router.group({ middleware: [session()] }, r => {
   r.get('/auth/github/callback', async ctx => {
     const githubUser = await social.driver('github').user(ctx)
 
-    // githubUser.id       → "12345"
-    // githubUser.name     → "John Doe"
-    // githubUser.email    → "john@example.com"
-    // githubUser.avatar   → "https://avatars.githubusercontent.com/u/12345"
-    // githubUser.nickname → "johndoe"
-    // githubUser.token    → "gho_xxxx..."
+    // githubUser.id            → "12345"
+    // githubUser.name          → "John Doe"
+    // githubUser.email         → "john@example.com"
+    // githubUser.emailVerified → true
+    // githubUser.avatar        → "https://avatars.githubusercontent.com/u/12345"
+    // githubUser.nickname      → "johndoe"
+    // githubUser.token         → "gho_xxxx..."
 
-    // Find or create your app user
-    let user = await User.findBy('email', githubUser.email)
+    // SECURITY: only match an existing user by email when the provider
+    // has verified it. See the "Verified-email gate" section below.
+    let user: User | null = null
+    if (githubUser.email && githubUser.emailVerified) {
+      user = await User.findBy('email', githubUser.email)
+    }
     if (!user) {
       user = new User()
       user.merge({ name: githubUser.name, email: githubUser.email })
       await user.save()
     }
 
-    // Link the social account (or update tokens if already linked)
+    // Link the social account (or update tokens if already linked).
+    // Tokens are encrypted at rest by SocialAccount — see "Token storage".
     await social.findOrCreate('github', githubUser, user)
 
     const s = ctx.get<Session>('session')
@@ -146,6 +152,7 @@ Every provider returns a `SocialUser` with these fields:
 | `id` | `string` | Unique identifier from the provider |
 | `name` | `string \| null` | Full name |
 | `email` | `string \| null` | Email address |
+| `emailVerified` | `boolean` | Whether the provider asserts the email has been verified by the user. **Callers MUST check this before matching an existing app user by email.** See [Verified-email gate](#verified-email-gate). |
 | `avatar` | `string \| null` | Profile picture URL |
 | `nickname` | `string \| null` | Username / handle |
 | `token` | `string` | OAuth access token |
@@ -182,25 +189,15 @@ social.driver('google')
   .redirect(ctx)
 ```
 
-### Stateless mode
-
-Skip session-based CSRF state verification. Useful for SPAs or token-based APIs where you manage state yourself:
-
-```typescript
-// Redirect (no state stored in session)
-social.driver('google').stateless().redirect(ctx)
-
-// Callback (no state verification)
-const user = await social.driver('google').stateless().user(ctx)
-```
-
 ### User from token
 
-If you already have an access token (e.g., from a mobile app), fetch the user profile directly without the redirect flow:
+If you already have an access token from an out-of-band flow (e.g., a mobile app that ran its own OAuth dance), fetch the user profile directly without the redirect flow:
 
 ```typescript
 const user = await social.driver('google').userFromToken(accessToken)
 ```
+
+`userFromToken()` is the only stateless path in this module. It does not validate CSRF state because there is no redirect to defend — the caller is asserting they already obtained the token securely. The previously-available `provider.stateless()` opt-out for the redirect flow has been removed (it silently disabled CSRF protection); state is mandatory for `redirect()` + `user()`.
 
 ## Built-in providers
 
@@ -208,6 +205,7 @@ const user = await social.driver('google').userFromToken(accessToken)
 
 - Default scopes: `openid`, `email`, `profile`
 - User fields: `sub` → id, `name` → name, `email` → email, `picture` → avatar
+- `emailVerified`: from the OIDC `email_verified` claim (`false` if missing)
 - Supports the `hd` parameter to restrict to a Google Workspace domain:
 
 ```typescript
@@ -218,12 +216,14 @@ social.driver('google').with({ hd: 'mycompany.com' }).redirect(ctx)
 
 - Default scopes: `read:user`, `user:email`
 - User fields: `id` → id, `login` → nickname, `name` → name, `avatar_url` → avatar
+- `emailVerified`: `true` whenever an email is returned. GitHub only exposes verified addresses — the profile `email` must be a verified one and the `/user/emails` fallback filters on `verified === true`.
 - Automatically fetches the primary verified email from `/user/emails` when the profile email is private
 
 ### Discord
 
 - Default scopes: `identify`, `email`
 - User fields: `id` → id, `username` → nickname, `global_name` → name, `email` → email
+- `emailVerified`: from the `verified` field on `/users/@me` (`false` if missing)
 - Avatar URL is computed from the user's ID and avatar hash, with a default fallback
 
 To request guild information:
@@ -236,6 +236,7 @@ social.driver('discord').scopes(['guilds']).redirect(ctx)
 
 - Default scopes: `email`, `public_profile`
 - User fields: `id` → id, `name` → name, `email` → email, `picture.data.url` → avatar
+- `emailVerified`: `true` whenever an email is returned. Facebook's Graph API only exposes the user's verified primary address; an unverified address is omitted from the response.
 - Uses Graph API v21.0
 
 To request additional permissions:
@@ -248,6 +249,7 @@ social.driver('facebook').scopes(['user_birthday', 'user_location']).redirect(ct
 
 - Default scopes: `openid`, `profile`, `email`
 - User fields: `sub` → id, `name` → name, `email` → email, `picture` → avatar
+- `emailVerified`: from the OIDC `email_verified` claim (`false` if missing)
 - Uses the OpenID Connect userinfo endpoint (`/v2/userinfo`)
 
 To request posting permissions:
@@ -293,6 +295,10 @@ class SpotifyProvider extends AbstractProvider {
       id: data.id as string,
       name: (data.display_name as string) ?? null,
       email: (data.email as string) ?? null,
+      // Spotify exposes verification on the user object — populate from
+      // whatever claim your provider gives. Default to `false` if there
+      // is no signal; never default to `true` for unknown providers.
+      emailVerified: false,
       avatar: images?.[0]?.url ?? null,
       nickname: data.id as string,
       token: '',
@@ -400,6 +406,8 @@ const { account, created } = await social.findOrCreate('github', githubUser, use
 const { account, created } = await SocialAccount.findOrCreate('github', githubUser, user)
 ```
 
+`findOrCreate()` does NOT validate the email — the security check belongs at the call site (the place that matched `user` from `socialUser.email`). See [Verified-email gate](#verified-email-gate). Tokens passed in are encrypted at rest before insert; see [Token storage](#token-storage).
+
 ### Other methods
 
 ```typescript
@@ -429,7 +437,7 @@ await SocialAccount.deleteByUser(user)
 
 ### SocialAccountData
 
-All methods return or accept a `SocialAccountData` object:
+All methods return or accept a `SocialAccountData` object. `token` and `refreshToken` are returned in **plaintext** — the encrypt/decrypt round-trip happens inside `SocialAccount`. The database stores ciphertext.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -437,15 +445,53 @@ All methods return or accept a `SocialAccountData` object:
 | `userId` | `string \| number` | Foreign key to the user table |
 | `provider` | `string` | Provider name (e.g. `'github'`) |
 | `providerId` | `string` | User's ID from the provider |
-| `token` | `string` | OAuth access token |
-| `refreshToken` | `string \| null` | Refresh token |
+| `token` | `string` | OAuth access token (decrypted on read) |
+| `refreshToken` | `string \| null` | Refresh token (decrypted on read) |
 | `expiresAt` | `Date \| null` | Token expiry |
 | `createdAt` | `Date` | Row creation time |
 | `updatedAt` | `Date` | Last update time |
 
 ## Security
 
-- **CSRF state**: By default, a random 64-character hex string is stored in the session before redirect and verified on callback. This prevents cross-site request forgery attacks.
-- **State is single-use**: The state value is removed from the session after verification.
-- **Stateless mode**: Only use `stateless()` when you manage CSRF protection through other means (e.g., SPA with its own state parameter).
-- **Credentials**: Never commit client secrets. Use environment variables and `.env` files with strict permissions.
+### CSRF state
+
+A random 64-character hex string is stored in the session before redirect and verified on callback. This is mandatory for `redirect()` + `user()` — the previous `provider.stateless()` opt-out was removed because it silently disabled CSRF protection. The state value is removed from the session after verification (single-use).
+
+If you have an access token from an out-of-band flow (e.g., a mobile app that ran its own OAuth), use [`userFromToken()`](#user-from-token) — that method is intentionally stateless because there is no redirect to defend.
+
+### Verified-email gate
+
+`SocialUser.emailVerified` reflects the provider's own assertion that the user owns the email:
+
+| Provider | Source of truth |
+|----------|-----------------|
+| Google / LinkedIn | OIDC `email_verified` claim |
+| Discord | `verified` field on `/users/@me` |
+| GitHub | `true` whenever an email is returned (only verified addresses are exposed) |
+| Facebook | `true` whenever an email is returned (only verified addresses are exposed) |
+| Custom providers | Populate from the provider's verification claim. Default to `false` when there is no signal — never `true` for unknown providers. |
+
+**Callers MUST check `socialUser.emailVerified === true` before using `socialUser.email` to look up an existing application user.**
+
+If you skip this check, an attacker who registers a provider account using a victim's email (and that provider permits unverified addresses) gets linked to the victim's account on first sign-in. `SocialAccount.findOrCreate()` does not enforce this check itself — it can't tell whether `user` was located by email match or supplied directly — so the contract lives at the call site.
+
+```typescript
+// CORRECT: only match by email when the provider has verified it
+let user: User | null = null
+if (socialUser.email && socialUser.emailVerified) {
+  user = await User.findBy('email', socialUser.email)
+}
+
+// WRONG: blindly matching by email opens the takeover vector
+const user = await User.findBy('email', socialUser.email) // ✗
+```
+
+### Token storage
+
+`SocialAccount.create()` and `updateTokens()` encrypt both `token` and `refreshToken` via `EncryptionManager` before they hit the database; `hydrate()` decrypts them on read. Encrypted values are stored with an `enc:v1:` sentinel prefix so legacy plaintext rows (predating this change) can be returned unchanged by `hydrate()` and migrate to ciphertext on the next `updateTokens()` call.
+
+Tests that exercise `SocialAccount.create()` or `updateTokens()` must initialize encryption first (e.g., `EncryptionManager.useKey('test-key')` in `beforeEach`).
+
+### Credentials
+
+Never commit client secrets. Use environment variables and `.env` files with strict permissions.

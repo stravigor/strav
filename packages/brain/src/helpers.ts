@@ -2,6 +2,7 @@ import BrainManager from './brain_manager.ts'
 import { Agent } from './agent.ts'
 import { Workflow } from './workflow.ts'
 import { zodToJsonSchema } from './utils/schema.ts'
+import { interpolateInstructions } from './utils/prompt.ts'
 import { MemoryManager } from './memory/memory_manager.ts'
 import { ContextBudget } from './memory/context_budget.ts'
 import type { MemoryConfig, SerializedMemoryThread, Fact } from './memory/types.ts'
@@ -335,12 +336,12 @@ export class AgentRunner<T extends Agent = Agent> {
       }
     }
 
-    // Build system prompt with context interpolation
+    // Build system prompt with context interpolation. interpolateInstructions
+    // warns when a context value looks like a prompt-injection attempt — see
+    // packages/brain/CLAUDE.md ("Prompt-injection threat model").
     let system: string | undefined = agent.instructions || undefined
     if (system) {
-      for (const [key, value] of Object.entries(this._context)) {
-        system = system.replaceAll(`{{${key}}}`, String(value))
-      }
+      system = interpolateInstructions(system, this._context)
     }
 
     // Prepare structured output schema
@@ -483,9 +484,7 @@ export class AgentRunner<T extends Agent = Agent> {
 
     let system: string | undefined = agent.instructions || undefined
     if (system) {
-      for (const [key, value] of Object.entries(this._context)) {
-        system = system.replaceAll(`{{${key}}}`, String(value))
-      }
+      system = interpolateInstructions(system, this._context)
     }
 
     let schema: JsonSchema | undefined

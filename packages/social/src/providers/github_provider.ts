@@ -50,10 +50,15 @@ export class GitHubProvider extends AbstractProvider {
   }
 
   protected mapUserToObject(data: Record<string, unknown>): SocialUser {
+    const email = (data.email as string) ?? null
     return {
       id: String(data.id),
       name: (data.name as string) ?? null,
-      email: (data.email as string) ?? null,
+      email,
+      // GitHub only exposes verified emails: the profile `email` is required
+      // to be a verified address, and the fallback path in getUserByToken
+      // filters /user/emails for `verified === true`.
+      emailVerified: email !== null,
       avatar: (data.avatar_url as string) ?? null,
       nickname: (data.login as string) ?? null,
       token: '',

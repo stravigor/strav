@@ -204,7 +204,7 @@ class SupportAgent extends Agent {
 |---|---|---|
 | `provider` | Provider name (`'anthropic'`, `'openai'`, `'google'`, etc.) | Config default |
 | `model` | Model identifier | Provider default |
-| `instructions` | System prompt. Supports `{{key}}` interpolation | `''` |
+| `instructions` | System prompt. Supports `{{key}}` interpolation — see [Prompt-injection threat model](#prompt-injection-threat-model) | `''` |
 | `tools` | Array of `ToolDefinition` objects | `undefined` |
 | `output` | Zod schema or JSON Schema for structured output | `undefined` |
 | `maxIterations` | Max tool-use loop iterations | Config default (10) |
@@ -218,7 +218,7 @@ Use the fluent `AgentRunner` via `brain.agent()`:
 ```typescript
 const result = await brain.agent(SupportAgent)
   .input('Where is my order #12345?')
-  .with({ companyName: 'Acme Corp' })     // context for {{key}} interpolation
+  .with({ companyName: 'Acme Corp' })     // trusted context for {{key}} interpolation — see Prompt-injection threat model
   .run()
 
 result.text       // raw response text
@@ -400,6 +400,35 @@ const resumed = await brain.agent(SupportAgent).resume(row.state, results)
 #### Not supported by workflows
 
 `Workflow` steps orchestrate agents end-to-end and have no resume path. A workflow step whose agent suspends throws a clear error. Use `AgentRunner.run()` / `resume()` directly for pause-and-resume flows.
+
+### Prompt-injection threat model
+
+`agent.instructions` supports `{{key}}` placeholders that are filled in from `runner.with({ ... })` context. The substitution drops string values directly into the **system role** of the request sent to the LLM provider — anything user-controlled flowing through this channel is a prompt-injection vector. The model has no way to tell the difference between developer-authored instructions and runtime-substituted user input.
+
+**Rules for callers:**
+
+- **Never** put untrusted user input into agent context. The right place for runtime user input is `runner.input(userMessage)` — that lands in the `user` role, where the model expects untrusted content.
+- Use context for **trusted** values only: `userId`, `tenantId`, application configuration your code controls.
+- If you must mix untrusted text into a prompt, send it as an extra `user`-role message in a thread, not as a system-prompt placeholder.
+
+```typescript
+// CORRECT: untrusted user message goes through .input()
+await brain.agent(SupportAgent)
+  .input(userQuestion)               // ← untrusted; lands in user role
+  .with({ companyName: 'Acme' })     // ← trusted; interpolated into system role
+  .run()
+
+// WRONG: untrusted input interpolated into the system prompt
+await brain.agent(SupportAgent)
+  .with({ companyName: 'Acme', userNote: userInput })  // ✗ injection vector
+  .run()
+```
+
+**Defense-in-depth in the framework:**
+
+`interpolateInstructions()` runs every context value through `looksLikePromptInjection()` and emits a `console.warn` when a value contains markers commonly used to override system instructions — `"ignore previous instructions"`, `"system:"`, `<|im_start|>`, `[INST]`, role-switch phrases, etc. The warning is informational and the substitution still happens; treat it as a CI/development hint that something untrusted is reaching the system role. The detector is intentionally loose — false positives are cheap, missed exploits are not.
+
+A future release will replace `{{key}}` system-role interpolation with a structured-context API so untrusted values can be passed without ever touching the system role.
 
 ## Tools
 

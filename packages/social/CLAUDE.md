@@ -24,3 +24,20 @@ OAuth 2.0 social authentication with a fluent, driver-based API. Built-in provid
 - Social providers extend abstract_provider.ts
 - Custom providers are added via extend() on the manager
 - Social account data is normalized into a common shape regardless of provider
+
+## Verified-email gate (security)
+
+`SocialUser.emailVerified` is mandatory and reflects the provider's own assertion that the user owns the email. Per-provider mapping:
+
+- Google / LinkedIn — `email_verified` claim from the OIDC userinfo response (default `false` if missing).
+- Discord — `verified` field from `/users/@me` (default `false`).
+- GitHub / Facebook — `true` whenever an email is returned, because both providers only expose verified emails (GitHub via `/user/emails` filtered on `verified === true`; Facebook never returns unverified addresses).
+- Custom providers — populate from the provider's verification claim. Default to `false` if the provider does not expose one.
+
+**Callers MUST check `socialUser.emailVerified === true` before using `socialUser.email` to look up an existing application user.** The OAuth callback flow that links a social account to an existing user by email is the canonical pre-takeover vector: an attacker who registers with the provider using a victim's email and an unverified address will otherwise be linked to the victim's account on first sign-in. `SocialAccount.findOrCreate()` deliberately does not enforce this check itself — it can't tell whether `user` was located by email match or supplied directly — so the contract lives at the call site.
+
+The OAuth `state` parameter is non-optional (the previously-available `provider.stateless()` opt-out was removed because it silently disabled CSRF protection). `userFromToken()` remains stateless by design — it is for cases where the access token was obtained out-of-band (e.g., a mobile client that ran its own OAuth dance).
+
+## Token storage at rest
+
+`SocialAccount.create()` and `updateTokens()` encrypt the access token and refresh token via `EncryptionManager` before they hit the database; `hydrate()` decrypts them on read. Encrypted values are stored with an `enc:v1:` sentinel prefix. Legacy plaintext rows (predating this change) are returned as-is by `hydrate()` — they migrate to ciphertext on the next `updateTokens()` call. Tests must initialize encryption (e.g., `EncryptionManager.useKey('test-key')` in `beforeEach`) before calling `create()` or `updateTokens()`.

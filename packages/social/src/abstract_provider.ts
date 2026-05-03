@@ -9,7 +9,6 @@ export abstract class AbstractProvider {
 
   protected config: ProviderConfig
   protected _scopes: string[]
-  protected _stateless = false
   protected _parameters: Record<string, string> = {}
 
   constructor(config: ProviderConfig) {
@@ -41,11 +40,6 @@ export abstract class AbstractProvider {
     return this
   }
 
-  stateless(): this {
-    this._stateless = true
-    return this
-  }
-
   with(params: Record<string, string>): this {
     this._parameters = { ...this._parameters, ...params }
     return this
@@ -56,30 +50,24 @@ export abstract class AbstractProvider {
   // ---------------------------------------------------------------------------
 
   redirect(ctx: Context): Response {
-    let state: string | undefined
-
-    if (!this._stateless) {
-      state = randomHex(32)
-      const session = ctx.get<Session>('session')
-      session.set(STATE_KEY, state)
-    }
+    const state = randomHex(32)
+    const session = ctx.get<Session>('session')
+    session.set(STATE_KEY, state)
 
     const url = this.buildAuthUrl(state)
     return ctx.redirect(url)
   }
 
   async user(ctx: Context): Promise<SocialUser> {
-    if (!this._stateless) {
-      const session = ctx.get<Session>('session')
-      const expectedState = session.get<string>(STATE_KEY)
-      const returnedState = ctx.query.get('state')
+    const session = ctx.get<Session>('session')
+    const expectedState = session.get<string>(STATE_KEY)
+    const returnedState = ctx.query.get('state')
 
-      if (!expectedState || expectedState !== returnedState) {
-        throw new SocialError('Invalid state parameter. Possible CSRF attack.')
-      }
-
-      session.forget(STATE_KEY)
+    if (!expectedState || expectedState !== returnedState) {
+      throw new SocialError('Invalid state parameter. Possible CSRF attack.')
     }
+
+    session.forget(STATE_KEY)
 
     const code = ctx.query.get('code')
     if (!code) {
@@ -148,16 +136,15 @@ export abstract class AbstractProvider {
     }
   }
 
-  protected buildAuthUrl(state?: string): string {
+  protected buildAuthUrl(state: string): string {
     const params = new URLSearchParams({
       client_id: this.config.clientId,
       redirect_uri: this.config.redirectUrl,
       response_type: 'code',
       scope: this._scopes.join(' '),
+      state,
       ...this._parameters,
     })
-
-    if (state) params.set('state', state)
 
     return `${this.getAuthUrl()}?${params.toString()}`
   }

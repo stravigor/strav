@@ -57,7 +57,6 @@ r.get('/auth/github/callback', async ctx => {
 ```ts
 social.driver('github').scopes(['repo', 'gist']).redirect(ctx)
 social.driver('google').with({ hd: 'example.com' }).redirect(ctx)
-social.driver('google').stateless().redirect(ctx)
 const user = await social.driver('google').userFromToken(accessToken)
 ```
 

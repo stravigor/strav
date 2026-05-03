@@ -137,6 +137,7 @@ describe('SocialManager', () => {
           id: '1',
           name: null,
           email: null,
+          emailVerified: false,
           avatar: null,
           nickname: null,
           token: '',

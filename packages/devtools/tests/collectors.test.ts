@@ -164,17 +164,47 @@ describe('RequestCollector', () => {
     expect(store.entries).toHaveLength(0)
   })
 
-  test('middleware redacts authorization header', async () => {
+  test('middleware redacts sensitive request headers', async () => {
     const collector = new RequestCollector(store, { enabled: true })
     const mw = collector.middleware()
 
     const handler: Handler = c => c.text('ok')
-    const c = ctx('http://localhost/', 'GET', { authorization: 'Bearer secret-token' })
+    const c = ctx('http://localhost/', 'GET', {
+      authorization: 'Bearer secret-token',
+      cookie: 'sid=xyz',
+      'x-api-key': 'sk-abc123',
+      'x-csrf-token': 'csrf-tok',
+      accept: 'application/json',
+    })
     await compose([mw as Middleware], handler)(c)
     await wait(50)
 
     const headers = store.entries[0]!.content.requestHeaders as Record<string, string>
-    expect(headers.authorization).toBe('********')
+    expect(headers.authorization).toBe('[REDACTED]')
+    expect(headers.cookie).toBe('[REDACTED]')
+    expect(headers['x-api-key']).toBe('[REDACTED]')
+    expect(headers['x-csrf-token']).toBe('[REDACTED]')
+    expect(headers.accept).toBe('application/json')
+  })
+
+  test('middleware respects redactKeys option for app-specific headers', async () => {
+    const collector = new RequestCollector(store, {
+      enabled: true,
+      redactKeys: ['x-internal-tenant'],
+    })
+    const mw = collector.middleware()
+
+    const handler: Handler = c => c.text('ok')
+    const c = ctx('http://localhost/', 'GET', {
+      'x-internal-tenant': 'tenant-42',
+      'x-other': 'public',
+    })
+    await compose([mw as Middleware], handler)(c)
+    await wait(50)
+
+    const headers = store.entries[0]!.content.requestHeaders as Record<string, string>
+    expect(headers['x-internal-tenant']).toBe('[REDACTED]')
+    expect(headers['x-other']).toBe('public')
   })
 
   test('middleware tags slow requests', async () => {
@@ -346,6 +376,48 @@ describe('LogCollector', () => {
 
     expect(store.entries[0]!.tags).toContain('error')
     expect(store.entries[1]!.tags).toContain('error')
+  })
+
+  test('redacts sensitive keys from log context', async () => {
+    collector = new LogCollector(store, { enabled: true, level: 'trace' }, () => 'batch-1')
+    collector.register()
+
+    await Emitter.emit('log:entry', {
+      level: 'info',
+      msg: 'login attempt',
+      context: {
+        userId: 'u-1',
+        password: 'p4ssw0rd',
+        nested: { authorization: 'Bearer abc', ok: 'public' },
+      },
+    })
+    await collector.flush()
+
+    const ctx = store.entries[0]!.content.context as Record<string, unknown>
+    expect(ctx.userId).toBe('u-1')
+    expect(ctx.password).toBe('[REDACTED]')
+    expect((ctx.nested as any).authorization).toBe('[REDACTED]')
+    expect((ctx.nested as any).ok).toBe('public')
+  })
+
+  test('redactKeys option extends the deny-list per app', async () => {
+    collector = new LogCollector(
+      store,
+      { enabled: true, level: 'trace', redactKeys: ['internalCode'] },
+      () => 'batch-1'
+    )
+    collector.register()
+
+    await Emitter.emit('log:entry', {
+      level: 'info',
+      msg: 'event',
+      context: { internalCode: 'IC-42', name: 'event' },
+    })
+    await collector.flush()
+
+    const ctx = store.entries[0]!.content.context as Record<string, unknown>
+    expect(ctx.internalCode).toBe('[REDACTED]')
+    expect(ctx.name).toBe('event')
   })
 })
 

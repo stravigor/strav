@@ -82,6 +82,22 @@ describe('FacebookProvider', () => {
       expect(user.nickname).toBeNull()
       expect(user.token).toBe('fb-token')
       expect(user.expiresIn).toBe(5184000)
+      expect(user.emailVerified).toBe(true)
+    })
+
+    test('maps null email to emailVerified=false', async () => {
+      mockFetch([
+        { body: { access_token: 'tok' } },
+        { body: { id: '1', name: 'X', email: null } },
+      ])
+      const provider = new FacebookProvider(config)
+      const state = 's'
+      const ctx = mockContext({
+        query: { code: 'c', state },
+        sessionData: { social_state: state },
+      })
+      const user = await provider.user(ctx)
+      expect(user.emailVerified).toBe(false)
     })
 
     test('sends token exchange to correct URL', async () => {

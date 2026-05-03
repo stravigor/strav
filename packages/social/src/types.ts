@@ -2,6 +2,14 @@ export interface SocialUser {
   id: string
   name: string | null
   email: string | null
+  /**
+   * Whether the provider asserts the email has been verified by the user.
+   *
+   * Callers MUST check this before using `email` to match an existing
+   * application user — linking by an unverified email is a known account-
+   * takeover vector. See packages/social/CLAUDE.md ("Verified-email gate").
+   */
+  emailVerified: boolean
   avatar: string | null
   nickname: string | null
   token: string

@@ -34,6 +34,7 @@ export class GoogleProvider extends AbstractProvider {
       id: data.sub as string,
       name: (data.name as string) ?? null,
       email: (data.email as string) ?? null,
+      emailVerified: data.email_verified === true,
       avatar: (data.picture as string) ?? null,
       nickname: null,
       token: '',
