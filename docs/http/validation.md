@@ -28,6 +28,7 @@ Every rule is a factory function returning a `Rule` object:
 interface Rule {
   name: string
   validate(value: unknown): string | null  // error message or null
+  coerce?(value: unknown): unknown          // optional pre-validation transform
 }
 ```
 
@@ -39,9 +40,9 @@ All rules pass on `null`/`undefined` — use `required()` to enforce presence.
 |------|-------------|---------------|
 | `required()` | Value must not be null, undefined, or empty string | `This field is required` |
 | `string()` | Must be a string | `Must be a string` |
-| `integer()` | Must be an integer | `Must be an integer` |
-| `number()` | Must be a number (not NaN) | `Must be a number` |
-| `boolean()` | Must be a boolean | `Must be a boolean` |
+| `integer()` | Must be an integer (coerces numeric strings) | `Must be an integer` |
+| `number()` | Must be a number, not NaN (coerces numeric strings) | `Must be a number` |
+| `boolean()` | Must be a boolean (coerces `"true"/"1"/"on"` and `"false"/"0"/"off"`) | `Must be a boolean` |
 | `min(n)` | Numbers: `>= n`. Strings: length `>= n` | `Must be at least {n}` / `Must be at least {n} characters` |
 | `max(n)` | Numbers: `<= n`. Strings: length `<= n` | `Must be at most {n}` / `Must be at most {n} characters` |
 | `email()` | Must be a valid email address | `Must be a valid email address` |
@@ -70,6 +71,29 @@ const statusRules = [required(), oneOf(['active', 'inactive', 'suspended'])]
 const phoneRules = [string(), regex(/^\+\d{10,15}$/)]
 ```
 
+## Coercion
+
+HTML form bodies always arrive as strings (`<input type="number">` posts `"5"`, not `5`). The type-shape rules — `integer()`, `number()`, `boolean()` — coerce strings to their native types before validating, so the same rule set works for both JSON and form bodies without per-handler boilerplate. The coerced value is what ends up in `data` and what subsequent rules in the chain see.
+
+```typescript
+const { data, errors } = validate<{ position: number; done: boolean }>(
+  { position: '5', done: 'on' },          // form body — strings
+  {
+    position: [required(), integer(), min(0)],
+    done:     [boolean()],
+  }
+)
+
+data.position  // 5         (number)
+data.done      // true      (boolean)
+```
+
+**Coercion rules:**
+
+- `integer()` / `number()` parse with `Number(value)`. `"5"` → `5`, `"5.5"` → `5.5`. Strings that can't parse (`"abc"`) are left as-is so `validate()` rejects them. Empty strings are passed through so `required()` keeps owning emptiness.
+- `boolean()` accepts `"true"`, `"1"`, `"on"` (true) and `"false"`, `"0"`, `"off"` (false), case-insensitive. Anything else is left as-is and rejected.
+- Coercions run in declared rule order before any validation, so chaining (`integer(), min(10)`) works as expected — `min(10)` sees the coerced number.
+
 ## validate()
 
 ```typescript
@@ -80,6 +104,7 @@ function validate<T>(input: unknown, rules: RuleSet): ValidationResult<T>
 - Runs rules per field, stopping at the first error for each field.
 - Strips unknown fields from `data` — only declared fields are returned.
 - Omits `undefined` values — fields not present in the input are excluded from `data`, making partial updates safe (only submitted fields are included).
+- Applies any rule's `coerce()` before validation; the coerced value is what lands in `data`.
 - Returns `errors: null` when all rules pass.
 
 ### Return type
@@ -175,3 +200,23 @@ function slug(): Rule {
 ```
 
 Follow the convention: return `null` for undefined/null (let `required()` handle presence), return an error string on failure.
+
+If your rule needs to transform the input (parse a date string, normalize whitespace, etc.), add an optional `coerce()`. The coerced value is what `validate()` checks and what ends up in the result `data`:
+
+```typescript
+function date(): Rule {
+  return {
+    name: 'date',
+    coerce(value) {
+      if (typeof value !== 'string' || value.trim() === '') return value
+      const d = new Date(value)
+      return Number.isNaN(d.getTime()) ? value : d
+    },
+    validate(value) {
+      if (value === undefined || value === null || value === '') return null
+      if (!(value instanceof Date)) return 'Must be a valid date'
+      return null
+    },
+  }
+}
+```

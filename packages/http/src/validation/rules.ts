@@ -3,6 +3,18 @@ import { t } from '@strav/kernel/i18n/helpers'
 export interface Rule {
   name: string
   validate(value: unknown): string | null
+  /**
+   * Optional pre-validation transform. Form bodies arrive as strings, so
+   * type-shape rules (integer, number, boolean) coerce strings to their
+   * native types before validate() runs. validate() writes the coerced
+   * value into the returned `data`, so handlers receive typed input.
+   *
+   * Coercion is best-effort: if the input cannot be coerced (e.g. "abc"
+   * for integer()), the original value is returned and validate() rejects
+   * it. Empty strings are passed through so required() still owns
+   * emptiness.
+   */
+  coerce?(value: unknown): unknown
 }
 
 export function required(): Rule {
@@ -31,8 +43,13 @@ export function string(): Rule {
 export function integer(): Rule {
   return {
     name: 'integer',
+    coerce(value) {
+      if (typeof value !== 'string' || value.trim() === '') return value
+      const n = Number(value)
+      return Number.isFinite(n) ? n : value
+    },
     validate(value) {
-      if (value === undefined || value === null) return null
+      if (value === undefined || value === null || value === '') return null
       if (typeof value !== 'number' || !Number.isInteger(value)) return t('validation.integer')
       return null
     },
@@ -42,8 +59,13 @@ export function integer(): Rule {
 export function number(): Rule {
   return {
     name: 'number',
+    coerce(value) {
+      if (typeof value !== 'string' || value.trim() === '') return value
+      const n = Number(value)
+      return Number.isFinite(n) ? n : value
+    },
     validate(value) {
-      if (value === undefined || value === null) return null
+      if (value === undefined || value === null || value === '') return null
       if (typeof value !== 'number' || isNaN(value)) return t('validation.number')
       return null
     },
@@ -53,6 +75,13 @@ export function number(): Rule {
 export function boolean(): Rule {
   return {
     name: 'boolean',
+    coerce(value) {
+      if (typeof value !== 'string') return value
+      const v = value.toLowerCase()
+      if (v === 'true' || v === '1' || v === 'on') return true
+      if (v === 'false' || v === '0' || v === 'off') return false
+      return value
+    },
     validate(value) {
       if (value === undefined || value === null) return null
       if (typeof value !== 'boolean') return t('validation.boolean')

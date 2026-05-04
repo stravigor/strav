@@ -20,7 +20,15 @@ export function validate<T = Record<string, unknown>>(
   let hasErrors = false
 
   for (const [field, fieldRules] of Object.entries(rules)) {
-    const value = record[field]
+    let value = record[field]
+
+    // Pre-pass: apply each rule's coerce() in declared order. Form bodies
+    // arrive as strings; this lets [required(), integer()] turn "5" into 5
+    // before validation, so handlers receive typed data.
+    for (const rule of fieldRules) {
+      if (rule.coerce) value = rule.coerce(value)
+    }
+
     if (value !== undefined) data[field] = value
 
     for (const rule of fieldRules) {
