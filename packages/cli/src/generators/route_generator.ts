@@ -3,7 +3,7 @@ import { Archetype } from '@strav/database/schema/types'
 import type { SchemaDefinition } from '@strav/database/schema/types'
 import { toSnakeCase, toPascalCase, pluralize } from '@strav/kernel/helpers/strings'
 import type { GeneratedFile } from './model_generator.ts'
-import type { GeneratorConfig, GeneratorPaths } from './config.ts'
+import type { GeneratorConfig, GeneratorPaths, WriteResult } from './config.ts'
 import { resolvePaths, relativeImport, formatAndWrite } from './config.ts'
 
 /** Archetypes that sit under a parent's /:parentId group. */
@@ -66,10 +66,9 @@ export default class RouteGenerator {
   }
 
   /** Generate, format with Prettier, and write the route file to disk. */
-  async writeAll(): Promise<GeneratedFile[]> {
+  async writeAll(force?: boolean): Promise<WriteResult> {
     const files = this.generate()
-    await formatAndWrite(files)
-    return files
+    return formatAndWrite(files, { force })
   }
 
   // ---------------------------------------------------------------------------

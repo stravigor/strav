@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { resolve, relative } from 'node:path'
 import type { GeneratedFile } from './model_generator.ts'
 
@@ -66,11 +67,22 @@ export function relativeImport(fromDir: string, toDir: string): string {
   return rel.startsWith('.') ? rel : './' + rel
 }
 
+export interface WriteResult {
+  written: GeneratedFile[]
+  skipped: GeneratedFile[]
+}
+
 /**
  * Format generated files with Prettier and write them to disk.
  * Falls back to writing unformatted content if Prettier is not installed.
+ *
+ * Skips files that already exist unless `force` is true. Returns the
+ * partition of written and skipped files so callers can report them.
  */
-export async function formatAndWrite(files: GeneratedFile[]): Promise<void> {
+export async function formatAndWrite(
+  files: GeneratedFile[],
+  options: { force?: boolean } = {}
+): Promise<WriteResult> {
   let prettier: typeof import('prettier') | null = null
   try {
     prettier = await import('prettier')
@@ -78,13 +90,24 @@ export async function formatAndWrite(files: GeneratedFile[]): Promise<void> {
     // Prettier not installed — write unformatted
   }
 
+  const written: GeneratedFile[] = []
+  const skipped: GeneratedFile[] = []
+
   for (const file of files) {
+    if (existsSync(file.path) && !options.force) {
+      skipped.push(file)
+      continue
+    }
+
     let content = file.content
     if (prettier) {
       const filePath = resolve(file.path)
-      const options = await prettier.resolveConfig(filePath)
-      content = await prettier.format(content, { ...options, filepath: filePath })
+      const prettierOpts = await prettier.resolveConfig(filePath)
+      content = await prettier.format(content, { ...prettierOpts, filepath: filePath })
     }
     await Bun.write(file.path, content)
+    written.push(file)
   }
+
+  return { written, skipped }
 }

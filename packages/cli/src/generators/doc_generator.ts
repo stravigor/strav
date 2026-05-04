@@ -14,8 +14,9 @@ import {
   toPascalCase,
   pluralize,
 } from '@strav/kernel/helpers/strings'
+import { existsSync } from 'node:fs'
 import type { GeneratedFile } from './model_generator.ts'
-import type { GeneratorConfig, GeneratorPaths } from './config.ts'
+import type { GeneratorConfig, GeneratorPaths, WriteResult } from './config.ts'
 import { resolvePaths } from './config.ts'
 import { ApiRouting, toRouteSegment, toChildSegment } from './route_generator.ts'
 import type { ApiRoutingConfig } from './route_generator.ts'
@@ -91,12 +92,21 @@ export default class DocGenerator {
     return [this.generateIndexPage()]
   }
 
-  async writeAll(): Promise<GeneratedFile[]> {
+  async writeAll(force?: boolean): Promise<WriteResult> {
     const files = this.generate()
+    const written: GeneratedFile[] = []
+    const skipped: GeneratedFile[] = []
+
     for (const file of files) {
+      if (existsSync(file.path) && !force) {
+        skipped.push(file)
+        continue
+      }
       await Bun.write(file.path, file.content)
+      written.push(file)
     }
-    return files
+
+    return { written, skipped }
   }
 
   // ---------------------------------------------------------------------------

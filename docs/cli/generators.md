@@ -75,8 +75,11 @@ Generates model classes and enum files from schemas. It operates entirely in mem
 ### Usage via CLI
 
 ```bash
-bun strav generate:models
+bun strav generate:models           # safe: skips files that exist
+bun strav generate:models --force   # overwrite all files
 ```
+
+Existing files are skipped by default. Pass `--force` (`-f`) to regenerate everything (e.g., after a schema change that needs new fields wired into models).
 
 ### Programmatic usage
 
@@ -95,10 +98,11 @@ const files = generator.generate()
 // files = [{ path: 'app/models/user.ts', content: '...' }, ...]
 
 // Generate and write to disk
-const written = await generator.writeAll()
+const { written, skipped } = await generator.writeAll()       // safe: skips existing files
+const overwritten = await generator.writeAll(true)            // force overwrite
 ```
 
-The `config` parameter is optional — defaults are used when omitted.
+The `config` parameter is optional — defaults are used when omitted. `writeAll()` returns `{ written, skipped }` so callers can report which files were created vs. preserved.
 
 ## What gets generated
 
@@ -181,8 +185,11 @@ Generates the full application layer from schemas: event constants, validators, 
 ### Usage via CLI
 
 ```bash
-bun strav generate:api
+bun strav generate:api              # safe: skips files that exist
+bun strav generate:api --force      # overwrite all files
 ```
+
+Existing files are skipped by default. This is critical for `generate:api`: its output includes services, controllers, validators, policies, route wiring, and tests — exactly the files you'll edit. Pass `--force` (`-f`) only when you want to regenerate from a fresh schema.
 
 ### Programmatic usage
 
@@ -200,10 +207,11 @@ const generator = new ApiGenerator(schemas, representation, config)
 const files = generator.generate()
 
 // Generate and write to disk
-const written = await generator.writeAll()
+const { written, skipped } = await generator.writeAll()       // safe: skips existing files
+const overwritten = await generator.writeAll(true)            // force overwrite
 ```
 
-The `config` parameter is optional — defaults are used when omitted.
+The `config` parameter is optional — defaults are used when omitted. `writeAll()` returns `{ written, skipped }` so callers can report which files were created vs. preserved.
 
 ### What gets generated
 

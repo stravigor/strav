@@ -9,7 +9,8 @@ export function register(program: Command): void {
     .command('generate:models')
     .alias('g:models')
     .description('Generate model classes and enums from schema definitions')
-    .action(async () => {
+    .option('-f, --force', 'Overwrite existing generated files')
+    .action(async ({ force }: { force?: boolean }) => {
       try {
         const dbPaths = await getDatabasePaths()
         const config = await loadGeneratorConfig()
@@ -22,16 +23,22 @@ export function register(program: Command): void {
 
         const representation = registry.buildRepresentation()
         const generator = new ModelGenerator(registry.all(), representation, config)
-        const files = await generator.writeAll()
+        const { written, skipped } = await generator.writeAll(force)
 
-        if (files.length === 0) {
+        if (written.length === 0 && skipped.length === 0) {
           console.log(chalk.yellow('No models to generate.'))
           return
         }
 
-        console.log(chalk.green(`\nGenerated ${files.length} file(s):`))
-        for (const file of files) {
-          console.log(chalk.dim(`  ${file.path}`))
+        for (const file of written) {
+          console.log(chalk.green(`  CREATE  `) + chalk.dim(file.path))
+        }
+        for (const file of skipped) {
+          console.log(chalk.yellow(`  SKIP    `) + chalk.dim(file.path) + chalk.dim(' (already exists)'))
+        }
+
+        if (skipped.length > 0) {
+          console.log(chalk.dim(`\nSkipped ${skipped.length} existing file(s). Use --force to overwrite.`))
         }
       } catch (err) {
         console.error(chalk.red(`Error: ${err instanceof Error ? err.message : err}`))

@@ -272,17 +272,31 @@ bun strav make:island data_table --options
 ### Model Generation Commands
 
 #### `generate:models`
-Generate ORM models from schema definitions.
+Generate ORM models from schema definitions. Existing files are skipped by default.
 
 ```bash
 bun strav generate:models [options]
 
 # Options:
---force                # Overwrite existing models
+-f, --force            # Overwrite existing files (default: skip)
 
 # Examples:
-bun strav generate:models
-bun strav generate:models --force
+bun strav generate:models           # safe: skips files that exist
+bun strav generate:models --force   # overwrite all files
+```
+
+#### `generate:api`
+Generate services, controllers, policies, validators, events, routes, and tests from schemas. Existing files are skipped by default.
+
+```bash
+bun strav generate:api [options]
+
+# Options:
+-f, --force            # Overwrite existing files (default: skip)
+
+# Examples:
+bun strav generate:api              # safe: skips files that exist
+bun strav generate:api --force      # overwrite all files
 ```
 
 ### Database Seeding Commands

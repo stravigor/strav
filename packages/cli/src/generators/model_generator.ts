@@ -9,7 +9,7 @@ import type {
 } from '@strav/database/schema/database_representation'
 import type { PostgreSQLCustomType } from '@strav/database/schema/postgres'
 import { toSnakeCase, toCamelCase, toPascalCase } from '@strav/kernel/helpers/strings'
-import type { GeneratorConfig, GeneratorPaths } from './config.ts'
+import type { GeneratorConfig, GeneratorPaths, WriteResult } from './config.ts'
 import { resolvePaths, relativeImport, formatAndWrite } from './config.ts'
 
 export interface GeneratedFile {
@@ -54,10 +54,9 @@ export default class ModelGenerator {
   }
 
   /** Generate, format with Prettier, and write all files to disk. */
-  async writeAll(): Promise<GeneratedFile[]> {
+  async writeAll(force?: boolean): Promise<WriteResult> {
     const files = this.generate()
-    await formatAndWrite(files)
-    return files
+    return formatAndWrite(files, { force })
   }
 
   // ---------------------------------------------------------------------------
