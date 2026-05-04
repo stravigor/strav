@@ -517,12 +517,20 @@ export class IslandBuilder {
     lines.push('};')
 
     lines.push('')
+    // Kebab → PascalCase fallback so <vue:copy-button> resolves CopyButton.
+    // Mirrors the standalone client at packages/view/src/client/islands.ts.
+    lines.push('function __toPascalCase(s) {')
+    lines.push(
+      "  return s.replace(/(^|-)(\\w)/g, function(_m, _sep, ch) { return ch.toUpperCase(); });"
+    )
+    lines.push('}')
+    lines.push('')
     lines.push('function mountIslands() {')
     lines.push('  var islands = [];')
     lines.push("  document.querySelectorAll('[data-vue]').forEach(function(el) {")
     lines.push('    var name = el.dataset.vue;')
     lines.push('    if (!name) return;')
-    lines.push('    var Component = components[name];')
+    lines.push('    var Component = components[name] || components[__toPascalCase(name)];')
     lines.push('    if (!Component) {')
     lines.push("      console.warn('[islands] Unknown component: ' + name);")
     lines.push('      return;')

@@ -213,6 +213,22 @@ describe('IslandBuilder — generated entry', () => {
     expect(entry).toContain("'auth/login-form': __c")
     expect(entry).toContain("'billing/checkout': __c")
   })
+
+  test('mount lookup falls back to PascalCase so <vue:copy-button> resolves CopyButton', () => {
+    const b = new IslandBuilder({ islandsDir: APP })
+    const islands = (b as any).discoverIslands()
+    const entry = (b as any).generateEntry(islands) as string
+    expect(entry).toContain('function __toPascalCase')
+    expect(entry).toContain('components[name] || components[__toPascalCase(name)]')
+
+    // Verify the helper itself produces the right transforms.
+    const helper = new Function(
+      "return function __toPascalCase(s) { return s.replace(/(^|-)(\\w)/g, function(_m, _sep, ch) { return ch.toUpperCase(); }); }"
+    )() as (s: string) => string
+    expect(helper('copy-button')).toBe('CopyButton')
+    expect(helper('MyComp')).toBe('MyComp')
+    expect(helper('counter')).toBe('Counter')
+  })
 })
 
 // ── Package source resolution ────────────────────────────────────────────────
