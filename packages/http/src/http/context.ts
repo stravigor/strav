@@ -112,15 +112,16 @@ export default class Context {
 
   /** Extract named string fields from a form body. With no args, returns all non-file fields. */
   async inputs<K extends string>(...keys: K[]): Promise<Record<K, string>> {
-    const form = await this.body<FormData>()
+    const body = await this.body<Record<string, unknown>>()
     const result = {} as Record<K, string>
+    const fields = body && typeof body === 'object' ? body : {}
     if (keys.length === 0) {
-      form.forEach((value, key) => {
+      for (const [key, value] of Object.entries(fields)) {
         if (typeof value === 'string') (result as Record<string, string>)[key] = value
-      })
+      }
     } else {
       for (const key of keys) {
-        const value = form.get(key)
+        const value = fields[key]
         result[key] = typeof value === 'string' ? value : ''
       }
     }
@@ -129,15 +130,16 @@ export default class Context {
 
   /** Extract named file fields from a form body. With no args, returns all file fields. */
   async files<K extends string>(...keys: K[]): Promise<Record<K, File | null>> {
-    const form = await this.body<FormData>()
+    const body = await this.body<Record<string, unknown>>()
     const result = {} as Record<K, File | null>
+    const fields = body && typeof body === 'object' ? body : {}
     if (keys.length === 0) {
-      form.forEach((value, key) => {
+      for (const [key, value] of Object.entries(fields)) {
         if (value instanceof File) (result as Record<string, File>)[key] = value
-      })
+      }
     } else {
       for (const key of keys) {
-        const value = form.get(key)
+        const value = fields[key]
         result[key] = value instanceof File ? value : null
       }
     }

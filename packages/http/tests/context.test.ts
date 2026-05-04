@@ -98,4 +98,69 @@ describe('Context', () => {
       expect(ctx.subdomain).toBe('api')
     })
   })
+
+  describe('inputs', () => {
+    test('reads urlencoded fields by name', async () => {
+      const body = new URLSearchParams({ name: 'alice', email: 'a@x' })
+      const request = new Request('http://example.com/test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      })
+      const ctx = new Context(request)
+
+      expect(await ctx.inputs('name', 'email')).toEqual({ name: 'alice', email: 'a@x' })
+    })
+
+    test('returns all string fields when called with no args', async () => {
+      const form = new FormData()
+      form.set('name', 'alice')
+      form.set('avatar', new File(['x'], 'a.png', { type: 'image/png' }))
+      const request = new Request('http://example.com/test', { method: 'POST', body: form })
+      const ctx = new Context(request)
+
+      const result = await ctx.inputs()
+      expect(result).toEqual({ name: 'alice' })
+    })
+
+    test('missing keys return empty string', async () => {
+      const body = new URLSearchParams({ name: 'alice' })
+      const request = new Request('http://example.com/test', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      })
+      const ctx = new Context(request)
+
+      expect(await ctx.inputs('name', 'missing')).toEqual({ name: 'alice', missing: '' })
+    })
+  })
+
+  describe('files', () => {
+    test('reads File fields from multipart bodies', async () => {
+      const form = new FormData()
+      form.set('name', 'alice')
+      const png = new File(['x'], 'a.png', { type: 'image/png' })
+      form.set('avatar', png)
+      const request = new Request('http://example.com/test', { method: 'POST', body: form })
+      const ctx = new Context(request)
+
+      const result = await ctx.files('avatar', 'name')
+      expect(result.avatar).toBeInstanceOf(File)
+      expect(result.avatar?.name).toBe('a.png')
+      expect(result.name).toBeNull()
+    })
+
+    test('returns all File fields when called with no args', async () => {
+      const form = new FormData()
+      form.set('name', 'alice')
+      form.set('avatar', new File(['x'], 'a.png', { type: 'image/png' }))
+      const request = new Request('http://example.com/test', { method: 'POST', body: form })
+      const ctx = new Context(request)
+
+      const result = await ctx.files()
+      expect(Object.keys(result)).toEqual(['avatar'])
+      expect(result.avatar).toBeInstanceOf(File)
+    })
+  })
 })

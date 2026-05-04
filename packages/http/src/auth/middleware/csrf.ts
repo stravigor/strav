@@ -37,19 +37,18 @@ export function csrf(): Middleware {
     // Check headers first
     let token = ctx.header('X-CSRF-Token') ?? ctx.header('X-XSRF-Token')
 
-    // Fall back to request body
+    // Fall back to request body. ctx.body() returns a plain object for
+    // JSON, urlencoded, and multipart bodies (form bodies are flattened
+    // from FormData into Record<string, unknown> in Context.body()).
     if (!token) {
       const contentType = ctx.header('content-type') ?? ''
-
-      if (contentType.includes('application/json')) {
-        const body = await ctx.body<Record<string, unknown>>()
-        if (typeof body._token === 'string') token = body._token
-      } else if (
+      if (
+        contentType.includes('application/json') ||
         contentType.includes('application/x-www-form-urlencoded') ||
         contentType.includes('multipart/form-data')
       ) {
-        const body = await ctx.body<FormData>()
-        if (body instanceof FormData) token = body.get('_token') as string | null
+        const body = await ctx.body<Record<string, unknown>>()
+        if (body && typeof body._token === 'string') token = body._token
       }
     }
 
