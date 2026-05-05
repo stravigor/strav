@@ -1,6 +1,6 @@
 {
   "name": "@strav/transit",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "type": "module",
   "description": "Streaming CSV/JSONL import-export pipeline with validation, deduplication, idempotent upsert, and progress reporting",
   "license": "MIT",
