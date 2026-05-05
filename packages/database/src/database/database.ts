@@ -5,6 +5,11 @@ import { ConfigurationError } from '@strav/kernel/exceptions/errors'
 import { env } from '@strav/kernel/helpers/env'
 import { createTenantAwareSQL } from './tenant/wrapper'
 import { hasTenantContext, isBypassingTenant } from './tenant/context'
+import {
+  type TenantIdType,
+  DEFAULT_TENANT_ID_TYPE,
+  setTenantIdType,
+} from './tenant/id_type'
 
 /**
  * Database connection wrapper backed by {@link SQL Bun.sql}.
@@ -36,6 +41,7 @@ export default class Database {
   private _bypassConnection: SQL | null = null
   private tenantEnabled: boolean
   private tenantAwareConnection: SQL
+  readonly tenantIdType: TenantIdType
 
   constructor(protected config: Configuration) {
     if (Database._appConnection) {
@@ -59,6 +65,11 @@ export default class Database {
 
     this.tenantEnabled = config.get('database.tenant.enabled') ?? false
     Database._tenantEnabled = this.tenantEnabled
+
+    this.tenantIdType =
+      (config.get('database.tenant.idType') as TenantIdType | undefined) ??
+      DEFAULT_TENANT_ID_TYPE
+    setTenantIdType(this.tenantIdType)
 
     this.tenantAwareConnection = this.tenantEnabled
       ? createTenantAwareSQL(this.appConnection)

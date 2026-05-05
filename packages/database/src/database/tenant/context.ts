@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import { getTenantIdType, validateTenantId } from './id_type'
 
 export interface TenantContext {
   tenantId: string
@@ -14,20 +13,23 @@ export const tenantStorage = new AsyncLocalStorage<TenantContext>()
  *
  * All database operations against tenant-scoped tables will be filtered
  * by PostgreSQL row-level security to rows where `tenant_id` matches
- * the given UUID.
+ * the given id. The id format is validated against the configured
+ * `database.tenant.idType` (default `'bigint'`).
  *
  * @example
- * await withTenant('a3b1c4d5-...', async () => {
- *   const orders = await Order.all() // only this tenant's rows
+ * await withTenant('1234', async () => {           // bigint
+ *   const orders = await Order.all()
+ * })
+ *
+ * await withTenant('a3b1c4d5-...', async () => {   // uuid
+ *   const orders = await Order.all()
  * })
  */
 export async function withTenant<T>(
   tenantId: string,
   callback: () => T | Promise<T>
 ): Promise<T> {
-  if (!UUID_RE.test(tenantId)) {
-    throw new Error(`Invalid tenant id: ${tenantId}. Must be a UUID.`)
-  }
+  validateTenantId(getTenantIdType(), tenantId)
   return tenantStorage.run({ tenantId }, callback)
 }
 

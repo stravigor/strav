@@ -1,6 +1,7 @@
 import type { ColumnDefinition, DefaultValue } from '../../schema/database_representation'
 import type { PostgreSQLType } from '../../schema/postgres'
 import { enableRLSStatements, createTenantPolicyStatement } from '../tenant/policies'
+import { type TenantIdType, DEFAULT_TENANT_ID_TYPE } from '../tenant/id_type'
 import type {
   SchemaDiff,
   GeneratedSql,
@@ -18,6 +19,12 @@ import type {
  * enums, tables, constraints, indexes — each with up and down SQL.
  */
 export default class SqlGenerator {
+  private tenantIdType: TenantIdType
+
+  constructor(tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE) {
+    this.tenantIdType = tenantIdType
+  }
+
   generate(diff: SchemaDiff): GeneratedSql {
     return {
       enumsUp: this.generateEnumsUp(diff.enums),
@@ -141,7 +148,7 @@ export default class SqlGenerator {
       for (const stmt of enableRLSStatements(name)) {
         lines.push(stmt)
       }
-      lines.push(createTenantPolicyStatement(name))
+      lines.push(createTenantPolicyStatement(name, this.tenantIdType))
     }
 
     return lines.join('\n')

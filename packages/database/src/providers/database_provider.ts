@@ -21,7 +21,7 @@ export default class DatabaseProvider extends ServiceProvider {
     new BaseModel(this.db)
 
     if (this.db.isMultiTenant) {
-      await ensureTenantTable(this.db.bypass)
+      await ensureTenantTable(this.db.bypass, this.db.tenantIdType)
     }
   }
 

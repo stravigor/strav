@@ -1,13 +1,18 @@
 /**
  * SQL helpers for PostgreSQL row-level security DDL.
  *
- * Used by the migration generator and the tenants seed migration.
+ * Used by the migration generator and the tenants seed migration. The
+ * `idType` argument controls whether the column type and policy cast use
+ * `uuid` or `bigint`.
  */
+
+import type { TenantIdType } from './id_type'
 
 const POLICY_NAME = 'tenant_isolation'
 
-export function tenantIdColumnDDL(): string {
-  return `"tenant_id" UUID NOT NULL DEFAULT current_setting('app.tenant_id', true)::uuid REFERENCES "tenant" ("id") ON DELETE CASCADE`
+export function tenantIdColumnDDL(idType: TenantIdType): string {
+  const sqlType = idType === 'uuid' ? 'UUID' : 'BIGINT'
+  return `"tenant_id" ${sqlType} NOT NULL DEFAULT current_setting('app.tenant_id', true)::${idType} REFERENCES "tenant" ("id") ON DELETE CASCADE`
 }
 
 export function enableRLSStatements(table: string): string[] {
@@ -24,11 +29,12 @@ export function disableRLSStatements(table: string): string[] {
   ]
 }
 
-export function createTenantPolicyStatement(table: string): string {
+export function createTenantPolicyStatement(table: string, idType: TenantIdType): string {
+  const cast = `current_setting('app.tenant_id', true)::${idType}`
   return (
     `CREATE POLICY "${POLICY_NAME}" ON "${table}" ` +
-    `USING ("tenant_id" = current_setting('app.tenant_id', true)::uuid) ` +
-    `WITH CHECK ("tenant_id" = current_setting('app.tenant_id', true)::uuid);`
+    `USING ("tenant_id" = ${cast}) ` +
+    `WITH CHECK ("tenant_id" = ${cast});`
   )
 }
 

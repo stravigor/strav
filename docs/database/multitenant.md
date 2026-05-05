@@ -11,8 +11,10 @@ The previous schema-per-tenant approach worked but was heavy: per-tenant
 schemas, per-tenant migrations, schema cloning, model prefixes per domain.
 The RLS approach replaces all of that with two columns and one policy:
 
-- Every tenant-scoped table carries a `tenant_id UUID` column.
-- An RLS policy filters rows where `tenant_id = current_setting('app.tenant_id')::uuid`.
+- Every tenant-scoped table carries a `tenant_id` column. Type is
+  configurable via `database.tenant.idType` — defaults to `'bigint'`,
+  also supports `'uuid'`.
+- An RLS policy filters rows where `tenant_id = current_setting('app.tenant_id')::<idType>`.
 - The application sets `app.tenant_id` once per request, inside a
   transaction, via `set_config('app.tenant_id', $1, true)`.
 - PostgreSQL refuses to return — and refuses inserts that target — rows
@@ -34,6 +36,7 @@ export default {
 
   tenant: {
     enabled: true,
+    idType:  'bigint',                          // 'bigint' (default) or 'uuid'
     bypass: {
       username: env('DB_BYPASS_USER', 'strav_admin'),    // BYPASSRLS role
       password: env('DB_BYPASS_PASSWORD', ''),
@@ -41,6 +44,27 @@ export default {
   },
 }
 ```
+
+### Choosing an `idType`
+
+| Value      | `tenant.id` PK                                | Tenanted child `tenant_id` |
+| ---------- | --------------------------------------------- | -------------------------- |
+| `'bigint'` (default) | `BIGSERIAL NOT NULL`                | `BIGINT NOT NULL`          |
+| `'uuid'`   | `UUID NOT NULL DEFAULT gen_random_uuid()`     | `UUID NOT NULL`            |
+
+Pick `'bigint'` for sequential server-generated IDs (smaller storage,
+faster index lookups, no leakage of tenant count). Pick `'uuid'` if
+tenants are created by external/distributed sources or you expose tenant
+IDs publicly and want unguessable values.
+
+The same `idType` is threaded through schema generation, migration SQL,
+the RLS policy cast, and the runtime validator in `withTenant(...)`.
+Once a database is provisioned it cannot be changed without a data
+migration — pick deliberately at install time.
+
+> **Migrating from v0.4.x.** Apps previously running on v0.4.x have
+> UUID-based tenant tables. Set `idType: 'uuid'` explicitly to keep them
+> working — the framework default flipped to `'bigint'` in v0.5.0.
 
 ## Database Roles
 
@@ -94,12 +118,12 @@ export default defineSchema('order', {
 })
 ```
 
-Generated migration includes:
+Generated migration (with `idType: 'bigint'`, the default):
 
 ```sql
 CREATE TABLE IF NOT EXISTS "order" (
   "id" SERIAL,
-  "tenant_id" UUID NOT NULL DEFAULT current_setting('app.tenant_id', true)::uuid,
+  "tenant_id" BIGINT NOT NULL DEFAULT current_setting('app.tenant_id', true)::bigint,
   "total" DECIMAL(10,2) NOT NULL,
   "status" "order_status" NOT NULL DEFAULT 'pending',
   ...
@@ -111,9 +135,12 @@ CREATE TABLE IF NOT EXISTS "order" (
 ALTER TABLE "order" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "order" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "tenant_isolation" ON "order"
-  USING ("tenant_id" = current_setting('app.tenant_id', true)::uuid)
-  WITH CHECK ("tenant_id" = current_setting('app.tenant_id', true)::uuid);
+  USING ("tenant_id" = current_setting('app.tenant_id', true)::bigint)
+  WITH CHECK ("tenant_id" = current_setting('app.tenant_id', true)::bigint);
 ```
+
+With `idType: 'uuid'` the column becomes `UUID` and the cast becomes
+`::uuid` everywhere — same shape, different type.
 
 Tell the model it's tenant-scoped so `save()` refuses to run outside a
 context:
@@ -134,17 +161,22 @@ export default class Order extends BaseModel {
 
 ## Setting Tenant Context
 
-`withTenant(uuid, callback)` runs the callback inside an async context that
-the SQL proxy reads on every query.
+`withTenant(id, callback)` runs the callback inside an async context that
+the SQL proxy reads on every query. The `id` is always a string — pass a
+numeric string for `'bigint'` or a UUID literal for `'uuid'`. Format is
+validated against the configured `idType` before any SQL is bound.
 
 ```typescript
 import { withTenant } from '@strav/database'
 
-await withTenant('a3b1c4d5-...', async () => {
-  // RLS sees app.tenant_id = 'a3b1c4d5-...'
+// idType: 'bigint' (default)
+await withTenant('1234', async () => {
   const orders = await Order.all()             // only this tenant's rows
   await Order.create({ total: 99.0 })          // tenant_id auto-fills
 })
+
+// idType: 'uuid'
+await withTenant('a3b1c4d5-...', async () => { /* ... */ })
 ```
 
 Under the hood every query becomes a transaction whose first statement is
@@ -203,7 +235,7 @@ Or via CLI:
 ```bash
 bun strav tenant:create --slug=acme --name="Acme Corp"
 bun strav tenant:list
-bun strav tenant:delete <uuid>
+bun strav tenant:delete <id>     # numeric for bigint, UUID for uuid
 ```
 
 ## Background Jobs
@@ -276,9 +308,11 @@ await withoutTenant(async () => {
    to the next caller via a shared pooled connection.
 4. **WITH CHECK.** Inserts and updates targeting a different tenant
    are rejected at the database, not silently filtered.
-5. **Cast to UUID.** The setting is cast to UUID inside the policy
-   (`current_setting('app.tenant_id', true)::uuid`), so a malformed value
-   raises an error rather than matching anything by accident.
+5. **Typed cast.** The setting is cast to the configured `idType`
+   inside the policy (e.g. `current_setting('app.tenant_id', true)::bigint`),
+   so a malformed value raises a SQL error rather than matching anything
+   by accident. The runtime validator in `withTenant(...)` rejects
+   malformed IDs even earlier — before they reach Postgres.
 
 ## API Reference
 
@@ -286,7 +320,7 @@ await withoutTenant(async () => {
 
 - `withTenant(tenantId, callback)` — run inside a tenant context
 - `withoutTenant(callback)` — run with the BYPASSRLS connection
-- `getCurrentTenantId()` — current UUID or `null`
+- `getCurrentTenantId()` — current tenant id (numeric string or UUID, depending on `idType`) or `null`
 - `hasTenantContext()` — true if `withTenant(...)` is active and not bypassed
 - `isBypassingTenant()` — true if `withoutTenant(...)` is active
 

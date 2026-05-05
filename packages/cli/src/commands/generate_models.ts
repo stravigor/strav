@@ -2,7 +2,7 @@ import type { Command } from 'commander'
 import chalk from 'chalk'
 import SchemaRegistry from '@strav/database/schema/registry'
 import ModelGenerator from '../generators/model_generator.ts'
-import { loadGeneratorConfig, getDatabasePaths } from '../config/loader.ts'
+import { loadGeneratorConfig, getDatabasePaths, loadTenantIdType } from '../config/loader.ts'
 
 export function register(program: Command): void {
   program
@@ -21,7 +21,8 @@ export function register(program: Command): void {
         await registry.discover(dbPaths.schemas)
         registry.validate()
 
-        const representation = registry.buildRepresentation()
+        const tenantIdType = await loadTenantIdType()
+        const representation = registry.buildRepresentation(tenantIdType)
         const generator = new ModelGenerator(registry.all(), representation, config)
         const { written, skipped } = await generator.writeAll(force)
 

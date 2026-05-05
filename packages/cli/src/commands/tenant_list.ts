@@ -14,7 +14,7 @@ export function register(program: Command): void {
         const { db: database } = await bootstrap()
         db = database
 
-        await ensureTenantTable(db.bypass)
+        await ensureTenantTable(db.bypass, db.tenantIdType)
         const manager = new TenantManager(db)
         const tenants = await manager.list()
 

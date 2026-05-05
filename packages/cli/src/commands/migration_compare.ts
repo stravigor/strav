@@ -16,7 +16,7 @@ export function register(program: Command): void {
 
         console.log(chalk.cyan('Comparing schema with database...\n'))
 
-        const desired = registry.buildRepresentation()
+        const desired = registry.buildRepresentation(database.tenantIdType)
         const actual = await introspector.introspect()
         const diff = new SchemaDiffer().diff(desired, actual)
 

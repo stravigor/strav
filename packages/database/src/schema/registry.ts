@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path'
 import type { SchemaDefinition } from './types'
 import type { DatabaseRepresentation } from './database_representation'
 import RepresentationBuilder from './representation_builder'
+import { type TenantIdType, DEFAULT_TENANT_ID_TYPE } from '../database/tenant/id_type'
 
 /**
  * Discovers, stores, validates, and provides dependency-ordered
@@ -139,10 +140,14 @@ export default class SchemaRegistry {
   /**
    * Generate the {@link DatabaseRepresentation} from all registered schemas.
    * Must be called after {@link validate} to ensure all references are resolvable.
+   *
+   * @param tenantIdType  Column type for `tenant_id` on tenant-scoped tables.
+   *                      Defaults to `'bigint'`. Pass `'uuid'` for apps that
+   *                      have set `database.tenant.idType: 'uuid'` in config.
    */
-  buildRepresentation(): DatabaseRepresentation {
+  buildRepresentation(tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE): DatabaseRepresentation {
     const ordered = this.resolve()
-    return new RepresentationBuilder(ordered).build()
+    return new RepresentationBuilder(ordered, tenantIdType).build()
   }
 
   /** Collect all schema names that the given schema depends on, excluding self-references. */

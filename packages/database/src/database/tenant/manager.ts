@@ -28,7 +28,7 @@ export default class TenantManager {
 
   /** Ensure the `tenant` table exists. Safe to call repeatedly. */
   async setup(): Promise<void> {
-    await ensureTenantTable(this.db.bypass)
+    await ensureTenantTable(this.db.bypass, this.db.tenantIdType)
   }
 
   /** Create a new tenant and return its row. */

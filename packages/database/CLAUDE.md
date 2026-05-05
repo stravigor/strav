@@ -26,7 +26,7 @@ Database layer for the Strav framework — query builder, ORM, schema builder, a
 
 ## Multi-tenant (RLS) Support
 - One database, one schema, one migrations directory.
-- Tenant-scoped tables carry `tenant_id UUID NOT NULL DEFAULT current_setting('app.tenant_id', true)::uuid REFERENCES tenant(id) ON DELETE CASCADE`.
+- Tenant-scoped tables carry `tenant_id <idType> NOT NULL DEFAULT current_setting('app.tenant_id', true)::<idType> REFERENCES tenant(id) ON DELETE CASCADE`. `idType` is `'bigint'` by default; set `database.tenant.idType: 'uuid'` to opt into UUID instead. Threaded through `RepresentationBuilder`, `SqlGenerator`, RLS policy DDL helpers in `policies.ts`, and the runtime validator in `tenant/context.ts`.
 - `Database` exposes two pools when `database.tenant.enabled` is true:
   - **app** pool — non-superuser role (NOBYPASSRLS), used for `db.sql`. In a `withTenant(...)` block the SQL client is wrapped to inject `set_config('app.tenant_id', $1, true)` as the first statement of every transaction.
   - **bypass** pool — `database.tenant.bypass.username` (BYPASSRLS role), used by migrations, `TenantManager`, and `withoutTenant(...)`. Lazy-initialised, accessible via `db.bypass`.

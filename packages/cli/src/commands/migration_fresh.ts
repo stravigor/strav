@@ -53,11 +53,11 @@ export async function freshDatabase(
 
   console.log(chalk.cyan('Generating fresh migration...'))
 
-  const desired = registry.buildRepresentation()
+  const desired = registry.buildRepresentation(db.tenantIdType)
   const actual = await introspector.introspect()
   const diff = new SchemaDiffer().diff(desired, actual)
 
-  const sql = new SqlGenerator().generate(diff)
+  const sql = new SqlGenerator(db.tenantIdType).generate(diff)
   const version = Date.now().toString()
   const tableOrder = desired.tables.map(t => t.name)
 

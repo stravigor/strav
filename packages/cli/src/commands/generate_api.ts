@@ -8,7 +8,7 @@ import TestGenerator from '../generators/test_generator.ts'
 import DocGenerator from '../generators/doc_generator.ts'
 import type { ApiRoutingConfig } from '../generators/route_generator.ts'
 import type { GeneratorConfig } from '../generators/config.ts'
-import { loadGeneratorConfig, getDatabasePaths } from '../config/loader.ts'
+import { loadGeneratorConfig, getDatabasePaths, loadTenantIdType } from '../config/loader.ts'
 
 export function register(program: Command): void {
   program
@@ -30,7 +30,8 @@ export function register(program: Command): void {
         registry.validate()
 
         const schemas = registry.resolve()
-        const representation = registry.buildRepresentation()
+        const tenantIdType = await loadTenantIdType()
+        const representation = registry.buildRepresentation(tenantIdType)
 
         // Load generator config (if available)
         const config = await loadGeneratorConfig()

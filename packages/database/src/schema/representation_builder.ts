@@ -14,6 +14,7 @@ import type {
   DefaultValue,
 } from './database_representation'
 import { toSnakeCase, serialToIntegerType } from './naming'
+import { type TenantIdType, DEFAULT_TENANT_ID_TYPE } from '../database/tenant/id_type'
 
 /** Timestamp columns each archetype receives automatically. */
 const TIMESTAMP_RULES: Record<
@@ -53,9 +54,11 @@ interface PKInfo {
  */
 export default class RepresentationBuilder {
   private schemas: Map<string, SchemaDefinition>
+  private tenantIdType: TenantIdType
 
-  constructor(schemas: SchemaDefinition[]) {
+  constructor(schemas: SchemaDefinition[], tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE) {
     this.schemas = new Map(schemas.map(s => [s.name, s]))
+    this.tenantIdType = tenantIdType
   }
 
   build(): DatabaseRepresentation {
@@ -115,9 +118,10 @@ export default class RepresentationBuilder {
   /**
    * Inject the `tenant_id` column for tenant-scoped tables.
    *
-   * The column is NOT NULL with a DEFAULT of `current_setting('app.tenant_id', true)::uuid`,
-   * which the application populates inside a `withTenant(...)` block. Falls
-   * back to FK CASCADE on `tenant(id)` so deleting a tenant cleans up rows.
+   * The column is NOT NULL with a DEFAULT of
+   * `current_setting('app.tenant_id', true)::<idType>`, which the application
+   * populates inside a `withTenant(...)` block. Falls back to FK CASCADE on
+   * `tenant(id)` so deleting a tenant cleans up rows.
    *
    * The matching RLS policy DDL is emitted by the SQL generator.
    */
@@ -127,11 +131,15 @@ export default class RepresentationBuilder {
     indexes: IndexDefinition[],
     pk: PrimaryKeyConstraint | null
   ): void {
+    const pgType: PostgreSQLType = this.tenantIdType === 'uuid' ? 'uuid' : 'bigint'
     columns.push({
       name: 'tenant_id',
-      pgType: 'uuid',
+      pgType,
       notNull: true,
-      defaultValue: { kind: 'expression', sql: `current_setting('app.tenant_id', true)::uuid` },
+      defaultValue: {
+        kind: 'expression',
+        sql: `current_setting('app.tenant_id', true)::${this.tenantIdType}`,
+      },
       unique: false,
       primaryKey: false,
       autoIncrement: false,

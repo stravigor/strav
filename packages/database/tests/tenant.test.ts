@@ -77,6 +77,7 @@ describe('Multi-tenant (RLS)', () => {
     config.set('database.password', APP_PW)
     config.set('database.database', 'strav_testing')
     config.set('database.tenant.enabled', true)
+    config.set('database.tenant.idType', 'uuid')
     config.set('database.tenant.bypass.username', SUPERUSER)
     config.set('database.tenant.bypass.password', SUPERUSER_PW)
 
@@ -88,7 +89,7 @@ describe('Multi-tenant (RLS)', () => {
     db = container.resolve(Database)
     manager = container.resolve(TenantManager)
 
-    await ensureTenantTable(db.bypass)
+    await ensureTenantTable(db.bypass, 'uuid')
     // Make sure the app role can read the tenant FK target.
     await setupSql.unsafe(`GRANT SELECT ON "tenant" TO "${APP_ROLE}"`)
 
@@ -103,7 +104,7 @@ describe('Multi-tenant (RLS)', () => {
     for (const stmt of enableRLSStatements('rls_post')) {
       await db.bypass.unsafe(stmt)
     }
-    await db.bypass.unsafe(createTenantPolicyStatement('rls_post'))
+    await db.bypass.unsafe(createTenantPolicyStatement('rls_post', 'uuid'))
     await db.bypass.unsafe(`GRANT ALL ON "rls_post" TO "${APP_ROLE}"`)
 
     tenantA = await manager.create({ slug: 'rls-acme', name: 'Acme' })
