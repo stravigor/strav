@@ -312,11 +312,31 @@ function compileDirective(
       break
     }
 
-    case 'csrf':
-      lines.push(
-        `__out += '<input type="hidden" name="_token" value="' + __escape(csrfToken) + '">';`
-      )
+    case 'csrf': {
+      // @csrf / @csrf()         → bare escaped token value
+      // @csrf('input')          → <input type="hidden" name="_token" value="…">
+      // @csrf('meta')           → <meta name="csrf" content="…">
+      const raw = (token.args ?? '').trim()
+      if (raw === '') {
+        lines.push(`__out += __escape(csrfToken);`)
+        break
+      }
+      const variant = raw.replace(/^['"]|['"]$/g, '').trim()
+      if (variant === 'meta') {
+        lines.push(
+          `__out += '<meta name="csrf" content="' + __escape(csrfToken) + '">';`
+        )
+      } else if (variant === 'input') {
+        lines.push(
+          `__out += '<input type="hidden" name="_token" value="' + __escape(csrfToken) + '">';`
+        )
+      } else {
+        throw new TemplateError(
+          `@csrf accepts 'meta' or 'input' (got ${JSON.stringify(variant)}) at line ${token.line}`
+        )
+      }
       break
+    }
 
     case 'push': {
       if (!token.args) throw new TemplateError(`@push requires a name at line ${token.line}`)

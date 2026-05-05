@@ -148,6 +148,22 @@ Returns `403` if the token is missing or doesn't match.
 
 > Note: The `session()` middleware already sets `ctx.get('csrfToken')` on every request, so `csrf()` is only needed for the server-side validation on state-changing requests.
 
+#### Client-side helpers
+
+The [`@csrf` template directive](../view/view.md#csrf) has three forms: `@csrf` for the bare token, `@csrf('input')` for the hidden form input, and `@csrf('meta')` for the meta tag used by `fetch` wrappers. For SPA / island calls, pair `@csrf('meta')` (renders `<meta name="csrf" content="...">` in `<head>`) with `xfetch` from `@strav/view/client`:
+
+```typescript
+import { xfetch } from '@strav/view/client'
+
+const res = await xfetch('/api/projects', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'New project' }),
+})
+```
+
+`xfetch` reads the meta tag, injects `X-CSRF-Token` on state-changing methods, and defaults `credentials: 'same-origin'`. Otherwise identical to native `fetch`.
+
 ### guest() — reject authenticated users
 
 ```typescript

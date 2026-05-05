@@ -11,3 +11,6 @@ export type { RouteOptions } from './route_helper.ts'
 
 // Re-export client-side router (SPA router)
 export * from './router.ts'
+
+// CSRF-aware fetch wrapper for SPA / island API calls
+export { xfetch, resetCsrfTokenCache } from './xfetch.ts'

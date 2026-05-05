@@ -146,19 +146,47 @@ When using multiple CSS entries with IslandBuilder, `@css` outputs `<link>` tags
 
 ### CSRF
 
-Output a hidden CSRF token input inside forms:
+One directive with three forms, picked by argument:
 
 ```html
+{{-- Bare escaped token value, for custom embedding --}}
+@csrf
+
+{{-- Hidden input for traditional form POSTs --}}
 <form method="POST" action="/submit">
-  @csrf
+  @csrf('input')
   <input type="text" name="title">
   <button type="submit">Save</button>
 </form>
+
+{{-- Meta tag for SPA / island fetch wrappers --}}
+<head>
+  <title>App</title>
+  @csrf('meta')
+</head>
 ```
 
-Renders: `<input type="hidden" name="_token" value="a1b2c3...">`. The token is automatically available when the `session()` middleware is active — no need to pass it from the controller.
+| Form              | Renders |
+|-------------------|---------|
+| `@csrf` / `@csrf()`     | `a1b2c3...` (escaped token value) |
+| `@csrf('input')`  | `<input type="hidden" name="_token" value="a1b2c3...">` |
+| `@csrf('meta')`   | `<meta name="csrf" content="a1b2c3...">` |
 
-Pair with the `csrf()` middleware on the route group to validate incoming tokens on POST/PUT/PATCH/DELETE (see [auth docs](../../http/docs/auth.md#csrf--csrf-protection)).
+Pair `@csrf('meta')` with `xfetch` from `@strav/view/client`, which reads the meta tag and injects `X-CSRF-Token` on state-changing requests:
+
+```ts
+import { xfetch } from '@strav/view/client'
+
+const res = await xfetch('/api/projects', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'New project' }),
+})
+```
+
+`xfetch` is a thin wrapper over native `fetch`: same signature, defaults `credentials: 'same-origin'`, only injects the header on POST/PUT/PATCH/DELETE, and only when the caller hasn't already set one. GETs pass through unchanged.
+
+The directive reads the token from the active session — no controller plumbing required as long as `session()` middleware is mounted. Pair with the `csrf()` middleware on your route group to validate incoming tokens (see [auth docs](../../http/docs/auth.md#csrf--csrf-protection)).
 
 ### Content stacks
 
