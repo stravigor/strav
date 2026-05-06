@@ -3,6 +3,7 @@ import { readdirSync } from 'node:fs'
 import type Database from '../database'
 import type MigrationTracker from './tracker'
 import type { MigrationManifest } from './types'
+import { tenantAssignFunctionSQL, tenantSequencesTableSQL } from '../tenant/seed'
 import { DatabaseError } from '@strav/kernel/exceptions/errors'
 
 const TABLE_NAME = '_strav_migrations'
@@ -40,10 +41,28 @@ export default class MigrationRunner {
 
     if (pending.length === 0) return { applied: [], batch: 0 }
 
+    // Tenanted tables produced by the schema generator carry BEFORE INSERT
+    // triggers that reference `strav_assign_tenanted_id()`. The function is
+    // normally installed by DatabaseProvider.boot(), but CLI commands don't
+    // run service providers — install it here so CREATE TRIGGER resolves
+    // during the migration itself. Idempotent (CREATE OR REPLACE).
+    if (this.db.isMultiTenant) {
+      await this.db.bypass.unsafe(tenantAssignFunctionSQL(this.db.tenantIdType))
+    }
+
     const batch = (await this.tracker.getLastBatch()) + 1
 
     for (const version of pending) {
       await this.applyMigration(version, batch)
+    }
+
+    // The counter table `_strav_tenant_sequences` references the tenant
+    // table by FK, so it can only be created after the migration brings
+    // that table into existence. Idempotent (CREATE TABLE IF NOT EXISTS).
+    if (this.db.isMultiTenant) {
+      await this.db.bypass.unsafe(
+        tenantSequencesTableSQL(this.db.tenantIdType, this.db.tenantTableName)
+      )
     }
 
     return { applied: pending, batch }
