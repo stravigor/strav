@@ -57,7 +57,11 @@ export async function freshDatabase(
   const actual = await introspector.introspect()
   const diff = new SchemaDiffer().diff(desired, actual)
 
-  const sql = new SqlGenerator(db.tenantIdType).generate(diff)
+  const sql = new SqlGenerator(
+    db.tenantIdType,
+    db.tenantTableName,
+    db.tenantFkColumn
+  ).generate(diff)
   const version = Date.now().toString()
   const tableOrder = desired.tables.map(t => t.name)
 
