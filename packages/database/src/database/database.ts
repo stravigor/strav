@@ -10,6 +10,11 @@ import {
   DEFAULT_TENANT_ID_TYPE,
   setTenantIdType,
 } from './tenant/id_type'
+import {
+  DEFAULT_TENANT_TABLE_NAME,
+  setTenantTableName,
+  tenantFkColumnFor,
+} from './tenant/naming'
 
 /**
  * Database connection wrapper backed by {@link SQL Bun.sql}.
@@ -42,6 +47,8 @@ export default class Database {
   private tenantEnabled: boolean
   private tenantAwareConnection: SQL
   readonly tenantIdType: TenantIdType
+  readonly tenantTableName: string
+  readonly tenantFkColumn: string
 
   constructor(protected config: Configuration) {
     if (Database._appConnection) {
@@ -70,6 +77,12 @@ export default class Database {
       (config.get('database.tenant.idType') as TenantIdType | undefined) ??
       DEFAULT_TENANT_ID_TYPE
     setTenantIdType(this.tenantIdType)
+
+    this.tenantTableName =
+      (config.get('database.tenant.tableName') as string | undefined) ??
+      DEFAULT_TENANT_TABLE_NAME
+    setTenantTableName(this.tenantTableName)
+    this.tenantFkColumn = tenantFkColumnFor(this.tenantTableName)
 
     this.tenantAwareConnection = this.tenantEnabled
       ? createTenantAwareSQL(this.appConnection)

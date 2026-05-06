@@ -15,6 +15,10 @@ import type {
 } from './database_representation'
 import { toSnakeCase, serialToIntegerType, isTenantedSequence } from './naming'
 import { type TenantIdType, DEFAULT_TENANT_ID_TYPE } from '../database/tenant/id_type'
+import {
+  DEFAULT_TENANT_TABLE_NAME,
+  tenantFkColumnFor,
+} from '../database/tenant/naming'
 
 /** Timestamp columns each archetype receives automatically. */
 const TIMESTAMP_RULES: Record<
@@ -61,10 +65,19 @@ interface PKInfo {
 export default class RepresentationBuilder {
   private schemas: Map<string, SchemaDefinition>
   private tenantIdType: TenantIdType
+  private tenantTableName: string
+  private tenantFkColumn: string
 
-  constructor(schemas: SchemaDefinition[], tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE) {
+  constructor(
+    schemas: SchemaDefinition[],
+    tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE,
+    tenantTableName: string = DEFAULT_TENANT_TABLE_NAME,
+    tenantFkColumn: string = tenantFkColumnFor(tenantTableName)
+  ) {
     this.schemas = new Map(schemas.map(s => [s.name, s]))
     this.tenantIdType = tenantIdType
+    this.tenantTableName = tenantTableName
+    this.tenantFkColumn = tenantFkColumn
   }
 
   build(): DatabaseRepresentation {
@@ -87,12 +100,12 @@ export default class RepresentationBuilder {
     // 1. Primary key
     const pk = this.addPrimaryKey(schema, columns)
 
-    // 1b. Promote a tenanted-sequence PK to composite (tenant_id, id) before
+    // 1b. Promote a tenanted-sequence PK to composite (<tenantFk>, id) before
     //     addTenantColumn runs, so it can skip the now-redundant index.
     const pkColumn =
       pk && pk.columns.length === 1 ? columns.find(c => c.name === pk.columns[0]) : null
     if (pk && pkColumn?.tenantedSequence && schema.tenanted) {
-      pk.columns = ['tenant_id', ...pk.columns]
+      pk.columns = [this.tenantFkColumn, ...pk.columns]
     }
 
     // 2. Tenant column (tenant-scoped tables only) — must come before
@@ -146,8 +159,9 @@ export default class RepresentationBuilder {
     pk: PrimaryKeyConstraint | null
   ): void {
     const pgType: PostgreSQLType = this.tenantIdType === 'uuid' ? 'uuid' : 'bigint'
+    const fkCol = this.tenantFkColumn
     columns.push({
-      name: 'tenant_id',
+      name: fkCol,
       pgType,
       notNull: true,
       defaultValue: {
@@ -164,22 +178,22 @@ export default class RepresentationBuilder {
     })
 
     foreignKeys.push({
-      columns: ['tenant_id'],
-      referencedTable: 'tenant',
+      columns: [fkCol],
+      referencedTable: this.tenantTableName,
       referencedColumns: ['id'],
       onDelete: 'CASCADE',
       onUpdate: 'CASCADE',
     })
 
-    // Composite index aligned with RLS predicate (tenant_id, pk).
-    // Skip when the PK already starts with tenant_id (tenanted-sequence
+    // Composite index aligned with RLS predicate (<tenantFk>, pk).
+    // Skip when the PK already starts with the tenant FK (tenanted-sequence
     // promotion) — Postgres auto-indexes the PK.
     if (pk && pk.columns.length > 0) {
-      if (pk.columns[0] !== 'tenant_id') {
-        indexes.push({ columns: ['tenant_id', ...pk.columns], unique: false })
+      if (pk.columns[0] !== fkCol) {
+        indexes.push({ columns: [fkCol, ...pk.columns], unique: false })
       }
     } else {
-      indexes.push({ columns: ['tenant_id'], unique: false })
+      indexes.push({ columns: [fkCol], unique: false })
     }
   }
 
@@ -276,13 +290,13 @@ export default class RepresentationBuilder {
       if (parentPK.isTenantedComposite) {
         this.assertTenantedChild(schema, parentName, 'parent')
         foreignKeys.push({
-          columns: ['tenant_id', fkColName],
+          columns: [this.tenantFkColumn, fkColName],
           referencedTable: toSnakeCase(parentName),
-          referencedColumns: ['tenant_id', toSnakeCase(parentPK.name)],
+          referencedColumns: [this.tenantFkColumn, toSnakeCase(parentPK.name)],
           onDelete: 'CASCADE',
           onUpdate: 'CASCADE',
         })
-        indexes.push({ columns: ['tenant_id', fkColName], unique: false })
+        indexes.push({ columns: [this.tenantFkColumn, fkColName], unique: false })
       } else {
         foreignKeys.push({
           columns: [fkColName],
@@ -358,13 +372,13 @@ export default class RepresentationBuilder {
         anyComposite = true
         this.assertTenantedChild(schema, entityName, 'entity')
         foreignKeys.push({
-          columns: ['tenant_id', fkColName],
+          columns: [this.tenantFkColumn, fkColName],
           referencedTable: toSnakeCase(entityName),
-          referencedColumns: ['tenant_id', toSnakeCase(entityPK.name)],
+          referencedColumns: [this.tenantFkColumn, toSnakeCase(entityPK.name)],
           onDelete: 'CASCADE',
           onUpdate: 'CASCADE',
         })
-        indexes.push({ columns: ['tenant_id', fkColName], unique: false })
+        indexes.push({ columns: [this.tenantFkColumn, fkColName], unique: false })
       } else {
         foreignKeys.push({
           columns: [fkColName],
@@ -380,7 +394,7 @@ export default class RepresentationBuilder {
     // Composite unique on the FK pair (also add the backing index PostgreSQL creates).
     // When any side is a tenanted-composite parent, scope uniqueness by tenant.
     if (fkColNames.length === 2) {
-      const uqCols = anyComposite ? ['tenant_id', ...fkColNames] : fkColNames
+      const uqCols = anyComposite ? [this.tenantFkColumn, ...fkColNames] : fkColNames
       uniqueConstraints.push({ columns: uqCols })
       indexes.push({ columns: uqCols, unique: true })
     }
@@ -454,26 +468,24 @@ export default class RepresentationBuilder {
     })
 
     if (refPK.isTenantedComposite) {
-      // We need a child schema reference to validate, but addReferenceColumn
-      // doesn't currently receive it. Validate here against refSchema; the
-      // child is the schema currently being built, not refSchema. Look up via
-      // foreignKeys path by checking ['tenant_id'] presence in `columns`.
-      const childHasTenantId = columns.some(c => c.name === 'tenant_id')
-      if (!childHasTenantId) {
+      // The child must already have its own tenant FK column from
+      // addTenantColumn — verify it's there before emitting the composite FK.
+      const childHasTenantFk = columns.some(c => c.name === this.tenantFkColumn)
+      if (!childHasTenantFk) {
         throw new Error(
-          `Reference field "${fieldName}" targets tenanted-sequence schema "${fieldDef.references}", but the referencing schema is not tenanted. Composite foreign keys require a tenant_id column on the child.`
+          `Reference field "${fieldName}" targets tenanted-sequence schema "${fieldDef.references}", but the referencing schema is not tenanted. Composite foreign keys require a "${this.tenantFkColumn}" column on the child.`
         )
       }
       foreignKeys.push({
-        columns: ['tenant_id', fkColName],
+        columns: [this.tenantFkColumn, fkColName],
         referencedTable: toSnakeCase(fieldDef.references!),
-        referencedColumns: ['tenant_id', toSnakeCase(refPK.name)],
+        referencedColumns: [this.tenantFkColumn, toSnakeCase(refPK.name)],
         // Composite FKs must use CASCADE: SET NULL is impossible because
-        // tenant_id is NOT NULL.
+        // the tenant FK column is NOT NULL.
         onDelete: 'CASCADE',
         onUpdate: 'CASCADE',
       })
-      indexes.push({ columns: ['tenant_id', fkColName], unique: false })
+      indexes.push({ columns: [this.tenantFkColumn, fkColName], unique: false })
     } else {
       foreignKeys.push({
         columns: [fkColName],

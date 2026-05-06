@@ -433,7 +433,7 @@ describe('Tenanted sequences — schema/SQL generation', () => {
       expect(sql).toContain('ENABLE ROW LEVEL SECURITY')
       expect(sql).toMatch(/CREATE POLICY "tenant_isolation" ON "order"/)
       expect(sql).toContain(
-        `CREATE TRIGGER "order_assign_tenanted_id" BEFORE INSERT ON "order" FOR EACH ROW EXECUTE FUNCTION strav_assign_tenanted_id();`
+        `CREATE TRIGGER "order_assign_tenanted_id" BEFORE INSERT ON "order" FOR EACH ROW EXECUTE FUNCTION strav_assign_tenanted_id('tenant_id');`
       )
     })
 

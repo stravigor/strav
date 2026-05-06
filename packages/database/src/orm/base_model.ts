@@ -37,6 +37,14 @@ export default class BaseModel {
    */
   static tenantScoped: boolean = false
 
+  /**
+   * Property name to use when calling `model.load('<name>')` to fetch the
+   * parent tenant row. Defaults to `db.tenantTableName` (e.g. `'workspace'`
+   * when the configured table is `workspace`, or `'tenant'` for the default).
+   * Override on a per-model basis to use a different accessor name.
+   */
+  static tenantRef: string | undefined = undefined
+
   constructor(db?: Database) {
     if (db) BaseModel._db = db
   }
@@ -270,6 +278,9 @@ export default class BaseModel {
     const ctor = this.constructor as typeof BaseModel
     const refMetas = getReferenceMeta(ctor)
     const assocMetas = getAssociates(ctor)
+    const tenantRef = ctor.tenantScoped
+      ? (ctor.tenantRef ?? BaseModel.db.tenantTableName)
+      : undefined
 
     for (const relation of relations) {
       const refMeta = refMetas.find(r => r.property === relation)
@@ -284,10 +295,39 @@ export default class BaseModel {
         continue
       }
 
+      if (tenantRef && relation === tenantRef) {
+        await this.loadTenant(relation)
+        continue
+      }
+
       throw new Error(`Unknown relation "${relation}" on ${ctor.name}`)
     }
 
     return this
+  }
+
+  /**
+   * Load the parent tenant row from the configured tenant table. Reads the
+   * tenant FK from the model's `<tenantTableName>Id` property (camelCase) and
+   * routes through `db.bypass` since the tenant table is global (no RLS).
+   */
+  private async loadTenant(property: string): Promise<void> {
+    const db = BaseModel.db
+    const fkProp = toCamelCase(db.tenantFkColumn)
+    const fkValue = (this as any)[fkProp]
+
+    if (fkValue === null || fkValue === undefined) {
+      ;(this as any)[property] = null
+      return
+    }
+
+    const rows = await db.bypass.unsafe(
+      `SELECT * FROM "${db.tenantTableName}" WHERE "id" = $1 LIMIT 1`,
+      [fkValue]
+    )
+
+    ;(this as any)[property] =
+      rows.length > 0 ? hydrateRow(rows[0] as Record<string, unknown>) : null
   }
 
   private async loadReference(meta: ReferenceMetadata): Promise<void> {

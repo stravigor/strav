@@ -35,8 +35,9 @@ export default {
   password: env('DB_PASSWORD', ''),
 
   tenant: {
-    enabled: true,
-    idType:  'bigint',                          // 'bigint' (default) or 'uuid'
+    enabled:   true,
+    idType:    'bigint',                        // 'bigint' (default) or 'uuid'
+    tableName: 'tenant',                        // default; rename to 'workspace', 'organization', etc.
     bypass: {
       username: env('DB_BYPASS_USER', 'strav_admin'),    // BYPASSRLS role
       password: env('DB_BYPASS_PASSWORD', ''),
@@ -65,6 +66,54 @@ migration — pick deliberately at install time.
 > **Migrating from v0.4.x.** Apps previously running on v0.4.x have
 > UUID-based tenant tables. Set `idType: 'uuid'` explicitly to keep them
 > working — the framework default flipped to `'bigint'` in v0.5.0.
+
+### Renaming the tenant table
+
+If your domain calls them workspaces, organizations, or accounts, set
+`database.tenant.tableName` to that name instead of the default `'tenant'`:
+
+```typescript
+tenant: {
+  enabled:   true,
+  tableName: 'workspace',
+}
+```
+
+The framework derives every related identifier from that one knob:
+
+| Concept                                  | With default     | With `tableName: 'workspace'` |
+| ---------------------------------------- | ---------------- | ------------------------------ |
+| Tenant registry table                    | `tenant`         | `workspace`                    |
+| FK column on tenanted children           | `tenant_id`      | `workspace_id`                 |
+| Composite PK on tenantedSerial tables    | `(tenant_id, id)`| `(workspace_id, id)`           |
+| Composite FK to a tenantedSerial parent  | `(tenant_id, …)` | `(workspace_id, …)`            |
+| RLS policy column                        | `tenant_id`      | `workspace_id`                 |
+| `model.load('<name>')` accessor          | `'tenant'`       | `'workspace'`                  |
+
+The session config key (`app.tenant_id`) and the framework-internal
+`_strav_tenant_sequences` counter table are *not* renamed — they're
+implementation details that have no user-facing meaning. The dynamic
+trigger function still reads `NEW.<configured FK column>` correctly.
+
+The class name of the built-in `Tenant` model also stays put. Alias on
+import if you prefer your own name:
+
+```typescript
+import { Tenant as Workspace } from '@strav/database'
+
+const ws = await Workspace.find(id)
+```
+
+**Constraint.** The tenant `tableName` is set once at install time and
+threaded through every DDL emission. Renaming it on a live database is a
+one-shot manual migration: rename the table, rename the FK columns on
+every tenanted child, and recreate the RLS policies and triggers. The
+diff engine refuses to auto-detect the rename.
+
+**Validation.** The value is interpolated directly into DDL, so it must
+be a plain snake_case identifier (lowercase letters, digits, and
+underscores; cannot start with a digit). `Database` rejects anything
+else at boot.
 
 ## Database Roles
 
@@ -210,6 +259,29 @@ import type { Middleware } from '@strav/http'
 
 export const bypassTenant: Middleware = (_ctx, next) => withoutTenant(() => next())
 ```
+
+## Loading the parent tenant from a model
+
+A tenant-scoped model can load its parent row through `model.load(...)`.
+The relation name defaults to the configured tenant table name — so with
+`tableName: 'workspace'`, `await project.load('workspace')` populates
+`project.workspace` with the matching `Workspace` row. Override per-model
+with `static tenantRef = 'whatever'` if you need a different accessor.
+
+```typescript
+class Project extends BaseModel {
+  static tenantScoped = true
+  // optional override; defaults to db.tenantTableName
+  // static tenantRef = 'workspace'
+}
+
+const project = await Project.find(1)
+await project.load('workspace')
+project.workspace // populated tenant row
+```
+
+The lookup routes through the bypass connection (the tenant table has no
+RLS), so it works inside `withTenant(...)` or `withoutTenant(...)`.
 
 ## Tenant Management
 

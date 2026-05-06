@@ -28,10 +28,11 @@ Database paths for schemas and migrations are configurable via `config/generator
 - `bun strav db:setup-roles [--apply]` — emit/apply the SQL to create the
   app + bypass PostgreSQL roles required for the RLS workflow.
 - `bun strav tenant:create --slug=... --name=...` — insert a new row in
-  the built-in `tenant` registry.
+  the configured tenant registry table (`database.tenant.tableName`,
+  default `tenant`).
 - `bun strav tenant:list` — list registered tenants.
-- `bun strav tenant:delete <uuid>` — delete a tenant (cascades to all
-  rows in tenant-scoped tables via the FK on `tenant_id`).
+- `bun strav tenant:delete <id>` — delete a tenant (cascades via the FK
+  on the configured tenant column, default `tenant_id`).
 
 ## Conventions
 - Commands are auto-loaded by command_loader.ts

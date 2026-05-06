@@ -38,3 +38,11 @@ export {
   getTenantIdType,
   validateTenantId,
 } from './id_type'
+
+export {
+  DEFAULT_TENANT_TABLE_NAME,
+  setTenantTableName,
+  getTenantTableName,
+  validateTenantTableName,
+  tenantFkColumnFor,
+} from './naming'

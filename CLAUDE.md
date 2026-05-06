@@ -90,9 +90,11 @@ migrations. Full guide: `docs/database/multitenant.md`.
 
 ### How it works
 - Mark a table `tenanted: true` in `defineSchema(...)`. The schema builder
-  injects `tenant_id <idType> NOT NULL DEFAULT current_setting('app.tenant_id', true)::<idType>`
-  with FK to `tenant(id) ON DELETE CASCADE`. `idType` is `'bigint'` by
-  default; set `database.tenant.idType: 'uuid'` for UUID.
+  injects `<tenantFk> <idType> NOT NULL DEFAULT current_setting('app.tenant_id', true)::<idType>`
+  with FK to `<tenantTable>(id) ON DELETE CASCADE`. `idType` is `'bigint'`
+  by default; set `database.tenant.idType: 'uuid'` for UUID. The tenant
+  table is named `tenant` by default; set `database.tenant.tableName: 'workspace'`
+  to rename it (FK column auto-derives as `<tableName>_id`).
 - The migration generator emits `ENABLE`/`FORCE ROW LEVEL SECURITY` and a
   `tenant_isolation` policy with the matching `::<idType>` cast.
 - `withTenant(id, fn)` wraps `fn`'s queries in transactions whose first
@@ -112,8 +114,9 @@ migrations. Full guide: `docs/database/multitenant.md`.
 export default {
   username: env('DB_USER', 'strav_app'),       // NOBYPASSRLS role
   tenant: {
-    enabled: true,
-    idType:  'bigint',                          // 'bigint' (default) or 'uuid'
+    enabled:   true,
+    idType:    'bigint',                        // 'bigint' (default) or 'uuid'
+    tableName: 'tenant',                        // default; rename to 'workspace', etc.
     bypass: {
       username: env('DB_BYPASS_USER', 'strav_admin'),  // BYPASSRLS role
       password: env('DB_BYPASS_PASSWORD', ''),

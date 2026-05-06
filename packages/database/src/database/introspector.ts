@@ -166,12 +166,15 @@ export default class DatabaseIntrospector {
   // --- Tables ---
 
   private async loadTables(): Promise<string[]> {
+    // Exclude framework-internal tables and the configured tenant registry
+    // (created by `TenantManager.setup()`, not by user schemas).
+    const excludes = ['_strav_migrations', '_strav_tenant_sequences', this.db.tenantTableName]
     const rows = await this.db.sql`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
         AND table_type = 'BASE TABLE'
-        AND table_name NOT IN ('_strav_migrations', '_strav_tenant_sequences')
+        AND table_name <> ALL(${excludes})
       ORDER BY table_name
     `
     return rows.map((r: any) => r.table_name)

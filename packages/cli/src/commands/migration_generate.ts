@@ -21,7 +21,11 @@ export function register(program: Command): void {
 
         console.log(chalk.cyan('Comparing schema with database...'))
 
-        const desired = registry.buildRepresentation(database.tenantIdType)
+        const desired = registry.buildRepresentation(
+          database.tenantIdType,
+          database.tenantTableName,
+          database.tenantFkColumn
+        )
         const actual = await introspector.introspect()
         const diff = new SchemaDiffer().diff(desired, actual)
 
@@ -36,7 +40,11 @@ export function register(program: Command): void {
           return
         }
 
-        const sql = new SqlGenerator(database.tenantIdType).generate(diff)
+        const sql = new SqlGenerator(
+          database.tenantIdType,
+          database.tenantTableName,
+          database.tenantFkColumn
+        ).generate(diff)
         const version = Date.now().toString()
         const tableOrder = desired.tables.map(t => t.name)
 

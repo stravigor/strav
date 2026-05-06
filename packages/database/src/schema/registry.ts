@@ -145,9 +145,18 @@ export default class SchemaRegistry {
    *                      Defaults to `'bigint'`. Pass `'uuid'` for apps that
    *                      have set `database.tenant.idType: 'uuid'` in config.
    */
-  buildRepresentation(tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE): DatabaseRepresentation {
+  buildRepresentation(
+    tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE,
+    tenantTableName?: string,
+    tenantFkColumn?: string
+  ): DatabaseRepresentation {
     const ordered = this.resolve()
-    return new RepresentationBuilder(ordered, tenantIdType).build()
+    return new RepresentationBuilder(
+      ordered,
+      tenantIdType,
+      tenantTableName,
+      tenantFkColumn
+    ).build()
   }
 
   /** Collect all schema names that the given schema depends on, excluding self-references. */

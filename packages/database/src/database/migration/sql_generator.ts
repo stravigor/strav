@@ -2,6 +2,7 @@ import type { ColumnDefinition, DefaultValue } from '../../schema/database_repre
 import type { PostgreSQLType } from '../../schema/postgres'
 import { enableRLSStatements, createTenantPolicyStatement } from '../tenant/policies'
 import { type TenantIdType, DEFAULT_TENANT_ID_TYPE } from '../tenant/id_type'
+import { DEFAULT_TENANT_TABLE_NAME, tenantFkColumnFor } from '../tenant/naming'
 import type {
   SchemaDiff,
   GeneratedSql,
@@ -20,9 +21,17 @@ import type {
  */
 export default class SqlGenerator {
   private tenantIdType: TenantIdType
+  private tenantTableName: string
+  private tenantFkColumn: string
 
-  constructor(tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE) {
+  constructor(
+    tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE,
+    tenantTableName: string = DEFAULT_TENANT_TABLE_NAME,
+    tenantFkColumn: string = tenantFkColumnFor(tenantTableName)
+  ) {
     this.tenantIdType = tenantIdType
+    this.tenantTableName = tenantTableName
+    this.tenantFkColumn = tenantFkColumn
   }
 
   generate(diff: SchemaDiff): GeneratedSql {
@@ -148,12 +157,14 @@ export default class SqlGenerator {
       for (const stmt of enableRLSStatements(name)) {
         lines.push(stmt)
       }
-      lines.push(createTenantPolicyStatement(name, this.tenantIdType))
+      lines.push(
+        createTenantPolicyStatement(name, this.tenantIdType, this.tenantFkColumn)
+      )
     }
 
     if (hasTenantedSequence(columns)) {
       lines.push('')
-      lines.push(tenantedSequenceTriggerSql(name))
+      lines.push(tenantedSequenceTriggerSql(name, this.tenantFkColumn))
     }
 
     return lines.join('\n')
@@ -420,13 +431,17 @@ function hasTenantedSequence(columns: ColumnDefinition[]): boolean {
 /**
  * Build the per-table BEFORE INSERT trigger that fills tenanted-sequence ids.
  * The function `strav_assign_tenanted_id()` is installed once globally by
- * `TenantManager.setup()` (see tenant/seed.ts).
+ * `TenantManager.setup()` (see tenant/seed.ts). The FK column is passed as a
+ * trigger argument so the function can read `NEW.<fkColumn>` dynamically.
  */
-export function tenantedSequenceTriggerSql(table: string): string {
+export function tenantedSequenceTriggerSql(
+  table: string,
+  fkColumn: string = 'tenant_id'
+): string {
   const triggerName = `${table}_assign_tenanted_id`
   return [
     `-- Per-tenant id assignment trigger`,
     `DROP TRIGGER IF EXISTS "${triggerName}" ON "${table}";`,
-    `CREATE TRIGGER "${triggerName}" BEFORE INSERT ON "${table}" FOR EACH ROW EXECUTE FUNCTION strav_assign_tenanted_id();`,
+    `CREATE TRIGGER "${triggerName}" BEFORE INSERT ON "${table}" FOR EACH ROW EXECUTE FUNCTION strav_assign_tenanted_id('${fkColumn}');`,
   ].join('\n')
 }
