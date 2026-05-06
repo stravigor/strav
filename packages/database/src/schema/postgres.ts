@@ -29,6 +29,10 @@ export type PostgreSQLNumericTypes =
   | 'smallserial'
   | 'serial'
   | 'bigserial'
+  // Internal markers for per-tenant sequence columns. Not real PostgreSQL types:
+  // emitted as INTEGER/BIGINT and assigned via the `strav_assign_tenanted_id()` trigger.
+  | 'tenanted_serial'
+  | 'tenanted_bigserial'
 
 /** Currency amounts with locale-aware formatting. */
 export type PostgreSQLMonetaryTypes = 'money'

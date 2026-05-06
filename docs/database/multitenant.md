@@ -279,6 +279,100 @@ await withTenant(tenantId, async () => {
 })
 ```
 
+## Per-tenant ID sequences
+
+`t.tenantedSerial()` and `t.tenantedBigSerial()` give each tenant its own
+ID counter. Within a tenant, IDs go `1, 2, 3, …`; across tenants the
+identity space is fully partitioned. Globally unique identity is the
+composite `(tenant_id, id)`.
+
+Use this when tenants expect human-readable, low-numbered identifiers
+(invoice numbers, order numbers, ticket numbers) instead of cluster-wide
+SERIAL values.
+
+```typescript
+export default defineSchema('order', {
+  tenanted: true,
+  fields: {
+    id:    t.tenantedBigSerial().primaryKey(),  // BIGINT, per-tenant counter
+    total: t.decimal(10, 2).required(),
+  },
+})
+```
+
+Generated DDL (with `idType: 'bigint'`):
+
+```sql
+CREATE TABLE "order" (
+  "id"        BIGINT NOT NULL,
+  "tenant_id" BIGINT NOT NULL DEFAULT current_setting('app.tenant_id', true)::bigint,
+  "total"     DECIMAL(10,2) NOT NULL DEFAULT 0,
+  ...
+  CONSTRAINT "pk_order" PRIMARY KEY ("tenant_id", "id")
+);
+
+ALTER TABLE "order" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "order" FORCE ROW LEVEL SECURITY;
+CREATE POLICY "tenant_isolation" ON "order" ...;
+
+CREATE TRIGGER "order_assign_tenanted_id"
+  BEFORE INSERT ON "order" FOR EACH ROW
+  EXECUTE FUNCTION strav_assign_tenanted_id();
+```
+
+### How it works
+
+- A global `_strav_tenant_sequences` table tracks `(tenant_id, table_name) → next_value`
+  and is itself RLS-protected so each tenant only sees its own counters.
+- One global PL/pgSQL function `strav_assign_tenanted_id()` runs as a
+  BEFORE INSERT trigger. If `NEW.id IS NULL`, it UPSERTs the counter row
+  and writes `NEW.id`. The UPSERT row-locks `(tenant_id, table_name)` so
+  concurrent inserts in the same tenant serialize on that lock; tenants
+  never block each other.
+- Both the table and the function are installed once at boot via
+  `TenantManager.setup()` (idempotent). Per-table triggers are emitted
+  by the migration generator alongside `CREATE TABLE`.
+
+### Constraints and trade-offs
+
+- **Composite primary key.** PK is `(tenant_id, id)`. Within a tenant
+  context (`withTenant(...)`) this is invisible to callers — RLS scopes
+  every query to the active tenant, so `Model.find(1)` returns *that
+  tenant's* row 1.
+- **Composite foreign keys.** A reference to a tenantedSerial parent is
+  emitted as `FOREIGN KEY (tenant_id, parent_id) → parent(tenant_id, id)`.
+  The child must itself be `tenanted: true` so the child has a `tenant_id`
+  column to reuse; otherwise `defineSchema` throws. Composite FKs always
+  use `ON DELETE CASCADE` because `SET NULL` is impossible on a
+  `NOT NULL tenant_id`.
+- **Gap-free per committed transaction.** The counter increment lives in
+  the caller's transaction, so a rolled-back insert reclaims its number.
+  Postgres SERIAL does *not* roll back. Gaps still appear on explicit
+  DELETEs.
+- **Explicit ids pass through.** If you `INSERT ... (id, ...) VALUES (100, ...)`,
+  the trigger leaves `NEW.id` alone. The counter is unaware of 100, so a
+  later auto-issued id may eventually collide and fail with a PK
+  violation — same model as Postgres SERIAL.
+- **Initial creation only.** Migrating an existing column between
+  `serial` and `tenantedSerial` is intentionally rejected by the differ;
+  drop and recreate the column manually.
+- **`Model.find(id)` requires a tenant context.** A tenant-scoped model
+  (`tenantScoped = true`) throws if you call `find` outside
+  `withTenant(...)` / `withoutTenant(...)`, mirroring the existing
+  guard on `save()`.
+
+### When *not* to use it
+
+- High-throughput inserts within a single tenant — the row-level lock
+  on `_strav_tenant_sequences` serializes per-tenant writes. For very
+  hot tenants, prefer regular `t.bigserial()` (no per-tenant lock) or
+  UUID PKs.
+- When external systems already own the IDs (use `t.uuid()` or
+  `t.bigserial()` and let the source assign).
+- For tables that don't need user-facing numbering — the extra
+  composite-PK and composite-FK machinery is only worth it when you
+  actually need 1, 2, 3 per tenant.
+
 ## Bypass
 
 `withoutTenant(callback)` routes through the BYPASSRLS connection. Use

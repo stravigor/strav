@@ -27,6 +27,16 @@ const t = {
   smallserial: () => new FieldBuilder('smallserial'),
   serial: () => new FieldBuilder('serial'),
   bigserial: () => new FieldBuilder('bigserial'),
+  /**
+   * Per-tenant INTEGER sequence. Each tenant's IDs start at 1 and increment
+   * independently (1, 2, 3, ...). Globally unique identity is `(tenant_id, id)`.
+   * Requires `tenanted: true` on the schema and must be the primary key.
+   */
+  tenantedSerial: () => new FieldBuilder('tenanted_serial'),
+  /**
+   * Per-tenant BIGINT sequence. See {@link tenantedSerial}.
+   */
+  tenantedBigSerial: () => new FieldBuilder('tenanted_bigserial'),
 
   // --- Monetary ---
   money: () => new FieldBuilder('money'),

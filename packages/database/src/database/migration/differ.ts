@@ -143,6 +143,27 @@ export default class SchemaDiffer {
     desired: ColumnDefinition,
     actual: ColumnDefinition
   ): ColumnDiff | null {
+    // Reject migrations that would convert a column between a global SERIAL
+    // and a per-tenant sequence (or vice versa). These changes need a manual
+    // migration: drop column, recreate as the new type, backfill data.
+    if (!!desired.tenantedSequence !== !!actual.tenantedSequence) {
+      throw new Error(
+        `Cannot migrate column "${name}" between SERIAL/BIGSERIAL and tenantedSerial/tenantedBigSerial automatically. ` +
+          `Drop the column and recreate it manually.`
+      )
+    }
+
+    // Two tenanted-sequence columns of different widths (integer vs bigint)
+    // also need manual migration since the trigger's counter is shared with
+    // existing rows.
+    if (desired.tenantedSequence && actual.tenantedSequence) {
+      if (!pgTypesEqual(desired.pgType, actual.pgType)) {
+        throw new Error(
+          `Cannot change tenantedSerial column "${name}" between INTEGER and BIGINT automatically.`
+        )
+      }
+    }
+
     const typeChanged = !pgTypesEqual(desired.pgType, actual.pgType)
     const nullableChanged = desired.notNull !== actual.notNull
     const defaultChanged = !defaultsEqual(desired.defaultValue, actual.defaultValue)

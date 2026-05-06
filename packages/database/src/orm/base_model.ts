@@ -78,6 +78,7 @@ export default class BaseModel {
     this: ModelStatic<T>,
     id: number | string | bigint
   ): Promise<T | null> {
+    BaseModel.assertTenantContextFor(this)
     const db = BaseModel.db
     const table = this.tableName
     const pkCol = this.primaryKeyColumn
@@ -88,6 +89,24 @@ export default class BaseModel {
     )
     if (rows.length === 0) return null
     return this.hydrate<T>(rows[0] as Record<string, unknown>)
+  }
+
+  /**
+   * Throw if a tenant-scoped model is queried by id without an active tenant
+   * context. Without it, `find(1)` could return any tenant's row 1
+   * non-deterministically.
+   */
+  private static assertTenantContextFor(model: typeof BaseModel): void {
+    if (
+      model.tenantScoped &&
+      BaseModel.db.isMultiTenant &&
+      !hasTenantContext() &&
+      !isBypassingTenant()
+    ) {
+      throw new DatabaseError(
+        `${model.name} is tenant-scoped; wrap find() in withTenant(...) or withoutTenant(...).`
+      )
+    }
   }
 
   /** Find a record by primary key or throw. */

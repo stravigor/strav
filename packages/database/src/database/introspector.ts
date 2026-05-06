@@ -83,16 +83,21 @@ export default class DatabaseIntrospector {
     const enums = await this.loadEnums()
     const enumNames = new Set(enums.map(e => e.name))
     const tableNames = await this.loadTables()
+    const tenantedSequenceTables = await this.loadTenantedSequenceTriggers()
 
     const tables: TableDefinition[] = []
     for (const name of tableNames) {
-      tables.push(await this.loadTable(name, enumNames))
+      tables.push(await this.loadTable(name, enumNames, tenantedSequenceTables.has(name)))
     }
 
     return { enums, tables }
   }
 
-  private async loadTable(name: string, enumNames: Set<string>): Promise<TableDefinition> {
+  private async loadTable(
+    name: string,
+    enumNames: Set<string>,
+    hasTenantedSequence: boolean
+  ): Promise<TableDefinition> {
     const [columns, primaryKey, foreignKeys, uniqueConstraints, indexes] = await Promise.all([
       this.loadColumns(name, enumNames),
       this.loadPrimaryKey(name),
@@ -107,6 +112,13 @@ export default class DatabaseIntrospector {
       for (const col of columns) {
         if (pkSet.has(col.name)) col.primaryKey = true
       }
+    }
+
+    // Mark tenanted-sequence id column so the differ matches the desired
+    // representation built from t.tenantedSerial() / t.tenantedBigSerial().
+    if (hasTenantedSequence) {
+      const idCol = columns.find(c => c.name === 'id')
+      if (idCol) idCol.tenantedSequence = true
     }
 
     // Mark single-column unique constraints on the column
@@ -159,10 +171,28 @@ export default class DatabaseIntrospector {
       FROM information_schema.tables
       WHERE table_schema = 'public'
         AND table_type = 'BASE TABLE'
-        AND table_name != '_strav_migrations'
+        AND table_name NOT IN ('_strav_migrations', '_strav_tenant_sequences')
       ORDER BY table_name
     `
     return rows.map((r: any) => r.table_name)
+  }
+
+  /**
+   * Returns the set of table names that have a `*_assign_tenanted_id` BEFORE
+   * INSERT trigger installed. Used to mark introspected columns as
+   * `tenantedSequence: true` so the differ doesn't try to "fix" them.
+   */
+  private async loadTenantedSequenceTriggers(): Promise<Set<string>> {
+    const rows = await this.db.sql`
+      SELECT c.relname AS table_name
+      FROM pg_trigger tg
+      JOIN pg_class c ON c.oid = tg.tgrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public'
+        AND NOT tg.tgisinternal
+        AND tg.tgname LIKE '%_assign_tenanted_id'
+    `
+    return new Set(rows.map((r: any) => r.table_name as string))
   }
 
   // --- Columns ---

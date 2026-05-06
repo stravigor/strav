@@ -100,6 +100,11 @@ migrations. Full guide: `docs/database/multitenant.md`.
   validated against the configured `idType` (numeric string or UUID).
 - `withoutTenant(fn)` routes through a separate connection bound to a role
   with `BYPASSRLS` (used by migrations and `TenantManager`).
+- `t.tenantedSerial()` / `t.tenantedBigSerial()` give each tenant its own
+  id sequence (1, 2, 3, … per tenant). Composite PK `(tenant_id, id)`;
+  cross-table references auto-promote to composite FKs. Backed by a
+  global `_strav_tenant_sequences` counter table + `strav_assign_tenanted_id()`
+  trigger installed by `TenantManager.setup()`.
 
 ### Configuration
 ```typescript

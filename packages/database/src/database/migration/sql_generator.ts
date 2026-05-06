@@ -151,6 +151,11 @@ export default class SqlGenerator {
       lines.push(createTenantPolicyStatement(name, this.tenantIdType))
     }
 
+    if (hasTenantedSequence(columns)) {
+      lines.push('')
+      lines.push(tenantedSequenceTriggerSql(name))
+    }
+
     return lines.join('\n')
   }
 
@@ -340,10 +345,14 @@ export function columnToSql(c: ColumnDefinition): string {
   const typeSql = pgTypeToSql(c.pgType, c)
   const parts = [`"${c.name}" ${typeSql}`]
 
-  // Serial types handle NOT NULL and default implicitly
+  // Serial types handle NOT NULL and default implicitly. Per-tenant sequence
+  // columns are plain INTEGER/BIGINT with NOT NULL but no DEFAULT — the
+  // strav_assign_tenanted_id() trigger fills them before NOT NULL is checked.
   if (!isSerial(c.pgType)) {
     if (c.notNull) parts.push('NOT NULL')
-    if (c.defaultValue !== undefined) parts.push(`DEFAULT ${defaultValueToSql(c.defaultValue)}`)
+    if (!c.tenantedSequence && c.defaultValue !== undefined) {
+      parts.push(`DEFAULT ${defaultValueToSql(c.defaultValue)}`)
+    }
   }
 
   return parts.join(' ')
@@ -355,6 +364,11 @@ export function pgTypeToSql(pgType: PostgreSQLType, col?: ColumnDefinition): str
     if (pgType.type === 'custom') return `"${pgType.name}"`
     if (pgType.type === 'array') return `${pgTypeToSql(pgType.element as PostgreSQLType)}[]`
   }
+
+  // Per-tenant sequence markers emit the underlying integer type;
+  // the BEFORE INSERT trigger handles assignment.
+  if (pgType === 'tenanted_serial') return 'INTEGER'
+  if (pgType === 'tenanted_bigserial') return 'BIGINT'
 
   // Multi-word types
   const multiWord: Record<string, string> = {
@@ -396,4 +410,23 @@ export function defaultValueToSql(dv: DefaultValue): string {
 
 function isSerial(pgType: PostgreSQLType): boolean {
   return pgType === 'serial' || pgType === 'bigserial' || pgType === 'smallserial'
+}
+
+/** True if any column in the table is filled by the strav_assign_tenanted_id trigger. */
+function hasTenantedSequence(columns: ColumnDefinition[]): boolean {
+  return columns.some(c => c.tenantedSequence)
+}
+
+/**
+ * Build the per-table BEFORE INSERT trigger that fills tenanted-sequence ids.
+ * The function `strav_assign_tenanted_id()` is installed once globally by
+ * `TenantManager.setup()` (see tenant/seed.ts).
+ */
+export function tenantedSequenceTriggerSql(table: string): string {
+  const triggerName = `${table}_assign_tenanted_id`
+  return [
+    `-- Per-tenant id assignment trigger`,
+    `DROP TRIGGER IF EXISTS "${triggerName}" ON "${table}";`,
+    `CREATE TRIGGER "${triggerName}" BEFORE INSERT ON "${table}" FOR EACH ROW EXECUTE FUNCTION strav_assign_tenanted_id();`,
+  ].join('\n')
 }

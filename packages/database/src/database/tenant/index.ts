@@ -23,7 +23,13 @@ export {
 export { default as TenantManager } from './manager'
 export type { TenantRecord, TenantStats } from './manager'
 
-export { tenantTableSQL, ensureTenantTable } from './seed'
+export {
+  tenantTableSQL,
+  ensureTenantTable,
+  tenantSequencesTableSQL,
+  tenantAssignFunctionSQL,
+  ensureTenantSequencesObjects,
+} from './seed'
 
 export {
   type TenantIdType,

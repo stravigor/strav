@@ -78,6 +78,12 @@ export interface ColumnDefinition {
   scale?: number
   /** Whether this field is a ULID (stored as char(26)). */
   isUlid?: boolean
+  /**
+   * Whether this column is assigned per-tenant by the
+   * `strav_assign_tenanted_id()` trigger. Drives SQL emission (no SERIAL,
+   * no DEFAULT) and triggers composite-PK / composite-FK promotion.
+   */
+  tenantedSequence?: boolean
 }
 
 /**

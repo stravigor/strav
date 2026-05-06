@@ -1,6 +1,6 @@
 import { inject } from '@strav/kernel/core/inject'
 import Database from '../database'
-import { ensureTenantTable } from './seed'
+import { ensureTenantTable, ensureTenantSequencesObjects } from './seed'
 
 export interface TenantRecord {
   id: string
@@ -26,9 +26,10 @@ export interface TenantStats {
 export default class TenantManager {
   constructor(private db: Database) {}
 
-  /** Ensure the `tenant` table exists. Safe to call repeatedly. */
+  /** Ensure the `tenant` table and per-tenant sequencing infrastructure exist. */
   async setup(): Promise<void> {
     await ensureTenantTable(this.db.bypass, this.db.tenantIdType)
+    await ensureTenantSequencesObjects(this.db.bypass, this.db.tenantIdType)
   }
 
   /** Create a new tenant and return its row. */

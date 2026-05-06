@@ -34,3 +34,4 @@ Database layer for the Strav framework — query builder, ORM, schema builder, a
 - `BaseModel.tenantScoped = true` makes `save()` throw if called outside a tenant or bypass context.
 - `defineSchema(name, { tenanted: true, fields })` adds the column + RLS policy DDL automatically.
 - `MigrationRunner` always runs against `db.bypass` so policies don't filter the migration itself.
+- `t.tenantedSerial()` / `t.tenantedBigSerial()` give per-tenant id sequences (each tenant counts 1, 2, 3, … independently). Composite PK `(tenant_id, id)`; references from other tenanted tables are auto-promoted to composite FKs `(tenant_id, parent_id) → parent(tenant_id, id)`. Backed by a global `_strav_tenant_sequences` table + `strav_assign_tenanted_id()` trigger function installed by `TenantManager.setup()`. See `docs/database/multitenant.md` § Per-tenant ID sequences.

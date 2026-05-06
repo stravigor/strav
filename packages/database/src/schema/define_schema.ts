@@ -2,6 +2,7 @@ import { Archetype } from './types'
 import type { SchemaInput, SchemaDefinition } from './types'
 import type { FieldDefinition } from './field_definition'
 import type { PostgreSQLCustomType } from './postgres'
+import { isTenantedSequence } from './naming'
 
 /**
  * Define a data schema for the application.
@@ -31,6 +32,8 @@ export default function defineSchema(name: string, input: SchemaInput): SchemaDe
     fields[fieldName] = def
   }
 
+  validateTenantedSequenceFields(name, fields, input.tenanted ?? false)
+
   return {
     name,
     archetype: input.archetype ?? Archetype.Entity,
@@ -39,6 +42,39 @@ export default function defineSchema(name: string, input: SchemaInput): SchemaDe
     as: input.as,
     tenanted: input.tenanted ?? false,
     fields,
+  }
+}
+
+/**
+ * Validate that `t.tenantedSerial()` / `t.tenantedBigSerial()` fields are used
+ * correctly: only on tenanted schemas, only as the primary key, and at most
+ * one per schema.
+ */
+function validateTenantedSequenceFields(
+  schemaName: string,
+  fields: Record<string, FieldDefinition>,
+  tenanted: boolean
+): void {
+  const tenantedSeqFields = Object.entries(fields).filter(([, def]) =>
+    isTenantedSequence(def.pgType)
+  )
+  if (tenantedSeqFields.length === 0) return
+
+  if (!tenanted) {
+    throw new Error(
+      `Schema "${schemaName}": t.tenantedSerial() / t.tenantedBigSerial() requires { tenanted: true } on the schema.`
+    )
+  }
+  if (tenantedSeqFields.length > 1) {
+    throw new Error(
+      `Schema "${schemaName}": only one tenantedSerial/tenantedBigSerial field allowed per schema (found ${tenantedSeqFields.length}).`
+    )
+  }
+  const [fieldName, def] = tenantedSeqFields[0]!
+  if (!def.primaryKey) {
+    throw new Error(
+      `Schema "${schemaName}": tenantedSerial field "${fieldName}" must be marked .primaryKey().`
+    )
   }
 }
 
