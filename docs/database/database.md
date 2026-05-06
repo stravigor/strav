@@ -23,7 +23,12 @@ import { Database } from '@strav/database'
 
 app.singleton(Database)
 const db = app.resolve(Database)
+await db.init()   // open the connection pools
 ```
+
+`init()` is what actually opens the Postgres pools — the constructor only stores config. Always call `await db.init()` before issuing queries when you instantiate `Database` outside the `DatabaseProvider` boot flow (the provider calls it for you). It's idempotent.
+
+`init()` also waits for any previous instance's pools to drain before opening new ones, which avoids stacking connections under `bun --hot` reloads. If your dev server still trips `max_connections`, lower `database.idleTimeout` (seconds) or `DB_POOL_MAX` so old pools recycle faster.
 
 ### Running queries
 

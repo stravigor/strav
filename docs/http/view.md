@@ -31,6 +31,12 @@ app.use(new ViewProvider())
 
 This registers the `ViewEngine` singleton and wires it into the HTTP context so `ctx.view()` works in all route handlers.
 
+`ctx.view()` automatically injects a few per-request values into the data passed to the template, so common directives "just work":
+
+- **`csrfToken`** — read first from `ctx.get('csrfToken')` (set by the `csrf()` middleware on safe methods), then fallen back to `ctx.get('session')?.csrfToken` so the `@csrf('meta')`/`@csrf('input')` directives also work when only `session()` is wired up.
+
+Caller-supplied data wins, so passing `{ csrfToken: '…' }` explicitly still overrides the default.
+
 Templates live in the `views/` directory by default. Configure via `config/view.ts`:
 
 ```typescript
