@@ -347,6 +347,7 @@ describe('Configurable tenant table name — DB integration', () => {
     container.singleton(TenantManager)
 
     db = container.resolve(Database)
+    await db.init()
     manager = container.resolve(TenantManager)
 
     expect(db.tenantTableName).toBe('workspace')

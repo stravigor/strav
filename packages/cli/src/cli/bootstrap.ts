@@ -24,6 +24,7 @@ export async function bootstrap(): Promise<BootstrapResult> {
   await config.load()
 
   const db = new Database(config)
+  await db.init()
 
   const registry = new SchemaRegistry()
   const dbPaths = await getDatabasePaths()

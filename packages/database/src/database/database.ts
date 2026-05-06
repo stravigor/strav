@@ -33,31 +33,37 @@ export default class Database {
   private static _appConnection: SQL | null = null
   private static _bypassConnection: SQL | null = null
   private static _tenantEnabled: boolean = false
+  /**
+   * Promise that resolves when any prior `Database` instance has finished
+   * draining its pools. The next instance's `init()` chains off this so a
+   * new pool never opens connections while the old one still holds them.
+   * Critical for `bun --hot` where a rapid succession of reloads could
+   * otherwise stack pools and exhaust `max_connections`.
+   */
+  private static _drainPromise: Promise<void> = Promise.resolve()
 
-  private appConnection: SQL
+  private appConnection!: SQL
   private _bypassConnection: SQL | null = null
   private tenantEnabled: boolean
-  private tenantAwareConnection: SQL
+  private tenantAwareConnection!: SQL
+  private _initPromise: Promise<void> | null = null
 
   constructor(protected config: Configuration) {
-    if (Database._appConnection) {
-      Database._appConnection.close()
+    // Capture refs to any pools left over from a previous instance and
+    // schedule them for close. Pool creation itself is deferred to init()
+    // so the new instance can `await` the close before opening connections.
+    const oldApp = Database._appConnection
+    const oldBypass = Database._bypassConnection
+    Database._appConnection = null
+    Database._bypassConnection = null
+    if (oldApp || oldBypass) {
+      const prior = Database._drainPromise
+      Database._drainPromise = prior
+        .catch(() => undefined)
+        .then(async () => {
+          await Promise.allSettled([oldApp?.close(), oldBypass?.close()])
+        })
     }
-    if (Database._bypassConnection) {
-      Database._bypassConnection.close()
-      Database._bypassConnection = null
-    }
-
-    this.appConnection = new SQL({
-      hostname: config.get('database.host') ?? env('DB_HOST', '127.0.0.1'),
-      port: config.get('database.port') ?? env.int('DB_PORT', 5432),
-      username: config.get('database.username') ?? env('DB_USER', 'postgres'),
-      password: config.get('database.password') ?? env('DB_PASSWORD', ''),
-      database: config.get('database.database') ?? env('DB_DATABASE', 'strav'),
-      max: config.get('database.pool') ?? env.int('DB_POOL_MAX', 10),
-      idleTimeout: config.get('database.idleTimeout') ?? env.int('DB_IDLE_TIMEOUT', 20),
-    })
-    Database._appConnection = this.appConnection
 
     this.tenantEnabled = config.get('database.tenant.enabled') ?? false
     Database._tenantEnabled = this.tenantEnabled
@@ -72,10 +78,46 @@ export default class Database {
         'database.tenant.tableName is no longer supported. Define a tenant table via defineSchema(...) with `tenantRegistry: true`; the schema name becomes the table name. See docs/database/multitenant.md.'
       )
     }
+  }
+
+  /**
+   * Open the app connection pool, waiting for any previous instance's pools
+   * to finish closing first. Idempotent — safe to call multiple times.
+   * Must be called before any query (`db.sql`, `db.bypass`, etc.).
+   */
+  async init(): Promise<void> {
+    if (this._initPromise) return this._initPromise
+    this._initPromise = this._init()
+    return this._initPromise
+  }
+
+  private async _init(): Promise<void> {
+    // Wait for any in-flight drain from a prior instance before opening
+    // a new pool, so we don't briefly double up on Postgres connections.
+    await Database._drainPromise
+
+    this.appConnection = new SQL({
+      hostname: this.config.get('database.host') ?? env('DB_HOST', '127.0.0.1'),
+      port: this.config.get('database.port') ?? env.int('DB_PORT', 5432),
+      username: this.config.get('database.username') ?? env('DB_USER', 'postgres'),
+      password: this.config.get('database.password') ?? env('DB_PASSWORD', ''),
+      database: this.config.get('database.database') ?? env('DB_DATABASE', 'strav'),
+      max: this.config.get('database.pool') ?? env.int('DB_POOL_MAX', 10),
+      idleTimeout: this.config.get('database.idleTimeout') ?? env.int('DB_IDLE_TIMEOUT', 20),
+    })
+    Database._appConnection = this.appConnection
 
     this.tenantAwareConnection = this.tenantEnabled
       ? createTenantAwareSQL(this.appConnection)
       : this.appConnection
+  }
+
+  private assertInitialized(): void {
+    if (!this.appConnection) {
+      throw new ConfigurationError(
+        'Database not initialized. Call `await db.init()` after construction.'
+      )
+    }
   }
 
   /**
@@ -106,6 +148,7 @@ export default class Database {
    * - Otherwise: returns the raw app connection.
    */
   get sql(): SQL {
+    this.assertInitialized()
     if (this.tenantEnabled && isBypassingTenant()) {
       return this.bypass
     }
@@ -120,6 +163,7 @@ export default class Database {
    * Throws if `database.tenant.bypass.username` is not configured.
    */
   get bypass(): SQL {
+    this.assertInitialized()
     if (!this.tenantEnabled) {
       return this.appConnection
     }
@@ -179,19 +223,29 @@ export default class Database {
 
   /** Close all connection pools. */
   async close(): Promise<void> {
-    await this.appConnection.close()
-    if (Database._appConnection === this.appConnection) {
-      Database._appConnection = null
-    }
-    if (this._bypassConnection) {
-      await this._bypassConnection.close()
-      this._bypassConnection = null
-      if (Database._bypassConnection === null) {
-        // already cleared
-      } else {
-        Database._bypassConnection = null
+    const tasks: Promise<unknown>[] = []
+    if (this.appConnection) {
+      tasks.push(this.appConnection.close())
+      if (Database._appConnection === this.appConnection) {
+        Database._appConnection = null
       }
     }
+    if (this._bypassConnection) {
+      tasks.push(this._bypassConnection.close())
+      if (Database._bypassConnection === this._bypassConnection) {
+        Database._bypassConnection = null
+      }
+      this._bypassConnection = null
+    }
+    if (tasks.length === 0) return
+
+    // Chain off the existing drain so an immediate reconstruction
+    // (`close()` then `new Database(...)`) waits for this close too.
+    const drained = Promise.allSettled(tasks).then(() => undefined)
+    Database._drainPromise = Database._drainPromise
+      .catch(() => undefined)
+      .then(() => drained)
+    await drained
   }
 
   /** Whether multi-tenant (RLS) mode is enabled. */

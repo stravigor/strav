@@ -85,6 +85,7 @@ export class TestDatabaseManager {
     }
 
     this.database = app.resolve(Database)
+    await this.database.init()
 
     // Configure BaseModel with the shared database
     new BaseModel(this.database)

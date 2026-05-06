@@ -25,6 +25,7 @@ describe('PostgresSessionStore', () => {
     container.singleton(PostgresSessionStore)
 
     db = container.resolve(Database)
+    await db.init()
     store = container.resolve(PostgresSessionStore)
 
     await db.sql`DROP TABLE IF EXISTS "_strav_sessions"`

@@ -105,6 +105,7 @@ describe('Multi-tenant (RLS)', () => {
     container.singleton(TenantManager)
 
     db = container.resolve(Database)
+    await db.init()
     manager = container.resolve(TenantManager)
 
     await ensureTenantTable(db.bypass, 'uuid')

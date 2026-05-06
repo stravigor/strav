@@ -27,6 +27,7 @@ describe('QueryBuilder DateTime Handling', () => {
     container.singleton(Database)
 
     db = container.resolve(Database)
+    await db.init()
 
     // Initialize BaseModel with database connection
     new BaseModel(db)

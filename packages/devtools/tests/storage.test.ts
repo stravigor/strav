@@ -19,6 +19,7 @@ beforeAll(async () => {
   const config = new Configuration(join(import.meta.dir, '../config'))
   await config.load()
   db = new Database(config)
+  await db.init()
 
   entryStore = new EntryStore(db.sql)
   aggregateStore = new AggregateStore(db.sql)

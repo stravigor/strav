@@ -17,6 +17,7 @@ export default class DatabaseProvider extends ServiceProvider {
 
   override async boot(app: Application): Promise<void> {
     this.db = app.resolve(Database)
+    await this.db.init()
     new BaseModel(this.db)
 
     if (this.db.isMultiTenant) {

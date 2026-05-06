@@ -77,6 +77,7 @@ describe('TestCase', () => {
     config = app.resolve(Configuration)
     await config.load()
     db = app.resolve(Database)
+    await db.init()
     new BaseModel(db)
 
     await db.sql.unsafe('DROP TABLE IF EXISTS "item"')
