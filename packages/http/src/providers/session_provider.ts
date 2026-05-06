@@ -30,6 +30,14 @@ export default class SessionProvider extends ServiceProvider {
 
   override register(app: Application): void {
     app.singleton(SessionManager)
+    // Bind the chosen store class so boot() can resolve it. Without this,
+    // every consumer has to add their own provider that registers the
+    // store — boilerplate the framework should absorb.
+    if (this.driver === 'redis') {
+      app.singleton(RedisSessionStore)
+    } else {
+      app.singleton(PostgresSessionStore)
+    }
   }
 
   override async boot(app: Application): Promise<void> {
