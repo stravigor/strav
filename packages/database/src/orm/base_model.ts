@@ -11,7 +11,8 @@ import {
   getEncrypted,
   getUlids,
 } from './decorators'
-import type { ReferenceMetadata, AssociateMetadata } from './decorators'
+import type { ReferenceMetadata } from './decorators'
+import { hydrateRow } from './hydrate'
 import Database from '../database/database'
 import { hasTenantContext, isBypassingTenant } from '../database/tenant/context'
 import {
@@ -267,11 +268,13 @@ export default class BaseModel {
    * Eagerly load one or more relationships by name.
    *
    * Supports both `@reference` (belongs-to) and `@associate` (many-to-many)
-   * relationships. Returns `this` for chaining.
+   * relationships. For associations, this is a convenience that calls
+   * `this.<name>.load()` on the per-instance Collection. Returns `this`
+   * for chaining.
    *
    * @example
    * const team = await Team.find(1)
-   * await team.load('members')          // many-to-many
+   * await team.load('members')          // many-to-many (delegates to team.members.load())
    * await user.load('profile', 'teams') // multiple relations
    */
   async load(...relations: string[]): Promise<this> {
@@ -291,7 +294,7 @@ export default class BaseModel {
 
       const assocMeta = assocMetas.find(a => a.property === relation)
       if (assocMeta) {
-        await this.loadAssociation(assocMeta)
+        await (this as any)[relation].load()
         continue
       }
 
@@ -348,22 +351,6 @@ export default class BaseModel {
 
     ;(this as any)[meta.property] =
       rows.length > 0 ? hydrateRow(rows[0] as Record<string, unknown>) : null
-  }
-
-  private async loadAssociation(meta: AssociateMetadata): Promise<void> {
-    const db = BaseModel.db
-    const ctor = this.constructor as typeof BaseModel
-    const pkValue = (this as any)[ctor.primaryKeyProperty]
-
-    const targetTable = toSnakeCase(meta.model)
-    const rows = await db.sql.unsafe(
-      `SELECT t.* FROM "${targetTable}" t ` +
-        `INNER JOIN "${meta.through}" p ON p."${meta.otherKey}" = t."${toSnakeCase(meta.targetPK)}" ` +
-        `WHERE p."${meta.foreignKey}" = $1`,
-      [pkValue]
-    )
-
-    ;(this as any)[meta.property] = (rows as Record<string, unknown>[]).map(row => hydrateRow(row))
   }
 
   // ---------------------------------------------------------------------------
@@ -516,12 +503,3 @@ export default class BaseModel {
   }
 }
 
-/** Convert a raw DB row to a plain object with camelCase keys and DateTime hydration. */
-export function hydrateRow(row: Record<string, unknown>): Record<string, unknown> {
-  const obj: Record<string, unknown> = {}
-  for (const [column, value] of Object.entries(row)) {
-    const prop = toCamelCase(column)
-    obj[prop] = value instanceof Date ? DateTime.fromJSDate(value) : value
-  }
-  return obj
-}

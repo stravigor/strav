@@ -1,4 +1,7 @@
 export { default as BaseModel } from './base_model'
 export { default as Tenant } from './models/tenant'
+export { default as Collection } from './collection'
+export type { AttachTarget } from './collection'
+export { hydrateRow } from './hydrate'
 export { primary, reference, associate, cast, encrypt, ulid } from './decorators'
 export type { CastDefinition } from './decorators'

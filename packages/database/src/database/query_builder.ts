@@ -4,7 +4,7 @@ import type BaseModel from '../orm/base_model'
 import { ModelNotFoundError } from '@strav/kernel/exceptions/errors'
 import { getReferenceMeta, getAssociates, getCasts } from '../orm/decorators'
 import type { ReferenceMetadata, AssociateMetadata, CastDefinition } from '../orm/decorators'
-import { hydrateRow } from '../orm/base_model'
+import { hydrateRow } from '../orm/hydrate'
 import Database from './database'
 
 type ModelStatic<T extends BaseModel> = (new (...args: any[]) => T) & typeof BaseModel
@@ -900,12 +900,13 @@ export default class QueryBuilder<T extends BaseModel> {
       const fk = r._pivot_fk
       delete r._pivot_fk
       if (!grouped.has(fk)) grouped.set(fk, [])
-      grouped.get(fk)!.push(hydrateRow(r))
+      grouped.get(fk)!.push(r)
     }
 
     for (const model of models) {
       const pk = (model as any)[pkProp]
-      ;(model as any)[meta.property] = grouped.get(pk) ?? []
+      const collection = (model as any)[meta.property]
+      collection.hydrate(grouped.get(pk) ?? [])
     }
   }
 

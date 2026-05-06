@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 import EncryptionManager from '@strav/kernel/encryption/encryption_manager'
+import Collection from './collection'
 
 const PRIMARY_KEY = Symbol('orm:primary')
 const REFERENCE_KEY = Symbol('orm:references')
@@ -8,6 +9,9 @@ const ASSOCIATE_KEY = Symbol('orm:associates')
 const CAST_KEY = Symbol('orm:casts')
 const ENCRYPT_KEY = Symbol('orm:encrypted')
 const ULID_KEY = Symbol('orm:ulid')
+
+/** Per-instance store for lazy-initialized Collection objects. */
+const COLLECTION_STORE = Symbol('orm:collection_store')
 
 // ---------------------------------------------------------------------------
 // @primary
@@ -109,19 +113,52 @@ export interface AssociateMetadata extends AssociateOptions {
 
 /**
  * Property decorator that marks a field as a many-to-many association.
- * Associates are loaded via pivot table queries and excluded from dehydrate.
+ *
+ * Installs a per-instance {@link Collection} accessor on the prototype.
+ * The Collection exposes `load()`, `attach()`, `detach()`, `sync()`, plus
+ * iteration/length/`toArray()`. Loaded rows are plain camelCase objects.
  *
  * @example
  * @associate({ through: 'team_user', foreignKey: 'team_id', otherKey: 'user_pid', model: 'User', targetPK: 'pid' })
- * declare members: User[]
+ * declare members: Collection<User>
+ *
+ * await team.members.load()
+ * await team.members.attach(user)
+ * await team.members.attach([u1, u2], { role: 'admin' })
+ * await team.members.detach(user)
+ * await team.members.sync([u1, u2])
+ * for (const m of team.members) { ... }
  */
 export function associate(options: AssociateOptions) {
   return function (target: any, propertyKey: string) {
+    const meta: AssociateMetadata = { property: propertyKey, ...options }
+
     const assocs: AssociateMetadata[] = [
       ...(Reflect.getMetadata(ASSOCIATE_KEY, target.constructor) ?? []),
     ]
-    assocs.push({ property: propertyKey, ...options })
+    assocs.push(meta)
     Reflect.defineMetadata(ASSOCIATE_KEY, assocs, target.constructor)
+
+    Object.defineProperty(target, propertyKey, {
+      configurable: true,
+      enumerable: false,
+      get(this: any) {
+        const store: Map<string, Collection<any>> =
+          this[COLLECTION_STORE] ??
+          (Object.defineProperty(this, COLLECTION_STORE, {
+            value: new Map(),
+            enumerable: false,
+            writable: false,
+          }),
+          this[COLLECTION_STORE])
+        let c = store.get(propertyKey)
+        if (!c) {
+          c = new Collection(this, meta)
+          store.set(propertyKey, c)
+        }
+        return c
+      },
+    })
   }
 }
 

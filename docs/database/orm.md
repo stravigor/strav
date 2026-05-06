@@ -147,9 +147,14 @@ A bare `@reference` (without options) simply excludes the property from persiste
 
 ### @associate (many-to-many)
 
-Defines a many-to-many relationship through a pivot table:
+Defines a many-to-many relationship through a pivot table. The decorated
+property is a per-instance [`Collection`](#many-to-many-collections) that
+exposes both read (`load`, iteration) and write (`attach`, `detach`, `sync`)
+helpers against the pivot.
 
 ```typescript
+import { associate, Collection } from '@strav/database'
+
 @associate({
   through: 'team_user',
   foreignKey: 'team_id',
@@ -157,7 +162,7 @@ Defines a many-to-many relationship through a pivot table:
   model: 'User',
   targetPK: 'pid',
 })
-declare members: User[]
+declare members: Collection<User>
 ```
 
 ### @cast (type casting)
@@ -221,15 +226,113 @@ const profile = await Profile.findOrFail(1)
 await profile.load('user', 'reviewer')   // loads @reference relations
 
 const team = await Team.findOrFail(1)
-await team.load('members')              // loads @associate relation
-
-// Chaining
-const user = await User.findOrFail(userId)
-await user.load('teams')
-console.log(user.teams)                 // Team[]
+await team.load('members')               // delegates to team.members.load()
 ```
 
 `load()` supports both `@reference` and `@associate` relationships and returns `this` for chaining.
+
+For `@associate`, you can equivalently call `load()` directly on the
+collection — the call sites are interchangeable:
+
+```typescript
+await team.members.load()
+```
+
+## Many-to-many collections
+
+Properties decorated with `@associate` are exposed as a `Collection<T>` on
+each model instance. The collection is created lazily on first access (no
+DB query is issued until you call `load()` or one of the eager-load paths).
+
+### Reading
+
+```typescript
+const team = await Team.findOrFail(1)
+await team.members.load()
+
+team.members.length             // number of loaded rows
+team.members.toArray()          // copy as array
+team.members.at(0)              // first row, or undefined
+
+for (const m of team.members) { // iterable when loaded
+  console.log(m.username)
+}
+```
+
+Loaded rows are plain camelCase objects (the same shape `load()` produced
+in earlier versions), not full hydrated `BaseModel` instances. The
+collection's `isLoaded()` returns `true` once `load()` has run.
+
+Eager loading via `query(Team).with('members')` populates the collection
+on every returned instance — no extra round trip per parent.
+
+### Writing — attach
+
+`attach()` inserts rows into the pivot table. It is idempotent: a duplicate
+attach is silently ignored (`ON CONFLICT DO NOTHING`).
+
+```typescript
+await team.members.attach(user)                       // single instance
+await team.members.attach(userId)                     // by raw id
+await team.members.attach([user1, user2])             // bulk
+await team.members.attach([user1, user2], { role: 'admin' })  // with pivot extras
+```
+
+The optional second argument is an object of extra pivot column values
+(camelCase keys, converted to snake_case columns). The same extras are
+applied to every row in a bulk attach.
+
+### Writing — detach
+
+```typescript
+await team.members.detach(user)                       // single
+await team.members.detach([user1, user2])             // bulk
+await team.members.detach()                           // ALL members of this team
+```
+
+Calling `detach()` with no argument removes every row in the pivot for
+this parent — useful for "reset and re-add" flows.
+
+### Writing — sync
+
+`sync()` replaces the entire set of associated rows with the given list.
+It runs `detach()` then `attach()` inside a single transaction (or the one
+you pass via the third argument).
+
+```typescript
+await team.members.sync([user1, user2])
+await team.members.sync([user1, user2], { role: 'developer' })
+```
+
+After `sync()`, the pivot rows for this parent are exactly the supplied
+targets — anyone previously attached but not in the list is removed.
+
+### Re-loading after writes
+
+`attach`, `detach`, and `sync` do **not** mutate the in-memory `items`
+of the collection. Call `await team.members.load()` again if you need
+the collection to reflect the latest pivot state.
+
+### Transactions
+
+All four methods (`load`, `attach`, `detach`, `sync`) accept an optional
+trailing transaction handle:
+
+```typescript
+await transaction(async (trx) => {
+  const team = await Team.create({ name: 'Engineering' }, trx)
+  await team.members.attach([alice, bob], { role: 'admin' }, trx)
+})
+```
+
+### Tenant scoping
+
+When the parent model is `tenantScoped`, `attach`, `detach`, and `sync`
+require an active tenant context (`withTenant(...)` or `withoutTenant(...)`)
+— the same rule that already applies to `save()`. The pivot's `tenant_id`
+column, if present, is filled by the database default
+(`current_setting('app.tenant_id', ...)`), so the write itself stays
+tenant-aware automatically.
 
 ## QueryBuilder
 
