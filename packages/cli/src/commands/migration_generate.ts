@@ -21,11 +21,10 @@ export function register(program: Command): void {
 
         console.log(chalk.cyan('Comparing schema with database...'))
 
-        const desired = registry.buildRepresentation(
-          database.tenantIdType,
-          database.tenantTableName,
-          database.tenantFkColumn
-        )
+        // Tenant table name + idType are read from the registered tenant
+        // schema (the one with `tenantRegistry: true`). Defaults to
+        // `tenant` / `bigint` if no schema is registered.
+        const desired = registry.buildRepresentation()
         const actual = await introspector.introspect()
         const diff = new SchemaDiffer().diff(desired, actual)
 

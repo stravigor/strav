@@ -26,6 +26,7 @@
     "./orm/*": "./src/orm/*.ts",
     "./schema": "./src/schema/index.ts",
     "./schema/*": "./src/schema/*.ts",
+    "./schemas/*": "./src/schemas/*.ts",
     "./helpers": "./src/helpers/index.ts",
     "./helpers/*": "./src/helpers/*.ts",
     "./providers": "./src/providers/index.ts",

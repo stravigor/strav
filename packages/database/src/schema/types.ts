@@ -22,11 +22,19 @@ export interface SchemaInput {
   associates?: string[]
   as?: Record<string, string>
   /**
-   * Mark the table as tenant-scoped. The schema builder injects a `tenant_id`
-   * UUID column referencing `tenant(id)` and the migration generator emits
+   * Mark the table as tenant-scoped. The schema builder injects a tenant FK
+   * column referencing the tenant table and the migration generator emits
    * RLS policy DDL so PostgreSQL enforces isolation by `app.tenant_id`.
    */
   tenanted?: boolean
+  /**
+   * Mark this schema as the **tenant registry** — the table that holds one
+   * row per tenant. The framework reads its name (used as the FK target on
+   * tenanted children) and its primary key type (used for the FK column
+   * cast and the runtime tenant id validator). At most one schema per
+   * registry may set this.
+   */
+  tenantRegistry?: boolean
   fields: Record<string, FieldBuilder>
 }
 
@@ -37,7 +45,9 @@ export interface SchemaDefinition {
   parents?: string[]
   associates?: string[]
   as?: Record<string, string>
-  /** Whether this table is tenant-scoped (carries `tenant_id` + RLS). */
+  /** Whether this table is tenant-scoped (carries the tenant FK + RLS). */
   tenanted?: boolean
+  /** Whether this is the tenant registry schema (see {@link SchemaInput.tenantRegistry}). */
+  tenantRegistry?: boolean
   fields: Record<string, FieldDefinition>
 }

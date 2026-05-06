@@ -3,6 +3,7 @@ import type { TenantIdType } from './id_type'
 import {
   enableRLSStatements,
   createTenantPolicyStatement,
+  sqlTypeFor,
 } from './policies'
 import { DEFAULT_TENANT_TABLE_NAME } from './naming'
 
@@ -26,7 +27,9 @@ export function tenantTableSQL(
   const idColumn =
     idType === 'uuid'
       ? `"id" UUID NOT NULL DEFAULT gen_random_uuid()`
-      : `"id" BIGSERIAL NOT NULL`
+      : idType === 'integer'
+        ? `"id" SERIAL NOT NULL`
+        : `"id" BIGSERIAL NOT NULL`
   return `
 CREATE TABLE IF NOT EXISTS "${tableName}" (
   ${idColumn},
@@ -59,7 +62,7 @@ export function tenantSequencesTableSQL(
   idType: TenantIdType,
   tenantTableName: string = DEFAULT_TENANT_TABLE_NAME
 ): string {
-  const sqlType = idType === 'uuid' ? 'UUID' : 'BIGINT'
+  const sqlType = sqlTypeFor(idType)
   return `
 CREATE TABLE IF NOT EXISTS "_strav_tenant_sequences" (
   "tenant_id"  ${sqlType} NOT NULL REFERENCES "${tenantTableName}" ("id") ON DELETE CASCADE,
@@ -87,7 +90,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON "_strav_tenant_sequences" TO PUBLIC;
  * `_strav_tenant_sequences`).
  */
 export function tenantAssignFunctionSQL(idType: TenantIdType): string {
-  const cast = idType === 'uuid' ? 'UUID' : 'BIGINT'
+  const cast = sqlTypeFor(idType)
   return `
 CREATE OR REPLACE FUNCTION strav_assign_tenanted_id() RETURNS TRIGGER AS $$
 DECLARE

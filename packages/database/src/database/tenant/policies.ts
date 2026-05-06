@@ -11,12 +11,19 @@ import { DEFAULT_TENANT_TABLE_NAME, tenantFkColumnFor } from './naming'
 
 const POLICY_NAME = 'tenant_isolation'
 
+/** Map a runtime tenant id type to its DDL column-type spelling. */
+export function sqlTypeFor(idType: TenantIdType): 'UUID' | 'BIGINT' | 'INTEGER' {
+  if (idType === 'uuid') return 'UUID'
+  if (idType === 'integer') return 'INTEGER'
+  return 'BIGINT'
+}
+
 export function tenantIdColumnDDL(
   idType: TenantIdType,
   tenantTableName: string = DEFAULT_TENANT_TABLE_NAME,
   fkColumn: string = tenantFkColumnFor(tenantTableName)
 ): string {
-  const sqlType = idType === 'uuid' ? 'UUID' : 'BIGINT'
+  const sqlType = sqlTypeFor(idType)
   return `"${fkColumn}" ${sqlType} NOT NULL DEFAULT current_setting('app.tenant_id', true)::${idType} REFERENCES "${tenantTableName}" ("id") ON DELETE CASCADE`
 }
 

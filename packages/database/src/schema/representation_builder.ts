@@ -158,7 +158,12 @@ export default class RepresentationBuilder {
     indexes: IndexDefinition[],
     pk: PrimaryKeyConstraint | null
   ): void {
-    const pgType: PostgreSQLType = this.tenantIdType === 'uuid' ? 'uuid' : 'bigint'
+    const pgType: PostgreSQLType =
+      this.tenantIdType === 'uuid'
+        ? 'uuid'
+        : this.tenantIdType === 'integer'
+          ? 'integer'
+          : 'bigint'
     const fkCol = this.tenantFkColumn
     columns.push({
       name: fkCol,

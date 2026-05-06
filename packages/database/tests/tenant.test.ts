@@ -15,6 +15,10 @@ import {
   createTenantPolicyStatement,
 } from '../src/database/tenant'
 import { transaction } from '../src/database'
+import SchemaRegistry from '../src/schema/registry'
+import defineSchema from '../src/schema/define_schema'
+import { Archetype } from '../src/schema/types'
+import t from '../src/schema/type_builder'
 
 const SUPERUSER = 'liva'
 const SUPERUSER_PW = 'password1234'
@@ -77,9 +81,23 @@ describe('Multi-tenant (RLS)', () => {
     config.set('database.password', APP_PW)
     config.set('database.database', 'strav_testing')
     config.set('database.tenant.enabled', true)
-    config.set('database.tenant.idType', 'uuid')
     config.set('database.tenant.bypass.username', SUPERUSER)
     config.set('database.tenant.bypass.password', SUPERUSER_PW)
+
+    // Register a tenant schema (UUID PK) so module state knows the tenant
+    // table name + idType — Database getters read from there.
+    const registry = new SchemaRegistry()
+    registry.register(
+      defineSchema('tenant', {
+        archetype: Archetype.Entity,
+        tenantRegistry: true,
+        fields: {
+          id: t.uuid().primaryKey(),
+          slug: t.string().unique().required(),
+          name: t.string().required(),
+        },
+      })
+    )
 
     container = new Container()
     container.singleton(Configuration, () => config)

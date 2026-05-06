@@ -115,6 +115,146 @@ describe('Configurable tenant table name — schema/SQL generation', () => {
   })
 })
 
+/**
+ * Schema-based tenant configuration — derive name + idType from a
+ * `tenantRegistry: true` schema, and validate the registry guards.
+ */
+describe('Tenant schema marker (tenantRegistry)', () => {
+  // Bun runs each test file in its own process, but the SchemaRegistry
+  // module-state propagation is sticky within this file. Use throwaway
+  // registry instances per test.
+  test('register() propagates tableName + idType to module state', async () => {
+    const SchemaRegistry = (await import('../src/schema/registry')).default
+    const { getTenantTableName } = await import('../src/database/tenant/naming')
+    const { getTenantIdType } = await import('../src/database/tenant/id_type')
+
+    const reg = new SchemaRegistry()
+    reg.register(
+      defineSchema('workspace', {
+        archetype: Archetype.Entity,
+        tenantRegistry: true,
+        fields: {
+          id: t.serial().primaryKey(),
+          slug: t.string().unique().required(),
+          name: t.string().required(),
+        },
+      })
+    )
+
+    expect(reg.tenantSchema()?.name).toBe('workspace')
+    expect(reg.tenantTableName()).toBe('workspace')
+    expect(reg.tenantIdType()).toBe('integer')
+    expect(getTenantTableName()).toBe('workspace')
+    expect(getTenantIdType()).toBe('integer')
+  })
+
+  test('rejects two schemas with tenantRegistry: true', async () => {
+    const SchemaRegistry = (await import('../src/schema/registry')).default
+    const reg = new SchemaRegistry()
+    reg.register(
+      defineSchema('one', {
+        archetype: Archetype.Entity,
+        tenantRegistry: true,
+        fields: { id: t.bigserial().primaryKey() },
+      })
+    )
+    expect(() =>
+      reg.register(
+        defineSchema('two', {
+          archetype: Archetype.Entity,
+          tenantRegistry: true,
+          fields: { id: t.bigserial().primaryKey() },
+        })
+      )
+    ).toThrow(/Only one is allowed/)
+  })
+
+  test('validate() throws if a tenanted schema exists but no tenantRegistry', async () => {
+    const SchemaRegistry = (await import('../src/schema/registry')).default
+    const reg = new SchemaRegistry()
+    reg.register(
+      defineSchema('post', {
+        archetype: Archetype.Entity,
+        tenanted: true,
+        fields: { title: t.string().required() },
+      })
+    )
+    expect(() => reg.validate()).toThrow(/no tenant registry schema is registered/)
+  })
+
+  test('defineSchema rejects tenantRegistry on a schema without a PK', () => {
+    expect(() =>
+      defineSchema('bad', {
+        archetype: Archetype.Entity,
+        tenantRegistry: true,
+        fields: {
+          slug: t.string().required(),
+        },
+      })
+    ).toThrow(/exactly one primary key/)
+  })
+
+  test('defineSchema rejects tenantRegistry with a non-serial/non-uuid PK', () => {
+    expect(() =>
+      defineSchema('bad', {
+        archetype: Archetype.Entity,
+        tenantRegistry: true,
+        fields: {
+          id: t.string().primaryKey(),
+        },
+      })
+    ).toThrow(/PK must be t\.serial\(\)/)
+  })
+})
+
+describe('Tenant id type derivation', () => {
+  test('serial / smallserial / bigserial / uuid map correctly', async () => {
+    const { tenantIdTypeFromPgType } = await import('../src/database/tenant/id_type')
+    expect(tenantIdTypeFromPgType('serial')).toBe('integer')
+    expect(tenantIdTypeFromPgType('smallserial')).toBe('integer')
+    expect(tenantIdTypeFromPgType('bigserial')).toBe('bigint')
+    expect(tenantIdTypeFromPgType('uuid')).toBe('uuid')
+  })
+
+  test('rejects unsupported pgTypes', async () => {
+    const { tenantIdTypeFromPgType } = await import('../src/database/tenant/id_type')
+    expect(() => tenantIdTypeFromPgType('text')).toThrow(/Cannot derive tenant id type/)
+    expect(() => tenantIdTypeFromPgType('integer')).toThrow(/Cannot derive tenant id type/)
+  })
+})
+
+describe('SERIAL tenant PK end-to-end (SQL gen)', () => {
+  function buildSql(schemas: ReturnType<typeof defineSchema>[]) {
+    const rep = new RepresentationBuilder(schemas, 'integer', 'tenant', 'tenant_id').build()
+    const diff = new SchemaDiffer().diff(rep, { enums: [], tables: [] })
+    return new SqlGenerator('integer', 'tenant', 'tenant_id').generate(diff)
+  }
+
+  test('tenanted child gets INTEGER tenant_id (not BIGINT)', () => {
+    const tenantSchema = defineSchema('tenant', {
+      archetype: Archetype.Entity,
+      tenantRegistry: true,
+      fields: {
+        id: t.serial().primaryKey(),
+        slug: t.string().unique().required(),
+        name: t.string().required(),
+      },
+    })
+    const post = defineSchema('post', {
+      archetype: Archetype.Entity,
+      tenanted: true,
+      fields: { title: t.string().required() },
+    })
+    const generated = buildSql([tenantSchema, post])
+    const tenantUp = generated.tables.get('tenant')!.up
+    const postUp = generated.tables.get('post')!.up
+    expect(tenantUp).toContain('"id" SERIAL')
+    expect(postUp).toContain('"tenant_id" INTEGER NOT NULL')
+    expect(postUp).toContain(`current_setting('app.tenant_id', true)::integer`)
+    expect(postUp).toMatch(/USING \("tenant_id" = current_setting\([^)]+\)::integer\)/)
+  })
+})
+
 describe('validateTenantTableName', () => {
   test('accepts plain snake_case identifiers', () => {
     expect(() => validateTenantTableName('tenant')).not.toThrow()
@@ -184,10 +324,22 @@ describe('Configurable tenant table name — DB integration', () => {
     config.set('database.password', APP_PW)
     config.set('database.database', 'strav_testing')
     config.set('database.tenant.enabled', true)
-    config.set('database.tenant.idType', 'uuid')
-    config.set('database.tenant.tableName', 'workspace')
     config.set('database.tenant.bypass.username', SUPERUSER)
     config.set('database.tenant.bypass.password', SUPERUSER_PW)
+
+    // Register a custom tenant schema (named 'workspace', UUID PK).
+    const SchemaRegistry = (await import('../src/schema/registry')).default
+    new SchemaRegistry().register(
+      defineSchema('workspace', {
+        archetype: Archetype.Entity,
+        tenantRegistry: true,
+        fields: {
+          id: t.uuid().primaryKey(),
+          slug: t.string().unique().required(),
+          name: t.string().required(),
+        },
+      })
+    )
 
     container = new Container()
     container.singleton(Configuration, () => config)
@@ -200,6 +352,10 @@ describe('Configurable tenant table name — DB integration', () => {
     expect(db.tenantTableName).toBe('workspace')
     expect(db.tenantFkColumn).toBe('workspace_id')
 
+    // ensureTenantTable creates the registry table directly (test fixture);
+    // production apps would create it via a migration.
+    const { ensureTenantTable } = await import('../src/database/tenant')
+    await ensureTenantTable(db.bypass, 'uuid', 'workspace')
     await manager.setup()
 
     await setupSql.unsafe(`GRANT SELECT ON "workspace" TO "${APP_ROLE}"`)

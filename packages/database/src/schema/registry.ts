@@ -3,7 +3,13 @@ import { join, resolve } from 'node:path'
 import type { SchemaDefinition } from './types'
 import type { DatabaseRepresentation } from './database_representation'
 import RepresentationBuilder from './representation_builder'
-import { type TenantIdType, DEFAULT_TENANT_ID_TYPE } from '../database/tenant/id_type'
+import {
+  type TenantIdType,
+  DEFAULT_TENANT_ID_TYPE,
+  setTenantIdType,
+  tenantIdTypeFromPgType,
+} from '../database/tenant/id_type'
+import { setTenantTableName, tenantFkColumnFor } from '../database/tenant/naming'
 
 /**
  * Discovers, stores, validates, and provides dependency-ordered
@@ -17,14 +23,62 @@ import { type TenantIdType, DEFAULT_TENANT_ID_TYPE } from '../database/tenant/id
  */
 export default class SchemaRegistry {
   private schemas = new Map<string, SchemaDefinition>()
+  private _tenantSchema: SchemaDefinition | null = null
 
   /** Register a single schema definition. */
   register(schema: SchemaDefinition): this {
     if (this.schemas.has(schema.name)) {
       throw new Error(`Schema "${schema.name}" is already registered`)
     }
+    if (schema.tenantRegistry) {
+      if (this._tenantSchema) {
+        throw new Error(
+          `Cannot register tenant registry schema "${schema.name}": "${this._tenantSchema.name}" is already marked tenantRegistry: true. Only one is allowed.`
+        )
+      }
+      this._tenantSchema = schema
+      // Propagate to module state so Database / SqlGenerator / RepresentationBuilder
+      // can read the configured tenant table name and idType without going
+      // through the registry.
+      this.applyTenantSchema(schema)
+    }
     this.schemas.set(schema.name, schema)
     return this
+  }
+
+  /** The schema marked `tenantRegistry: true`, or `null` if none registered. */
+  tenantSchema(): SchemaDefinition | null {
+    return this._tenantSchema
+  }
+
+  /** The tenant table name from the registered tenant schema, or `null`. */
+  tenantTableName(): string | null {
+    return this._tenantSchema?.name ?? null
+  }
+
+  /** Derive the runtime tenant id type from the registered tenant schema's PK. */
+  tenantIdType(): TenantIdType | null {
+    if (!this._tenantSchema) return null
+    const pkField = Object.values(this._tenantSchema.fields).find(f => f.primaryKey)
+    if (!pkField || typeof pkField.pgType !== 'string') return null
+    return tenantIdTypeFromPgType(pkField.pgType)
+  }
+
+  /**
+   * Push tenant schema info into module state so Database getters and
+   * downstream generators can read the configured names without holding a
+   * reference to this registry.
+   */
+  private applyTenantSchema(schema: SchemaDefinition): void {
+    setTenantTableName(schema.name)
+    const idType = this.tenantIdTypeFromSchema(schema)
+    if (idType) setTenantIdType(idType)
+  }
+
+  private tenantIdTypeFromSchema(schema: SchemaDefinition): TenantIdType | null {
+    const pkField = Object.values(schema.fields).find(f => f.primaryKey)
+    if (!pkField || typeof pkField.pgType !== 'string') return null
+    return tenantIdTypeFromPgType(pkField.pgType)
   }
 
   /** Retrieve a schema by name. */
@@ -73,6 +127,17 @@ export default class SchemaRegistry {
    * points to a registered schema.
    */
   validate(): void {
+    // If any schema is tenant-scoped, exactly one tenantRegistry schema
+    // must be registered. The framework-injected `<tenantTableName>_id` FK
+    // would otherwise reference a non-existent table.
+    const hasTenantedChild = Array.from(this.schemas.values()).some(s => s.tenanted)
+    if (hasTenantedChild && !this._tenantSchema) {
+      throw new Error(
+        `One or more schemas are marked tenanted: true but no tenant registry schema is registered. ` +
+          `Add a defineSchema(...) with tenantRegistry: true (or import @strav/database/schemas/default_tenant).`
+      )
+    }
+
     for (const schema of this.schemas.values()) {
       if (schema.parents) {
         for (const parent of schema.parents) {
@@ -141,22 +206,22 @@ export default class SchemaRegistry {
    * Generate the {@link DatabaseRepresentation} from all registered schemas.
    * Must be called after {@link validate} to ensure all references are resolvable.
    *
-   * @param tenantIdType  Column type for `tenant_id` on tenant-scoped tables.
-   *                      Defaults to `'bigint'`. Pass `'uuid'` for apps that
-   *                      have set `database.tenant.idType: 'uuid'` in config.
+   * Tenant table name and id type default to whatever was registered via
+   * `tenantRegistry: true`. Callers may override (rare — only useful for
+   * generating migrations against a different tenant configuration than the
+   * current process).
    */
   buildRepresentation(
-    tenantIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE,
+    tenantIdType?: TenantIdType,
     tenantTableName?: string,
     tenantFkColumn?: string
   ): DatabaseRepresentation {
     const ordered = this.resolve()
-    return new RepresentationBuilder(
-      ordered,
-      tenantIdType,
-      tenantTableName,
-      tenantFkColumn
-    ).build()
+    const idType = tenantIdType ?? this.tenantIdType() ?? DEFAULT_TENANT_ID_TYPE
+    const tableName = tenantTableName ?? this.tenantTableName() ?? undefined
+    const fkColumn =
+      tenantFkColumn ?? (tableName ? tenantFkColumnFor(tableName) : undefined)
+    return new RepresentationBuilder(ordered, idType, tableName, fkColumn).build()
   }
 
   /** Collect all schema names that the given schema depends on, excluding self-references. */

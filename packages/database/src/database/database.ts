@@ -5,16 +5,8 @@ import { ConfigurationError } from '@strav/kernel/exceptions/errors'
 import { env } from '@strav/kernel/helpers/env'
 import { createTenantAwareSQL } from './tenant/wrapper'
 import { hasTenantContext, isBypassingTenant } from './tenant/context'
-import {
-  type TenantIdType,
-  DEFAULT_TENANT_ID_TYPE,
-  setTenantIdType,
-} from './tenant/id_type'
-import {
-  DEFAULT_TENANT_TABLE_NAME,
-  setTenantTableName,
-  tenantFkColumnFor,
-} from './tenant/naming'
+import { type TenantIdType, getTenantIdType } from './tenant/id_type'
+import { getTenantTableName, tenantFkColumnFor } from './tenant/naming'
 
 /**
  * Database connection wrapper backed by {@link SQL Bun.sql}.
@@ -46,9 +38,6 @@ export default class Database {
   private _bypassConnection: SQL | null = null
   private tenantEnabled: boolean
   private tenantAwareConnection: SQL
-  readonly tenantIdType: TenantIdType
-  readonly tenantTableName: string
-  readonly tenantFkColumn: string
 
   constructor(protected config: Configuration) {
     if (Database._appConnection) {
@@ -73,20 +62,39 @@ export default class Database {
     this.tenantEnabled = config.get('database.tenant.enabled') ?? false
     Database._tenantEnabled = this.tenantEnabled
 
-    this.tenantIdType =
-      (config.get('database.tenant.idType') as TenantIdType | undefined) ??
-      DEFAULT_TENANT_ID_TYPE
-    setTenantIdType(this.tenantIdType)
-
-    this.tenantTableName =
-      (config.get('database.tenant.tableName') as string | undefined) ??
-      DEFAULT_TENANT_TABLE_NAME
-    setTenantTableName(this.tenantTableName)
-    this.tenantFkColumn = tenantFkColumnFor(this.tenantTableName)
+    if (config.get('database.tenant.idType') !== undefined) {
+      throw new ConfigurationError(
+        'database.tenant.idType is no longer supported. Define a tenant table via defineSchema(...) with `tenantRegistry: true`; the framework derives the id type from its primary key. See docs/database/multitenant.md.'
+      )
+    }
+    if (config.get('database.tenant.tableName') !== undefined) {
+      throw new ConfigurationError(
+        'database.tenant.tableName is no longer supported. Define a tenant table via defineSchema(...) with `tenantRegistry: true`; the schema name becomes the table name. See docs/database/multitenant.md.'
+      )
+    }
 
     this.tenantAwareConnection = this.tenantEnabled
       ? createTenantAwareSQL(this.appConnection)
       : this.appConnection
+  }
+
+  /**
+   * Tenant id cast type. Sourced from the tenant registry schema's PK
+   * (`SchemaRegistry.register` populates the module-level state). Defaults
+   * to `'bigint'` until a tenant schema is registered.
+   */
+  get tenantIdType(): TenantIdType {
+    return getTenantIdType()
+  }
+
+  /** Tenant table name from the registered tenant schema. Defaults to `'tenant'`. */
+  get tenantTableName(): string {
+    return getTenantTableName()
+  }
+
+  /** FK column name on tenanted children: `${tenantTableName}_id`. */
+  get tenantFkColumn(): string {
+    return tenantFkColumnFor(this.tenantTableName)
   }
 
   /**

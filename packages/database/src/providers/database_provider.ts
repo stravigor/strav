@@ -3,7 +3,6 @@ import type Application from '@strav/kernel/core/application'
 import Database from '../database/database'
 import { BaseModel } from '../orm'
 import TenantManager from '../database/tenant/manager'
-import { ensureTenantTable } from '../database/tenant/seed'
 
 export default class DatabaseProvider extends ServiceProvider {
   readonly name = 'database'
@@ -21,7 +20,13 @@ export default class DatabaseProvider extends ServiceProvider {
     new BaseModel(this.db)
 
     if (this.db.isMultiTenant) {
-      await ensureTenantTable(this.db.bypass, this.db.tenantIdType)
+      // Install framework-internal sequences infrastructure (counter table +
+      // strav_assign_tenanted_id trigger function). The tenant registry
+      // table is created by normal migrations — register a schema with
+      // `tenantRegistry: true` (or import the built-in default from
+      // `@strav/database/schemas/default_tenant`).
+      const manager = app.resolve(TenantManager)
+      await manager.setup()
     }
   }
 

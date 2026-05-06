@@ -4,7 +4,7 @@
  * validation so that the same value is used everywhere consistently.
  */
 
-export type TenantIdType = 'uuid' | 'bigint'
+export type TenantIdType = 'uuid' | 'bigint' | 'integer'
 
 export const DEFAULT_TENANT_ID_TYPE: TenantIdType = 'bigint'
 
@@ -34,7 +34,26 @@ export function validateTenantId(idType: TenantIdType, value: string): void {
     }
     return
   }
+  // Both 'bigint' and 'integer' accept any decimal string; the database will
+  // reject out-of-range values when the FK is bound.
   if (!BIGINT_RE.test(value)) {
     throw new Error(`Invalid tenant id: ${value}. Must be an integer.`)
   }
+}
+
+/**
+ * Map the PK pgType of the tenant registry schema to the runtime cast
+ * type used in RLS policies and FK column DEFAULTs.
+ *
+ *   serial / smallserial → integer
+ *   bigserial            → bigint
+ *   uuid                 → uuid
+ */
+export function tenantIdTypeFromPgType(pgType: string): TenantIdType {
+  if (pgType === 'serial' || pgType === 'smallserial') return 'integer'
+  if (pgType === 'bigserial') return 'bigint'
+  if (pgType === 'uuid') return 'uuid'
+  throw new Error(
+    `Cannot derive tenant id type from PK pgType ${JSON.stringify(pgType)}. Allowed: serial, smallserial, bigserial, uuid.`
+  )
 }

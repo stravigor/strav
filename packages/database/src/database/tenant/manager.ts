@@ -1,6 +1,6 @@
 import { inject } from '@strav/kernel/core/inject'
 import Database from '../database'
-import { ensureTenantTable, ensureTenantSequencesObjects } from './seed'
+import { ensureTenantSequencesObjects } from './seed'
 
 export interface TenantRecord {
   id: string
@@ -26,9 +26,13 @@ export interface TenantStats {
 export default class TenantManager {
   constructor(private db: Database) {}
 
-  /** Ensure the tenant table and per-tenant sequencing infrastructure exist. */
+  /**
+   * Install the framework-internal per-tenant sequencing infrastructure
+   * (counter table + `strav_assign_tenanted_id()` trigger function). The
+   * tenant registry table itself is part of normal migrations — register a
+   * schema with `tenantRegistry: true` and run `bun strav migrate`.
+   */
   async setup(): Promise<void> {
-    await ensureTenantTable(this.db.bypass, this.db.tenantIdType, this.db.tenantTableName)
     await ensureTenantSequencesObjects(
       this.db.bypass,
       this.db.tenantIdType,

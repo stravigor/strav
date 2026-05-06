@@ -35,9 +35,7 @@ export default {
   password: env('DB_PASSWORD', ''),
 
   tenant: {
-    enabled:   true,
-    idType:    'bigint',                        // 'bigint' (default) or 'uuid'
-    tableName: 'tenant',                        // default; rename to 'workspace', 'organization', etc.
+    enabled: true,
     bypass: {
       username: env('DB_BYPASS_USER', 'strav_admin'),    // BYPASSRLS role
       password: env('DB_BYPASS_PASSWORD', ''),
@@ -46,57 +44,82 @@ export default {
 }
 ```
 
-### Choosing an `idType`
+The tenant table name and primary-key type are **not** in config. The
+framework reads both from the schema you mark `tenantRegistry: true`.
 
-| Value      | `tenant.id` PK                                | Tenanted child `tenant_id` |
-| ---------- | --------------------------------------------- | -------------------------- |
-| `'bigint'` (default) | `BIGSERIAL NOT NULL`                | `BIGINT NOT NULL`          |
-| `'uuid'`   | `UUID NOT NULL DEFAULT gen_random_uuid()`     | `UUID NOT NULL`            |
+### Defining the tenant registry
 
-Pick `'bigint'` for sequential server-generated IDs (smaller storage,
-faster index lookups, no leakage of tenant count). Pick `'uuid'` if
-tenants are created by external/distributed sources or you expose tenant
-IDs publicly and want unguessable values.
+Add a schema marked `tenantRegistry: true`. The schema's *name* becomes
+the tenant table; the schema's *PK type* drives every cast and FK column
+type across the tenanted children.
 
-The same `idType` is threaded through schema generation, migration SQL,
-the RLS policy cast, and the runtime validator in `withTenant(...)`.
-Once a database is provisioned it cannot be changed without a data
-migration — pick deliberately at install time.
+```typescript
+// database/schemas/workspace.ts
+import { defineSchema, t, Archetype } from '@strav/database'
 
-> **Migrating from v0.4.x.** Apps previously running on v0.4.x have
-> UUID-based tenant tables. Set `idType: 'uuid'` explicitly to keep them
-> working — the framework default flipped to `'bigint'` in v0.5.0.
+export default defineSchema('workspace', {
+  archetype: Archetype.Entity,
+  tenantRegistry: true,
+  fields: {
+    id:   t.bigserial().primaryKey(),  // or t.serial() / t.uuid()
+    slug: t.string().unique().required(),
+    name: t.string().required(),
+  },
+})
+```
+
+If you don't want a custom layout, re-export the built-in default
+(`tenant` table, `BIGSERIAL` PK, plus `slug` and `name`):
+
+```typescript
+// database/schemas/tenant.ts
+export { default } from '@strav/database/schemas/default_tenant'
+```
+
+Exactly one schema across the registry may set `tenantRegistry: true`.
+At least one is required when any other schema is marked `tenanted: true`.
+
+### Supported PK types
+
+| `t.…().primaryKey()` | Storage column      | Cast in DEFAULT / RLS policy | FK on tenanted children |
+| -------------------- | ------------------- | ----------------------------- | ----------------------- |
+| `t.serial()`         | `SERIAL`            | `::integer`                   | `INTEGER NOT NULL`      |
+| `t.smallserial()`    | `SMALLSERIAL`       | `::integer`                   | `INTEGER NOT NULL`      |
+| `t.bigserial()`      | `BIGSERIAL`         | `::bigint`                    | `BIGINT NOT NULL`       |
+| `t.uuid()`           | `UUID DEFAULT gen_random_uuid()` | `::uuid`         | `UUID NOT NULL`         |
+
+Pick `t.serial()` / `t.bigserial()` for sequential server-generated IDs
+(smaller storage, faster index lookups). Pick `t.uuid()` if tenants are
+created by external/distributed sources or if you expose tenant IDs
+publicly and want unguessable values. Stick with `t.bigserial()` if you
+expect more than ~2 billion tenants; `t.serial()` is a safe pick for
+practically any app where that ceiling won't be hit.
+
+The PK type is set once at install — switching it later requires a data
+migration. Pick deliberately.
 
 ### Renaming the tenant table
 
-If your domain calls them workspaces, organizations, or accounts, set
-`database.tenant.tableName` to that name instead of the default `'tenant'`:
+Rename the schema. The framework derives every related identifier from
+the schema's name:
 
-```typescript
-tenant: {
-  enabled:   true,
-  tableName: 'workspace',
-}
-```
-
-The framework derives every related identifier from that one knob:
-
-| Concept                                  | With default     | With `tableName: 'workspace'` |
-| ---------------------------------------- | ---------------- | ------------------------------ |
-| Tenant registry table                    | `tenant`         | `workspace`                    |
-| FK column on tenanted children           | `tenant_id`      | `workspace_id`                 |
-| Composite PK on tenantedSerial tables    | `(tenant_id, id)`| `(workspace_id, id)`           |
-| Composite FK to a tenantedSerial parent  | `(tenant_id, …)` | `(workspace_id, …)`            |
-| RLS policy column                        | `tenant_id`      | `workspace_id`                 |
-| `model.load('<name>')` accessor          | `'tenant'`       | `'workspace'`                  |
+| Concept                                  | With `tenant`     | With `workspace`               |
+| ---------------------------------------- | ----------------- | ------------------------------ |
+| Tenant registry table                    | `tenant`          | `workspace`                    |
+| FK column on tenanted children           | `tenant_id`       | `workspace_id`                 |
+| Composite PK on tenantedSerial tables    | `(tenant_id, id)` | `(workspace_id, id)`           |
+| Composite FK to a tenantedSerial parent  | `(tenant_id, …)`  | `(workspace_id, …)`            |
+| RLS policy column                        | `tenant_id`       | `workspace_id`                 |
+| `model.load('<name>')` accessor          | `'tenant'`        | `'workspace'`                  |
 
 The session config key (`app.tenant_id`) and the framework-internal
 `_strav_tenant_sequences` counter table are *not* renamed — they're
 implementation details that have no user-facing meaning. The dynamic
-trigger function still reads `NEW.<configured FK column>` correctly.
+`strav_assign_tenanted_id()` trigger function still reads
+`NEW.<configured FK column>` correctly.
 
-The class name of the built-in `Tenant` model also stays put. Alias on
-import if you prefer your own name:
+The class name of the built-in `Tenant` model stays put — TypeScript
+class names can't be config-driven. Alias on import if you prefer:
 
 ```typescript
 import { Tenant as Workspace } from '@strav/database'
@@ -104,16 +127,19 @@ import { Tenant as Workspace } from '@strav/database'
 const ws = await Workspace.find(id)
 ```
 
-**Constraint.** The tenant `tableName` is set once at install time and
-threaded through every DDL emission. Renaming it on a live database is a
-one-shot manual migration: rename the table, rename the FK columns on
-every tenanted child, and recreate the RLS policies and triggers. The
-diff engine refuses to auto-detect the rename.
+**Renaming on a live database is a one-shot manual migration:** rename
+the table, the FK columns on every tenanted child, and recreate the RLS
+policies and triggers. The diff engine refuses to auto-detect the
+rename.
 
-**Validation.** The value is interpolated directly into DDL, so it must
-be a plain snake_case identifier (lowercase letters, digits, and
-underscores; cannot start with a digit). `Database` rejects anything
-else at boot.
+**Validation.** The schema name is interpolated directly into DDL, so it
+must be a plain snake_case identifier (lowercase letters, digits, and
+underscores; cannot start with a digit).
+
+> **Migrating from earlier versions.** The `database.tenant.idType` and
+> `database.tenant.tableName` config keys are removed. Define a
+> `tenantRegistry: true` schema instead — Database now throws a helpful
+> error at boot if either key is set.
 
 ## Database Roles
 

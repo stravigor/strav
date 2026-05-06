@@ -33,6 +33,7 @@ export default function defineSchema(name: string, input: SchemaInput): SchemaDe
   }
 
   validateTenantedSequenceFields(name, fields, input.tenanted ?? false)
+  if (input.tenantRegistry) validateTenantRegistryFields(name, fields)
 
   return {
     name,
@@ -41,7 +42,38 @@ export default function defineSchema(name: string, input: SchemaInput): SchemaDe
     associates: input.associates,
     as: input.as,
     tenanted: input.tenanted ?? false,
+    tenantRegistry: input.tenantRegistry ?? false,
     fields,
+  }
+}
+
+/**
+ * The tenant registry table must have a single primary key of an
+ * auto-numbering integer type (`serial` / `bigserial` / `smallserial`) or a
+ * `uuid`. The framework reads this PK to derive the FK column type on every
+ * tenanted child and the cast used in RLS policy expressions.
+ */
+function validateTenantRegistryFields(
+  schemaName: string,
+  fields: Record<string, FieldDefinition>
+): void {
+  const pkFields = Object.entries(fields).filter(([, def]) => def.primaryKey)
+  if (pkFields.length !== 1) {
+    throw new Error(
+      `Tenant registry schema "${schemaName}" must declare exactly one primary key field (got ${pkFields.length}).`
+    )
+  }
+  const [, pkField] = pkFields[0]!
+  const allowed = new Set([
+    'serial',
+    'bigserial',
+    'smallserial',
+    'uuid',
+  ])
+  if (typeof pkField.pgType !== 'string' || !allowed.has(pkField.pgType)) {
+    throw new Error(
+      `Tenant registry schema "${schemaName}" PK must be t.serial(), t.bigserial(), t.smallserial(), or t.uuid() (got ${JSON.stringify(pkField.pgType)}).`
+    )
   }
 }
 

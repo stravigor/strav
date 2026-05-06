@@ -77,9 +77,22 @@ describe('Tenanted sequences (per-tenant numbering)', () => {
     config.set('database.password', APP_PW)
     config.set('database.database', 'strav_testing')
     config.set('database.tenant.enabled', true)
-    config.set('database.tenant.idType', 'uuid')
     config.set('database.tenant.bypass.username', SUPERUSER)
     config.set('database.tenant.bypass.password', SUPERUSER_PW)
+
+    // Register a tenant schema with a UUID PK so module state populates.
+    const SchemaRegistry = (await import('../src/schema/registry')).default
+    new SchemaRegistry().register(
+      defineSchema('tenant', {
+        archetype: Archetype.Entity,
+        tenantRegistry: true,
+        fields: {
+          id: t.uuid().primaryKey(),
+          slug: t.string().unique().required(),
+          name: t.string().required(),
+        },
+      })
+    )
 
     container = new Container()
     container.singleton(Configuration, () => config)
