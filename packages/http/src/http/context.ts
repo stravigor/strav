@@ -216,8 +216,36 @@ export default class Context {
     if (!Context._viewEngine) {
       throw new ConfigurationError('ViewEngine not configured. Register it in the container.')
     }
-    const html = await Context._viewEngine.render(template, data)
+    const merged = this.mergeViewDefaults(data)
+    const html = await Context._viewEngine.render(template, merged)
     return this.html(html, status)
+  }
+
+  /**
+   * Inject implicit per-request values that templates expect to find — most
+   * notably `csrfToken`, used by the `@csrf` directive. Looks first at any
+   * value the csrf() middleware deposited on the context, then falls back
+   * to reading `csrfToken` directly off the active session, so templates
+   * work even when only `session()` is wired up.
+   *
+   * Caller-supplied data wins — these are defaults, not overrides.
+   */
+  private mergeViewDefaults(data?: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+
+    if (!data || !('csrfToken' in data)) {
+      const fromCtx = this._state.get('csrfToken')
+      if (typeof fromCtx === 'string') {
+        out.csrfToken = fromCtx
+      } else {
+        const session = this._state.get('session') as { csrfToken?: unknown } | undefined
+        if (session && typeof session.csrfToken === 'string') {
+          out.csrfToken = session.csrfToken
+        }
+      }
+    }
+
+    return data ? { ...out, ...data } : out
   }
 
   /**
