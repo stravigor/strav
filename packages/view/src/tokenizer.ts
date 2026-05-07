@@ -29,6 +29,7 @@ const DIRECTIVES = new Set([
   'islands',
   'css',
   'csrf',
+  'captcha',
   'class',
   'style',
   'push',

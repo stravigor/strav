@@ -338,6 +338,23 @@ function compileDirective(
       break
     }
 
+    case 'captcha': {
+      // @captcha               → honeypot field only
+      // @captcha('pow')        → honeypot + hidden token + PoW island
+      // @captcha('svg')        → honeypot + hidden token + inline SVG + answer input
+      // Calls __captcha(variant?) — registered by @strav/captcha's installCaptchaHelpers().
+      const raw = (token.args ?? '').trim()
+      if (raw === '') {
+        lines.push(`__out += (typeof __captcha === 'function' ? __captcha() : '');`)
+      } else {
+        const variant = raw.replace(/^['"]|['"]$/g, '').trim()
+        lines.push(
+          `__out += (typeof __captcha === 'function' ? __captcha(${JSON.stringify(variant)}) : '');`
+        )
+      }
+      break
+    }
+
     case 'push': {
       if (!token.args) throw new TemplateError(`@push requires a name at line ${token.line}`)
       const name = token.args.replace(/^['"]|['"]$/g, '').trim()

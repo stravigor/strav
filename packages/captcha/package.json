@@ -1,0 +1,31 @@
+{
+  "name": "@strav/captcha",
+  "version": "0.4.8",
+  "type": "module",
+  "description": "Built-in CAPTCHA for the Strav framework — honeypot, proof-of-work, and SVG text challenges with no external dependencies",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "strav": {
+    "islands": {
+      "namespace": "captcha",
+      "dir": "./src/islands"
+    }
+  },
+  "files": [
+    "src/",
+    "package.json",
+    "tsconfig.json"
+  ],
+  "peerDependencies": {
+    "@strav/kernel": "workspace:*",
+    "@strav/http": "workspace:*",
+    "@strav/view": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit"
+  }
+}
