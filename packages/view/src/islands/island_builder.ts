@@ -86,8 +86,12 @@ interface ResolvedSource extends IslandSource {
 }
 
 export interface IslandBuilderOptions {
-  /** Directory containing .vue SFC files. Default: './resources/islands'. Legacy single-source option. */
-  islandsDir?: string
+  /**
+   * Directory containing the app's own `.vue` SFC files. Default
+   * `'./resources/islands'`. Pass `false` to opt out of an anonymous source
+   * entirely (rare — useful when every island comes from `packages`).
+   */
+  islandsDir?: string | false
   /** Multiple island sources merged into one bundle. */
   sources?: IslandSource[]
   /** Package names whose `strav.islands` manifest should contribute sources. */
@@ -176,14 +180,14 @@ export class IslandBuilder {
       sources.push(this.normalizeSource(src))
     }
 
-    // 2. Legacy `islandsDir` (or default 'resources/islands') becomes the anonymous source
-    //    if no anonymous source already exists.
+    // 2. The app's own islands directory (default 'resources/islands') is the
+    //    anonymous source. Always added unless an explicit anonymous source is
+    //    already in `sources` — this avoids the footgun where adding `packages`
+    //    silently drops the app's own islands. If the directory doesn't exist
+    //    `discoverIslands` swallows the readdir error, so it's harmless to
+    //    register a missing default. Set `islandsDir: false` to opt out.
     const hasAnonymous = sources.some(s => !s.namespace)
-    const wantsLegacySource =
-      options.islandsDir !== undefined ||
-      (sources.length === 0 && options.packages === undefined)
-
-    if (!hasAnonymous && wantsLegacySource) {
+    if (!hasAnonymous && options.islandsDir !== false) {
       sources.unshift(
         this.normalizeSource({
           islandsDir: options.islandsDir ?? './resources/islands',
