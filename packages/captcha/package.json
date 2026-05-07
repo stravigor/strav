@@ -1,6 +1,6 @@
 {
   "name": "@strav/captcha",
-  "version": "0.4.10",
+  "version": "0.4.11",
   "type": "module",
   "description": "Built-in CAPTCHA for the Strav framework — honeypot, proof-of-work, and SVG text challenges with no external dependencies",
   "license": "MIT",
