@@ -44,8 +44,18 @@ export function register(program: Command): void {
           `CREATE ROLE "${bypassUser}" LOGIN PASSWORD '${bypassPassword}' BYPASSRLS;`,
           `GRANT ALL ON DATABASE "${dbName}" TO "${appUser}", "${bypassUser}";`,
           `GRANT ALL ON SCHEMA public TO "${appUser}", "${bypassUser}";`,
+          // Default privileges for objects the *current connection* will create.
           `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "${appUser}", "${bypassUser}";`,
           `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "${appUser}", "${bypassUser}";`,
+          // ALTER DEFAULT PRIVILEGES is per-role-of-the-creator. Migrations
+          // run as the bypass role, so without these the app role never
+          // sees grants on tables/sequences the bypass role creates and
+          // any non-bypass query (seeders, request-time inserts) fails
+          // with `permission denied for table …`. Setting them here means
+          // the demo flow `db:setup-roles → fresh → seed` works without
+          // any extra GRANT plumbing.
+          `ALTER DEFAULT PRIVILEGES FOR ROLE "${bypassUser}" IN SCHEMA public GRANT ALL ON TABLES TO "${appUser}";`,
+          `ALTER DEFAULT PRIVILEGES FOR ROLE "${bypassUser}" IN SCHEMA public GRANT ALL ON SEQUENCES TO "${appUser}";`,
         ]
 
         if (!opts.apply) {
