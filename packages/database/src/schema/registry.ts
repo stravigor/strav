@@ -224,32 +224,33 @@ export default class SchemaRegistry {
     return new RepresentationBuilder(ordered, idType, tableName, fkColumn).build()
   }
 
-  /** Collect all schema names that the given schema depends on, excluding self-references. */
+  /**
+   * Collect schema names that must come before this one in the build order.
+   *
+   * `parents` and `associates` stay in the dep set so hierarchical structures
+   * stream out top-down in the generated migration (cosmetic, not semantic).
+   * Field references via `t.reference(...)` are intentionally NOT included:
+   * FK constraints are emitted as `ALTER TABLE` in `constraints/up.sql`,
+   * which runs after every `CREATE TABLE`, so two schemas that point at each
+   * other (`workspace.owner → user`, `user.lastWorkspace → workspace`) and
+   * self-references (`revision.parentRevision → revision`) both work
+   * naturally. Including them in the topo graph would surface false-positive
+   * cycle errors and reject valid schemas.
+   *
+   * Self-references in `parents` / `associates` are excluded the same way
+   * they always have been.
+   */
   private getDependencies(schema: SchemaDefinition): string[] {
     const deps = new Set<string>()
 
     if (schema.parents) {
       for (const parent of schema.parents) {
-        // Exclude self-references to allow hierarchical structures
-        if (parent !== schema.name) {
-          deps.add(parent)
-        }
+        if (parent !== schema.name) deps.add(parent)
       }
     }
     if (schema.associates) {
       for (const assoc of schema.associates) {
-        // Exclude self-references for self-associations
-        if (assoc !== schema.name) {
-          deps.add(assoc)
-        }
-      }
-    }
-    for (const fieldDef of Object.values(schema.fields)) {
-      if (fieldDef.references) {
-        // Exclude self-references to allow parent-child relationships
-        if (fieldDef.references !== schema.name) {
-          deps.add(fieldDef.references)
-        }
+        if (assoc !== schema.name) deps.add(assoc)
       }
     }
 

@@ -106,6 +106,44 @@ t.string()
 t.reference('user')  // creates a foreign key to the user table
 ```
 
+`ON DELETE` is derived from the field's nullability: `.required()` → `RESTRICT`, `.nullable()` → `SET NULL`. Tenanted-composite FKs (when the parent uses `t.tenantedSerial()` / `t.tenantedBigSerial()`) are auto-promoted to `(tenant_id, fk_id) → parent(tenant_id, id)` and use `CASCADE`, since the tenant column is `NOT NULL` and `SET NULL` is impossible on a composite.
+
+#### Self-references
+
+`t.reference()` accepts the schema's own name. The FK column is named after the field (e.g. `parentRevision: t.reference('revision').nullable()` → column `parent_revision_id`, FK to the same table's PK). Works on both regular and tenanted-composite schemas — useful for hierarchical structures like category trees and revision chains.
+
+```typescript
+defineSchema('category', {
+  fields: {
+    id: t.bigserial().primaryKey(),
+    name: t.varchar(120).required(),
+    parent: t.reference('category').nullable(),  // self-FK
+  },
+})
+```
+
+#### Cross-table cycles
+
+Two schemas can reference each other freely (e.g. `workspace.owner → user`, `user.lastWorkspace → workspace`). The migration generator emits all `CREATE TABLE` statements first, then all FK constraints as `ALTER TABLE` in `constraints/up.sql` — the cycle is structural-only and resolves naturally. `down.sql` drops constraints first, then tables.
+
+```typescript
+defineSchema('workspace', {
+  fields: {
+    id: t.bigserial().primaryKey(),
+    owner: t.reference('user').required(),
+  },
+})
+
+defineSchema('user', {
+  fields: {
+    id: t.bigserial().primaryKey(),
+    lastWorkspace: t.reference('workspace').nullable(),
+  },
+})
+```
+
+`SchemaRegistry.resolve()` (the topological sort over schemas) only considers `parents` and `associates` for ordering — `references` field deps are intentionally excluded so cycles like the one above don't surface as false-positive errors.
+
 ### Enums
 
 ```typescript
