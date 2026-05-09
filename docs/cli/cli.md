@@ -286,10 +286,15 @@ For example, `@strav/search` provides `search:import` and `search:flush` command
 
 ## Bootstrap
 
-CLI commands that need a database connection use a shared bootstrap function:
+`@strav/cli` exposes two ways to bring up the framework inside a command. Pick based on what your action actually needs.
+
+### `bootstrap()` — DB-only
+
+Loads configuration, opens the database, discovers schemas, and creates an introspector. **Does not** instantiate an `Application` or boot any service providers, so facades like `rag`, `mail`, `notification`, `auth` are not wired. This is what every built-in command (migrations, generators, seed) uses.
 
 ```typescript
 import { bootstrap, shutdown } from '@strav/cli'
+import type { Command } from 'commander'
 
 export function register(program: Command): void {
   program.command('my:command').action(async () => {
@@ -298,7 +303,7 @@ export function register(program: Command): void {
       const { db: database, config, registry, introspector } = await bootstrap()
       db = database
 
-      // ... command logic ...
+      // ... command logic using db / config / registry / introspector ...
     } finally {
       if (db) await shutdown(db)
     }
@@ -306,11 +311,55 @@ export function register(program: Command): void {
 }
 ```
 
-The bootstrap:
-1. Loads configuration from `./config`.
-2. Connects to the database.
-3. Discovers and validates schemas.
-4. Creates the database introspector.
+Returns `{ config, db, registry, introspector }`. Always close `db` via `shutdown(db)` in `finally`.
+
+### `withProviders([...])` — full Application
+
+Builds a real `Application`, registers the providers you pass, boots them in dependency order, and installs signal handlers for graceful shutdown. Use this whenever your command depends on a facade or service that is wired by a provider — for example `rag.ingest(...)`, `mail.send(...)`, `notification.send(...)`, queued jobs, broadcast channels.
+
+```typescript
+import { withProviders } from '@strav/cli'
+import { ConfigProvider, DatabaseProvider } from '@strav/kernel'
+import { BrainProvider } from '@strav/brain'
+import { RagProvider, rag } from '@strav/rag'
+import type { Command } from 'commander'
+
+export function register(program: Command): void {
+  program
+    .command('rag:ingest')
+    .description('Ingest local docs into the resume RAG collection')
+    .option('-c, --collection <name>', 'Target collection', 'resume')
+    .action(async ({ collection }) => {
+      const app = await withProviders([
+        new ConfigProvider(),
+        new DatabaseProvider(),
+        new BrainProvider(),
+        new RagProvider(),
+      ])
+
+      try {
+        await rag.store().createCollection(collection, 1536)
+        await rag.flush(collection)
+        // ... ingest documents ...
+      } finally {
+        await app.shutdown()
+      }
+    })
+}
+```
+
+Pass only the providers your command actually needs — skipping `HttpProvider` / `ViewProvider` lets the command run while the dev server still holds port 3000.
+
+### Choosing between them
+
+| Need                                                               | Use                  |
+| ------------------------------------------------------------------ | -------------------- |
+| Migration, schema diff, model/API generation, raw model CRUD       | `bootstrap()`        |
+| Anything that calls a provider-bound facade (`rag`, `mail`, etc.)  | `withProviders([…])` |
+| Dispatching events, sending notifications, broadcasting, queueing  | `withProviders([…])` |
+| One-off script that doesn't need a discoverable `bun strav` entry  | Either, called from a plain file in `scripts/` — but you lose `--help` and option parsing |
+
+If you're unsure, start with `bootstrap()`; switch to `withProviders` the first time you reach for a facade and find it isn't wired.
 
 ## Typical workflow
 
