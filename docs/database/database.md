@@ -174,10 +174,23 @@ import { SchemaDiffer } from '@strav/database'
 const differ = new SchemaDiffer()
 const diff = differ.diff(desired, actual)
 
-// diff.enums    — enum changes (create, drop, modify)
-// diff.tables   — table changes (create, drop, modify with column-level detail)
-// diff.indexes  — index changes
+// diff.extensions — Postgres extensions to install / drop
+// diff.enums      — enum changes (create, drop, modify)
+// diff.tables     — table changes (create, drop, modify with column-level detail)
+// diff.indexes    — index changes
 ```
+
+#### Framework-managed tables
+
+Tables whose name starts with `_strav_` are owned by the framework, not by `database/schemas/*.ts`. Examples:
+
+- `_strav_migrations` — created by the migration runner.
+- `_strav_tenant_sequences` — created by `TenantManager.setup()` for per-tenant id sequences.
+- `_strav_sessions`, `_strav_access_tokens` — created by `SessionProvider` on boot.
+
+When the diff finds a `_strav_*` table in the live database that has no matching project schema, it skips the orphan-drop branch entirely (no `DROP TABLE`, no `DROP CONSTRAINT`, no `DROP INDEX` against that table). Without this filter, the first project migration after introducing `SessionProvider` would silently delete the auth tables the provider expects to exist.
+
+The exclusion only triggers when there's no project schema for the name. If you ever need to *manage* a `_strav_*`-prefixed table from your own schemas (rare; not currently a use case the framework supports beyond this), `defineSchema('_strav_yours', { … })` works normally — the diff falls back to its standard create/modify behavior because the desired set claims ownership.
 
 ### SqlGenerator
 

@@ -123,6 +123,13 @@ export default class SchemaDiffer {
     // Drops
     for (const [name, actualTable] of actualMap) {
       if (!desiredMap.has(name)) {
+        // Framework-managed tables (`_strav_*`) are owned by their respective
+        // providers, not by `database/schemas/*.ts`. Without this filter, the
+        // first project migration would drop tables like `_strav_sessions` /
+        // `_strav_access_tokens` that `SessionProvider` depends on. The
+        // exclusion only triggers when there's no project schema for the
+        // name — `defineSchema('_strav_custom', …)` still works.
+        if (isFrameworkManagedTable(name)) continue
         tables.push({ kind: 'drop', table: actualTable })
         // All constraints and indexes from a dropped table
         this.extractConstraintDrops(name, actualTable, constraints)
@@ -312,6 +319,22 @@ export default class SchemaDiffer {
 // ---------------------------------------------------------------------------
 // Comparison helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * True for tables the framework owns. Their lifecycle is managed by
+ * service providers (e.g. `SessionProvider` creates `_strav_sessions`)
+ * or by the migration runner itself (`_strav_migrations`,
+ * `_strav_tenant_sequences`); the project's `database/schemas/` is not
+ * the source of truth for them.
+ *
+ * Used by the diff's orphan-drop branch: when a `_strav_*` table exists
+ * in the live database but not in the project's schemas, do nothing.
+ * Override path (rare): declare a project schema with the same name and
+ * the diff falls back to its normal create/modify behavior.
+ */
+export function isFrameworkManagedTable(name: string): boolean {
+  return name.startsWith('_strav_')
+}
 
 function fkKey(fk: ForeignKeyConstraint): string {
   return `${fk.columns.join(',')}->${fk.referencedTable}(${fk.referencedColumns.join(',')})`
