@@ -632,6 +632,72 @@ Include the bundled script in your layout:
 <script type="module" src="/assets/app.js"></script>
 ```
 
+### Sharing state across islands
+
+Although islands look like isolated DOM nodes, **every island on a page mounts inside a single Vue application**. The bootstrap creates one `createApp(Root)` and renders each island as a `Teleport` child of that root, so they share plugins, `provide`/`inject`, and the same reactivity graph. Page-scoped global state — Pinia, a `reactive()` module, an event bus — works exactly like it would inside a SPA, without any per-island HTTP fan-out or `window`-event plumbing.
+
+**With IslandBuilder — install plugins via `setup.ts`:**
+
+```ts
+// resources/islands/setup.ts
+import type { App } from 'vue'
+import { createPinia } from 'pinia'
+
+export default (app: App) => {
+  app.use(createPinia())
+}
+```
+
+Define a store anywhere under `islands/` and consume it from any component on the page:
+
+```ts
+// resources/islands/stores/editor.ts
+import { defineStore } from 'pinia'
+
+export const useEditorStore = defineStore('editor', {
+  state: () => ({ selectedBlockId: null as string | null, isDirty: false }),
+  actions: {
+    select(id: string) { this.selectedBlockId = id },
+    markDirty() { this.isDirty = true },
+  },
+})
+```
+
+```vue
+<!-- resources/islands/palette.vue -->
+<script setup>
+import { useEditorStore } from './stores/editor'
+const editor = useEditorStore()
+</script>
+
+<template>
+  <button :disabled="!editor.selectedBlockId" @click="editor.markDirty()">
+    Edit selected
+  </button>
+</template>
+```
+
+A second island (e.g. `editor.vue`) calling `editor.select('block-42')` is reflected in the palette immediately — same reactive instance, no HTTP round-trip.
+
+**With manual bootstrap — install plugins via `__vue_setup`:**
+
+```ts
+import { createPinia } from 'pinia'
+
+window.__vue_setup = (app) => app.use(createPinia())
+window.__vue_components = { Editor, Palette }
+
+import '@strav/view/client/islands'
+```
+
+**Lighter alternative — `provide`/`inject`:**
+
+For small apps that don't want a full store, register a `reactive()` object on the root via the same hook and `inject` it from each island. Same single-app guarantee applies.
+
+**What this pattern doesn't do:**
+- **Survive page navigation.** Full HTML requests rebuild the app — store state is lost. The server is the source of truth between page loads; pass initial state into one "owner" island via `data-props` (or a `<script type="application/json">` block) and hydrate the store on `onMounted`. If a route is heavily interactive, scope it under the [SPA router](#spa-routing) so navigation stays client-side.
+- **Sync across tabs or push from the server.** Use [`@strav/signal`](../signal/broadcasting.md) broadcasting for that — it solves a different problem and composes cleanly with a Pinia store (signal listener → `store.$patch(...)`).
+
 ## SPA routing
 
 For single-page applications built with Vue islands, the framework provides a shared routing system. Route definitions are declared once and used by both the server (to register GET handlers) and the client (to match URLs and render views).
