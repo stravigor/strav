@@ -15,10 +15,20 @@ export enum Archetype {
   Contribution = 'contribution',
 }
 
+/**
+ * Reference to a parent schema in {@link SchemaInput.parents}.
+ *
+ * Plain string is the parent name. The object form attaches per-parent
+ * options — currently only `unique`, which marks the auto-generated FK
+ * column as `UNIQUE` (useful for 1:1 components like a single TOTP secret
+ * per user).
+ */
+export type ParentRef = string | { name: string; unique?: boolean }
+
 /** The input shape that users pass to {@link defineSchema}. */
 export interface SchemaInput {
   archetype?: Archetype
-  parents?: string[]
+  parents?: ParentRef[]
   associates?: string[]
   as?: Record<string, string>
   /**
@@ -36,13 +46,27 @@ export interface SchemaInput {
    */
   tenantRegistry?: boolean
   fields: Record<string, FieldBuilder>
+  /**
+   * Multi-column UNIQUE constraints declared at the schema level.
+   *
+   * Each entry is a list of logical column names. Each name is resolved as:
+   * 1. a parent name from {@link parents} → the FK column it generates,
+   * 2. a field name from {@link fields} (snake_cased; reference fields expand to their FK column),
+   * 3. an already-emitted column name (e.g. `tenant_id`, timestamps).
+   *
+   * Single-column entries become a unique index; multi-column entries become a UNIQUE constraint.
+   */
+  uniques?: string[][]
 }
 
 /** The resolved schema stored in the registry. */
 export interface SchemaDefinition {
   name: string
   archetype: Archetype
+  /** Canonical parent names. Per-parent options are stored separately. */
   parents?: string[]
+  /** Names of parents whose generated FK column must be UNIQUE. Subset of {@link parents}. */
+  uniqueParents?: string[]
   associates?: string[]
   as?: Record<string, string>
   /** Whether this table is tenant-scoped (carries the tenant FK + RLS). */
@@ -50,4 +74,6 @@ export interface SchemaDefinition {
   /** Whether this is the tenant registry schema (see {@link SchemaInput.tenantRegistry}). */
   tenantRegistry?: boolean
   fields: Record<string, FieldDefinition>
+  /** Schema-level UNIQUE declarations — see {@link SchemaInput.uniques}. */
+  uniques?: string[][]
 }

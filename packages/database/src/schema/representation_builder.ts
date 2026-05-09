@@ -115,7 +115,7 @@ export default class RepresentationBuilder {
     }
 
     // 3. Parent FK (for dependent archetypes)
-    this.addParentFK(schema, columns, foreignKeys, indexes)
+    this.addParentFK(schema, columns, foreignKeys, uniqueConstraints, indexes)
 
     // 4. Association FKs
     this.addAssociationFKs(schema, columns, foreignKeys, uniqueConstraints, indexes)
@@ -124,10 +124,13 @@ export default class RepresentationBuilder {
     // 6. Reference fields resolved to FK columns
     this.addUserFields(schema, columns, foreignKeys, indexes)
 
-    // 7. Timestamps
+    // 7. Schema-level UNIQUE declarations (resolved against everything above).
+    this.addSchemaUniques(schema, columns, uniqueConstraints, indexes)
+
+    // 8. Timestamps
     this.addTimestamps(schema, columns)
 
-    // 8. NOT NULL defaults (skip FK columns — they must never have defaults)
+    // 9. NOT NULL defaults (skip FK columns — they must never have defaults)
     this.applyNotNullDefaults(columns, foreignKeys)
 
     return {
@@ -263,9 +266,12 @@ export default class RepresentationBuilder {
     schema: SchemaDefinition,
     columns: ColumnDefinition[],
     foreignKeys: ForeignKeyConstraint[],
+    uniqueConstraints: UniqueConstraint[],
     indexes: IndexDefinition[]
   ): void {
     if (!schema.parents?.length || !PARENT_FK_ARCHETYPES.has(schema.archetype)) return
+
+    const uniqueParents = new Set(schema.uniqueParents ?? [])
 
     for (const parentName of schema.parents) {
       const parentSchema = this.schemas.get(parentName)
@@ -274,6 +280,7 @@ export default class RepresentationBuilder {
       const parentPK = this.findPrimaryKey(parentSchema)
       const fkColName = `${toSnakeCase(parentName)}_${toSnakeCase(parentPK.name)}`
       const fkColType = serialToIntegerType(parentPK.pgType)
+      const enforceUnique = uniqueParents.has(parentName)
 
       columns.push({
         name: fkColName,
@@ -301,7 +308,11 @@ export default class RepresentationBuilder {
           onDelete: 'CASCADE',
           onUpdate: 'CASCADE',
         })
-        indexes.push({ columns: [this.tenantFkColumn, fkColName], unique: false })
+        const idxCols = [this.tenantFkColumn, fkColName]
+        indexes.push({ columns: idxCols, unique: enforceUnique })
+        if (enforceUnique) {
+          uniqueConstraints.push({ columns: idxCols })
+        }
       } else {
         foreignKeys.push({
           columns: [fkColName],
@@ -310,7 +321,7 @@ export default class RepresentationBuilder {
           onDelete: 'CASCADE',
           onUpdate: 'CASCADE',
         })
-        indexes.push({ columns: [fkColName], unique: false })
+        indexes.push({ columns: [fkColName], unique: enforceUnique })
       }
     }
   }
@@ -403,6 +414,77 @@ export default class RepresentationBuilder {
       uniqueConstraints.push({ columns: uqCols })
       indexes.push({ columns: uqCols, unique: true })
     }
+  }
+
+  /**
+   * Apply schema-level UNIQUE declarations from {@link SchemaDefinition.uniques}.
+   *
+   * Resolves each logical column name against (in order) `schema.parents`,
+   * `schema.fields`, and the columns already emitted on the table. Single-column
+   * entries become a unique index; multi-column entries become a UNIQUE
+   * constraint plus its backing index.
+   */
+  private addSchemaUniques(
+    schema: SchemaDefinition,
+    columns: ColumnDefinition[],
+    uniqueConstraints: UniqueConstraint[],
+    indexes: IndexDefinition[]
+  ): void {
+    if (!schema.uniques?.length) return
+
+    const seen = new Set<string>()
+    for (const entry of schema.uniques) {
+      const resolved = entry.map(name =>
+        this.resolveUniqueColumn(schema, name, columns)
+      )
+      const key = [...resolved].sort().join(',')
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      if (resolved.length === 1) {
+        indexes.push({ columns: resolved, unique: true })
+      } else {
+        uniqueConstraints.push({ columns: resolved })
+        indexes.push({ columns: resolved, unique: true })
+      }
+    }
+  }
+
+  /**
+   * Map a logical column name in a `uniques` entry to the actual snake_case
+   * column emitted on the table. Throws if the name resolves to nothing.
+   */
+  private resolveUniqueColumn(
+    schema: SchemaDefinition,
+    name: string,
+    columns: ColumnDefinition[]
+  ): string {
+    if (schema.parents?.includes(name)) {
+      const parentSchema = this.schemas.get(name)
+      if (parentSchema) {
+        const parentPK = this.findPrimaryKey(parentSchema)
+        return `${toSnakeCase(name)}_${toSnakeCase(parentPK.name)}`
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(schema.fields, name)) {
+      const fieldDef = schema.fields[name]!
+      if (fieldDef.references) {
+        const refSchema = this.schemas.get(fieldDef.references)
+        if (refSchema) {
+          const refPK = this.findPrimaryKey(refSchema)
+          return `${toSnakeCase(name)}_${toSnakeCase(refPK.name)}`
+        }
+      }
+      return toSnakeCase(name)
+    }
+
+    if (columns.some(c => c.name === name)) return name
+
+    throw new Error(
+      `Schema "${schema.name}": uniques references unknown column "${name}". ` +
+        `Use a parent name from parents:[], a field name from fields:{}, or an existing column name (e.g. "${this.tenantFkColumn}").`
+    )
   }
 
   /**

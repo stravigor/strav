@@ -1,5 +1,5 @@
 import { Archetype } from './types'
-import type { SchemaInput, SchemaDefinition } from './types'
+import type { ParentRef, SchemaInput, SchemaDefinition } from './types'
 import type { FieldDefinition } from './field_definition'
 import type { PostgreSQLCustomType } from './postgres'
 import { isTenantedSequence } from './naming'
@@ -35,16 +35,90 @@ export default function defineSchema(name: string, input: SchemaInput): SchemaDe
   validateTenantedSequenceFields(name, fields, input.tenanted ?? false)
   if (input.tenantRegistry) validateTenantRegistryFields(name, fields)
 
+  const { parents, uniqueParents } = normalizeParents(name, input.parents)
+  const uniques = normalizeUniques(name, input.uniques)
+
   return {
     name,
     archetype: input.archetype ?? Archetype.Entity,
-    parents: input.parents,
+    parents,
+    uniqueParents,
     associates: input.associates,
     as: input.as,
     tenanted: input.tenanted ?? false,
     tenantRegistry: input.tenantRegistry ?? false,
     fields,
+    uniques,
   }
+}
+
+/**
+ * Split {@link ParentRef} entries into canonical names and a separate
+ * `uniqueParents` list. Existing consumers of `schema.parents` keep
+ * receiving plain strings.
+ */
+function normalizeParents(
+  schemaName: string,
+  refs: ParentRef[] | undefined
+): { parents?: string[]; uniqueParents?: string[] } {
+  if (!refs?.length) return {}
+  const names: string[] = []
+  const uniqueNames: string[] = []
+  const seen = new Set<string>()
+
+  for (const ref of refs) {
+    const { name, unique } =
+      typeof ref === 'string' ? { name: ref, unique: false } : ref
+    if (seen.has(name)) {
+      throw new Error(
+        `Schema "${schemaName}" lists parent "${name}" more than once.`
+      )
+    }
+    seen.add(name)
+    names.push(name)
+    if (unique) uniqueNames.push(name)
+  }
+
+  return {
+    parents: names,
+    uniqueParents: uniqueNames.length ? uniqueNames : undefined,
+  }
+}
+
+/**
+ * Validate {@link SchemaInput.uniques}: drop empty / undefined input,
+ * reject empty inner arrays, and dedupe entries that name the same column
+ * twice. Column-name resolution happens later in the representation builder.
+ */
+function normalizeUniques(
+  schemaName: string,
+  uniques: string[][] | undefined
+): string[][] | undefined {
+  if (!uniques?.length) return undefined
+  const out: string[][] = []
+  for (const entry of uniques) {
+    if (!Array.isArray(entry) || entry.length === 0) {
+      throw new Error(
+        `Schema "${schemaName}": uniques entry must be a non-empty array of column names.`
+      )
+    }
+    const seen = new Set<string>()
+    for (const col of entry) {
+      if (typeof col !== 'string' || col.length === 0) {
+        throw new Error(
+          `Schema "${schemaName}": uniques entry contains a non-string or empty column name.`
+        )
+      }
+      if (seen.has(col)) {
+        throw new Error(
+          `Schema "${schemaName}": uniques entry [${entry.join(', ')}] names "${col}" more than once.`
+        )
+      }
+      seen.add(col)
+    }
+    out.push([...entry])
+  }
+  return out
 }
 
 /**

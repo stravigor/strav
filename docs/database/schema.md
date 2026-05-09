@@ -112,6 +112,71 @@ t.reference('user')  // creates a foreign key to the user table
 t.enum(['user', 'admin', 'staff'])  // PostgreSQL enum type
 ```
 
+## Uniqueness
+
+Three places to declare uniqueness, picked by what you're constraining.
+
+### Single column on a hand-declared field
+
+Use the field-level modifier:
+
+```typescript
+fields: {
+  email: t.varchar(255).email().unique().required(),
+}
+```
+
+Emits a unique index on the `email` column.
+
+### Parent FK column (1:1 with parent)
+
+`parents` accepts either bare names or `{ name, unique }` objects. Marking a parent `unique: true` constrains the auto-generated FK column so each parent row can have at most one child row. This is the canonical 1:1 component pattern.
+
+```typescript
+defineSchema('totp_secret', {
+  archetype: Archetype.Component,
+  parents: [{ name: 'user', unique: true }],
+  fields: {
+    secretEncrypted: t.bytea().required().sensitive(),
+  },
+})
+```
+
+Emits a unique index on `user_id`. For tenanted-composite parents (parent uses `t.tenantedSerial()`), uniqueness is automatically scoped to `(tenant_id, user_id)` so two tenants can each have their own row.
+
+### Composite UNIQUE across multiple columns
+
+Use schema-level `uniques`. Each entry is a list of logical names — a name resolves against (in order) `parents`, `fields`, then any column already on the table (so you can reference `tenant_id` or `created_at` explicitly).
+
+```typescript
+defineSchema('oauth_identity', {
+  archetype: Archetype.Component,
+  parents: ['user'],
+  fields: {
+    provider: t.enum(['google', 'github']).required(),
+    providerUserId: t.varchar(255).required(),
+  },
+  uniques: [
+    ['provider', 'providerUserId'],   // → UNIQUE(provider, provider_user_id)
+  ],
+})
+```
+
+```typescript
+defineSchema('recovery_code', {
+  archetype: Archetype.Component,
+  parents: ['user'],
+  fields: { codeHash: t.varchar(255).required() },
+  uniques: [
+    ['user', 'codeHash'],             // parent shorthand → UNIQUE(user_id, code_hash)
+  ],
+})
+```
+
+Single-column entries become a unique index; multi-column entries become a UNIQUE constraint plus its backing index. Naming is automatic (`uq_<table>_<col>_<col>`, `idx_<table>_<col>_<col>_unique`); rename by hand-editing the migration if you need a custom identifier.
+
+The DSL throws at `defineSchema` time on duplicate parent names, empty entries, or duplicate columns inside an entry, and at representation-build time if a name doesn't resolve to a known parent / field / column.
+
 ## Associations (many-to-many)
 
 Define a pivot table between two entities using `defineAssociation`:
