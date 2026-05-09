@@ -11,6 +11,7 @@ import type { PostgreSQLType } from '../../schema/postgres'
 import type {
   SchemaDiff,
   EnumDiff,
+  ExtensionDiff,
   TableDiff,
   ColumnDiff,
   ConstraintDiff,
@@ -24,9 +25,31 @@ import type {
  */
 export default class SchemaDiffer {
   diff(desired: DatabaseRepresentation, actual: DatabaseRepresentation): SchemaDiff {
+    const extensions = this.diffExtensions(desired, actual)
     const enums = this.diffEnums(desired, actual)
     const { tables, constraints, indexes } = this.diffTablesAndDeps(desired, actual)
-    return { enums, tables, constraints, indexes }
+    return { extensions, enums, tables, constraints, indexes }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Extensions
+  // ---------------------------------------------------------------------------
+
+  private diffExtensions(
+    desired: DatabaseRepresentation,
+    actual: DatabaseRepresentation
+  ): ExtensionDiff[] {
+    const diffs: ExtensionDiff[] = []
+    const desiredSet = new Set(desired.extensions ?? [])
+    const actualSet = new Set(actual.extensions ?? [])
+
+    for (const name of desiredSet) {
+      if (!actualSet.has(name)) diffs.push({ kind: 'create', name })
+    }
+    for (const name of actualSet) {
+      if (!desiredSet.has(name)) diffs.push({ kind: 'drop', name })
+    }
+    return diffs
   }
 
   // ---------------------------------------------------------------------------

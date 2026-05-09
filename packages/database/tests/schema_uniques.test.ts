@@ -10,7 +10,7 @@ import type { SchemaDefinition } from '../src/schema/types'
 
 function build(schemas: SchemaDefinition[]) {
   const rep = new RepresentationBuilder(schemas).build()
-  const diff = new SchemaDiffer().diff(rep, { enums: [], tables: [] })
+  const diff = new SchemaDiffer().diff(rep, { extensions: [], enums: [], tables: [] })
   const sql = new SqlGenerator().generate(diff)
   return { rep, sql }
 }

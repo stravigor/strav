@@ -6,6 +6,12 @@ import type { Archetype } from './types'
  * Contains all enum types and table definitions in dependency order.
  */
 export interface DatabaseRepresentation {
+  /**
+   * PostgreSQL extensions required by any schema. Installed (via
+   * `CREATE EXTENSION IF NOT EXISTS`) before any other DDL so column types
+   * like `vector(1536)` resolve. Always sorted alphabetically.
+   */
+  extensions: string[]
   /** PostgreSQL enum types that must be created before tables. */
   enums: EnumDefinition[]
   /** Table definitions in dependency order. */

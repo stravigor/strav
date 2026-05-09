@@ -7,6 +7,7 @@ import type {
   SchemaDiff,
   GeneratedSql,
   EnumDiff,
+  ExtensionDiff,
   TableDiff,
   ColumnDiff,
   ConstraintDiff,
@@ -36,6 +37,8 @@ export default class SqlGenerator {
 
   generate(diff: SchemaDiff): GeneratedSql {
     return {
+      extensionsUp: this.generateExtensionsUp(diff.extensions),
+      extensionsDown: this.generateExtensionsDown(diff.extensions),
       enumsUp: this.generateEnumsUp(diff.enums),
       enumsDown: this.generateEnumsDown(diff.enums),
       tables: this.generateTables(diff.tables),
@@ -44,6 +47,35 @@ export default class SqlGenerator {
       indexesUp: this.generateIndexesUp(diff.indexes),
       indexesDown: this.generateIndexesDown(diff.indexes),
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Extensions
+  // ---------------------------------------------------------------------------
+
+  private generateExtensionsUp(diffs: ExtensionDiff[]): string {
+    const lines: string[] = []
+    for (const d of diffs) {
+      if (d.kind === 'create') {
+        lines.push(`CREATE EXTENSION IF NOT EXISTS "${d.name}";`)
+      } else if (d.kind === 'drop') {
+        lines.push(`DROP EXTENSION IF EXISTS "${d.name}";`)
+      }
+    }
+    return lines.join('\n').trim()
+  }
+
+  private generateExtensionsDown(diffs: ExtensionDiff[]): string {
+    const lines: string[] = []
+    // Reverse: creates become drops, drops become creates.
+    for (const d of [...diffs].reverse()) {
+      if (d.kind === 'create') {
+        lines.push(`DROP EXTENSION IF EXISTS "${d.name}";`)
+      } else if (d.kind === 'drop') {
+        lines.push(`CREATE EXTENSION IF NOT EXISTS "${d.name}";`)
+      }
+    }
+    return lines.join('\n').trim()
   }
 
   // ---------------------------------------------------------------------------

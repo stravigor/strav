@@ -80,6 +80,7 @@ export default class DatabaseIntrospector {
   constructor(private db: Database) {}
 
   async introspect(): Promise<DatabaseRepresentation> {
+    const extensions = await this.loadExtensions()
     const enums = await this.loadEnums()
     const enumNames = new Set(enums.map(e => e.name))
     const tableNames = await this.loadTables()
@@ -90,7 +91,26 @@ export default class DatabaseIntrospector {
       tables.push(await this.loadTable(name, enumNames, tenantedSequenceTables.has(name)))
     }
 
-    return { enums, tables }
+    return { extensions, enums, tables }
+  }
+
+  /**
+   * Read installed Postgres extensions from `pg_extension`.
+   *
+   * `plpgsql` is always installed by `initdb` and would otherwise show up
+   * as a phantom drop on every diff against a fresh schema — exclude it.
+   * All other extensions (including ones we don't manage) are surfaced so
+   * the diff can call out drift; the user is expected to declare them in
+   * `extensions: [...]` if they want them kept.
+   */
+  private async loadExtensions(): Promise<string[]> {
+    const rows = await this.db.sql`
+      SELECT extname AS name
+      FROM pg_extension
+      WHERE extname <> 'plpgsql'
+      ORDER BY extname
+    `
+    return rows.map((r: any) => r.name as string)
   }
 
   private async loadTable(

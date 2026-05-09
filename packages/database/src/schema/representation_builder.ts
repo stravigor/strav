@@ -82,13 +82,27 @@ export default class RepresentationBuilder {
 
   build(): DatabaseRepresentation {
     const enums = this.collectEnums()
+    const extensions = this.collectExtensions()
     const tables: TableDefinition[] = []
 
     for (const schema of this.schemas.values()) {
       tables.push(this.buildTable(schema))
     }
 
-    return { enums, tables }
+    return { extensions, enums, tables }
+  }
+
+  /**
+   * Collect every schema's `extensions` into one deduped, sorted list.
+   * Sorting keeps the diff stable across schema-discovery order.
+   */
+  private collectExtensions(): string[] {
+    const set = new Set<string>()
+    for (const schema of this.schemas.values()) {
+      if (!schema.extensions) continue
+      for (const ext of schema.extensions) set.add(ext)
+    }
+    return Array.from(set).sort()
   }
 
   private buildTable(schema: SchemaDefinition): TableDefinition {

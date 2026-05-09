@@ -8,6 +8,22 @@ import type {
 import type { PostgreSQLType } from '../../schema/postgres'
 
 // ---------------------------------------------------------------------------
+// Extension diffs
+// ---------------------------------------------------------------------------
+
+export interface ExtensionCreate {
+  kind: 'create'
+  name: string
+}
+
+export interface ExtensionDrop {
+  kind: 'drop'
+  name: string
+}
+
+export type ExtensionDiff = ExtensionCreate | ExtensionDrop
+
+// ---------------------------------------------------------------------------
 // Enum diffs
 // ---------------------------------------------------------------------------
 
@@ -133,6 +149,7 @@ export type IndexDiff = IndexAdd | IndexDrop
 // ---------------------------------------------------------------------------
 
 export interface SchemaDiff {
+  extensions: ExtensionDiff[]
   enums: EnumDiff[]
   tables: TableDiff[]
   constraints: ConstraintDiff[]
@@ -144,6 +161,8 @@ export interface SchemaDiff {
 // ---------------------------------------------------------------------------
 
 export interface GeneratedSql {
+  extensionsUp: string
+  extensionsDown: string
   enumsUp: string
   enumsDown: string
   tables: Map<string, { up: string; down: string }>
@@ -164,6 +183,8 @@ export interface MigrationSummary {
   enumsToCreate: number
   enumsToModify: number
   enumsToDrop: number
+  extensionsToCreate: number
+  extensionsToDrop: number
 }
 
 export interface MigrationManifest {

@@ -57,6 +57,15 @@ export interface SchemaInput {
    * Single-column entries become a unique index; multi-column entries become a UNIQUE constraint.
    */
   uniques?: string[][]
+  /**
+   * PostgreSQL extensions this schema requires (e.g. `'vector'`, `'pg_trgm'`,
+   * `'citext'`). The migration generator collects every schema's extensions,
+   * dedupes, and emits `CREATE EXTENSION IF NOT EXISTS "<name>";` ahead of
+   * any `CREATE TABLE` so column types like `vector(1536)` resolve.
+   *
+   * Names are quoted in the emitted SQL, so hyphens (`'uuid-ossp'`) are safe.
+   */
+  extensions?: string[]
 }
 
 /** The resolved schema stored in the registry. */
@@ -76,4 +85,6 @@ export interface SchemaDefinition {
   fields: Record<string, FieldDefinition>
   /** Schema-level UNIQUE declarations — see {@link SchemaInput.uniques}. */
   uniques?: string[][]
+  /** Required PostgreSQL extensions — see {@link SchemaInput.extensions}. */
+  extensions?: string[]
 }

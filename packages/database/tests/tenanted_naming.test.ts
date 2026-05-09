@@ -33,7 +33,7 @@ describe('Configurable tenant table name — schema/SQL generation', () => {
   ) {
     const fkCol = tenantFkColumnFor(tableName)
     const rep = new RepresentationBuilder(schemas, idType, tableName, fkCol).build()
-    const diff = new SchemaDiffer().diff(rep, { enums: [], tables: [] })
+    const diff = new SchemaDiffer().diff(rep, { extensions: [], enums: [], tables: [] })
     return new SqlGenerator(idType, tableName, fkCol).generate(diff)
   }
 
@@ -226,7 +226,7 @@ describe('Tenant id type derivation', () => {
 describe('SERIAL tenant PK end-to-end (SQL gen)', () => {
   function buildSql(schemas: ReturnType<typeof defineSchema>[]) {
     const rep = new RepresentationBuilder(schemas, 'integer', 'tenant', 'tenant_id').build()
-    const diff = new SchemaDiffer().diff(rep, { enums: [], tables: [] })
+    const diff = new SchemaDiffer().diff(rep, { extensions: [], enums: [], tables: [] })
     return new SqlGenerator('integer', 'tenant', 'tenant_id').generate(diff)
   }
 

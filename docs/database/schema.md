@@ -177,6 +177,44 @@ Single-column entries become a unique index; multi-column entries become a UNIQU
 
 The DSL throws at `defineSchema` time on duplicate parent names, empty entries, or duplicate columns inside an entry, and at representation-build time if a name doesn't resolve to a known parent / field / column.
 
+## PostgreSQL extensions
+
+Schemas declare the Postgres extensions they need; the migration generator collects them, dedupes, and emits `CREATE EXTENSION IF NOT EXISTS` ahead of any `CREATE TABLE` so column types like `vector(1536)` resolve.
+
+```typescript
+import { defineSchema, t, Archetype } from '@strav/database'
+
+export default defineSchema('embedding', {
+  archetype: Archetype.Component,
+  parents: ['doc'],
+  extensions: ['vector'],
+  fields: {
+    contentHash: t.varchar(64).required(),
+    paragraphIdx: t.integer().required(),
+  },
+})
+```
+
+The next `bun strav generate:migration` writes `extensions/up.sql` to the migration directory and runs it before any other DDL:
+
+```sql
+-- extensions/up.sql
+CREATE EXTENSION IF NOT EXISTS "vector";
+```
+
+`extensions/down.sql` mirrors with `DROP EXTENSION IF EXISTS` and runs *last* in the down direction (after dependent tables are gone). The `IF NOT EXISTS` / `IF EXISTS` clauses make both directions idempotent.
+
+**Diff semantics.** Extensions are diffed against the live database via `pg_extension`:
+
+- Adding an extension to any schema → next migration emits only the new `CREATE EXTENSION`.
+- Removing the last reference to an extension → next migration emits the matching `DROP EXTENSION`.
+- An extension already declared *and* installed → no change emitted.
+- `plpgsql` (always present in Postgres) is excluded from introspection so it never shows up as a phantom drop.
+
+**Naming.** Names are quoted in the emitted SQL, so hyphens are safe (`'uuid-ossp'`, `'pg_stat_statements'`). The DSL accepts any string — the framework doesn't whitelist names so you can use any extension your Postgres instance has available.
+
+**Multiple schemas, same extension.** Declare freely; `RepresentationBuilder` dedupes across the registry and the migration includes one `CREATE EXTENSION` per name.
+
 ## Associations (many-to-many)
 
 Define a pivot table between two entities using `defineAssociation`:

@@ -37,6 +37,7 @@ export default function defineSchema(name: string, input: SchemaInput): SchemaDe
 
   const { parents, uniqueParents } = normalizeParents(name, input.parents)
   const uniques = normalizeUniques(name, input.uniques)
+  const extensions = normalizeExtensions(name, input.extensions)
 
   return {
     name,
@@ -49,7 +50,33 @@ export default function defineSchema(name: string, input: SchemaInput): SchemaDe
     tenantRegistry: input.tenantRegistry ?? false,
     fields,
     uniques,
+    extensions,
   }
+}
+
+/**
+ * Validate {@link SchemaInput.extensions}: drop empty input, reject empty
+ * or non-string entries, and dedupe within the schema. Cross-schema dedup
+ * happens in {@link RepresentationBuilder}.
+ */
+function normalizeExtensions(
+  schemaName: string,
+  extensions: string[] | undefined
+): string[] | undefined {
+  if (!extensions?.length) return undefined
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const ext of extensions) {
+    if (typeof ext !== 'string' || ext.length === 0) {
+      throw new Error(
+        `Schema "${schemaName}": extensions entry must be a non-empty string.`
+      )
+    }
+    if (seen.has(ext)) continue
+    seen.add(ext)
+    out.push(ext)
+  }
+  return out.length ? out : undefined
 }
 
 /**

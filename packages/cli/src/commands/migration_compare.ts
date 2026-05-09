@@ -21,6 +21,7 @@ export function register(program: Command): void {
         const diff = new SchemaDiffer().diff(desired, actual)
 
         const hasChanges =
+          diff.extensions.length > 0 ||
           diff.enums.length > 0 ||
           diff.tables.length > 0 ||
           diff.constraints.length > 0 ||
@@ -29,6 +30,19 @@ export function register(program: Command): void {
         if (!hasChanges) {
           console.log(chalk.green('Schema is in sync with the database.'))
           return
+        }
+
+        // --- Extension changes ---
+        if (diff.extensions.length > 0) {
+          console.log(chalk.bold('Extension changes:'))
+          for (const x of diff.extensions) {
+            if (x.kind === 'create') {
+              console.log(chalk.green(`  + CREATE EXTENSION  ${x.name}`))
+            } else if (x.kind === 'drop') {
+              console.log(chalk.red(`  - DROP   EXTENSION  ${x.name}`))
+            }
+          }
+          console.log()
         }
 
         // --- Enum changes ---
@@ -140,7 +154,7 @@ export function register(program: Command): void {
         console.log(
           chalk.bold('Summary: ') +
             `${creates} table(s) to create, ${drops} to drop, ${modifies} to modify, ` +
-            `${diff.enums.length} enum change(s), ${diff.constraints.length} constraint change(s), ${diff.indexes.length} index change(s)`
+            `${diff.enums.length} enum change(s), ${diff.constraints.length} constraint change(s), ${diff.indexes.length} index change(s), ${diff.extensions.length} extension change(s)`
         )
         console.log(chalk.dim('\nRun "bun strav generate:migration" to create migration files.'))
       } catch (err) {

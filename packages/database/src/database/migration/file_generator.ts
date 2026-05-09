@@ -30,6 +30,19 @@ export default class MigrationFileGenerator {
     const upOrder: string[] = []
     const downOrder: string[] = []
 
+    // 0. Extensions — installed before any other DDL so column types like
+    //    `vector(1536)` resolve. Drops run last (after dependent tables are
+    //    gone), so for the up direction extensions/up.sql leads, and for the
+    //    down direction extensions/down.sql trails (achieved by NOT calling
+    //    downOrder.unshift(...) — leave it to the natural append order).
+    if (sql.extensionsUp.trim()) {
+      await Bun.write(join(migrationDir, 'extensions', 'up.sql'), sql.extensionsUp + '\n')
+      await Bun.write(join(migrationDir, 'extensions', 'down.sql'), sql.extensionsDown + '\n')
+      upOrder.push('extensions/up.sql')
+      // extensions/down.sql appended after all other downs — DROP EXTENSION
+      // last so dependent tables are already gone.
+    }
+
     // 1. Enums
     if (sql.enumsUp.trim()) {
       await Bun.write(join(migrationDir, 'enums', 'up.sql'), sql.enumsUp + '\n')
@@ -63,6 +76,12 @@ export default class MigrationFileGenerator {
       await Bun.write(join(migrationDir, 'indexes', 'down.sql'), sql.indexesDown + '\n')
       upOrder.push('indexes/up.sql')
       downOrder.unshift('indexes/down.sql')
+    }
+
+    // 5. Extensions down — appended last so DROP EXTENSION runs after every
+    //    dependent table has been dropped.
+    if (sql.extensionsUp.trim()) {
+      downOrder.push('extensions/down.sql')
     }
 
     // Build manifest
@@ -100,6 +119,8 @@ export default class MigrationFileGenerator {
     let enumsToCreate = 0
     let enumsToModify = 0
     let enumsToDrop = 0
+    let extensionsToCreate = 0
+    let extensionsToDrop = 0
 
     for (const t of diff.tables) {
       if (t.kind === 'create') tablesToCreate++
@@ -113,6 +134,11 @@ export default class MigrationFileGenerator {
       else if (e.kind === 'drop') enumsToDrop++
     }
 
+    for (const x of diff.extensions ?? []) {
+      if (x.kind === 'create') extensionsToCreate++
+      else if (x.kind === 'drop') extensionsToDrop++
+    }
+
     return {
       tablesToCreate,
       tablesToDrop,
@@ -120,6 +146,8 @@ export default class MigrationFileGenerator {
       enumsToCreate,
       enumsToModify,
       enumsToDrop,
+      extensionsToCreate,
+      extensionsToDrop,
     }
   }
 }

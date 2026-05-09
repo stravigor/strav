@@ -413,7 +413,7 @@ describe('Tenanted sequences (per-tenant numbering)', () => {
 describe('Tenanted sequences — schema/SQL generation', () => {
   function buildSql(idType: 'bigint' | 'uuid', schemas: ReturnType<typeof defineSchema>[]) {
     const rep = new RepresentationBuilder(schemas, idType).build()
-    const diff = new SchemaDiffer().diff(rep, { enums: [], tables: [] })
+    const diff = new SchemaDiffer().diff(rep, { extensions: [], enums: [], tables: [] })
     return new SqlGenerator(idType).generate(diff)
   }
 
