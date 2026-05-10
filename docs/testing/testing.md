@@ -1,6 +1,11 @@
 # Testing
 
-TestCase boots your app, provides HTTP helpers, and wraps each test in a rolled-back database transaction for full isolation.
+`@strav/testing` ships two primitives:
+
+- **`TestCase`** — boots your app, dispatches requests through the router in-memory, wraps each test in a rolled-back transaction. The default for backend tests.
+- **`BrowserTestCase`** — boots a real Bun HTTP server on an ephemeral port, drives a Playwright browser against it, captures outbound mail, mints sessions directly. For end-to-end tests that exercise rendered HTML, navigation, computed styles, or the full magic-link auth flow.
+
+`Factory` and `MemoryMailTransport` are shared across both.
 
 ## Quick Start
 
@@ -390,3 +395,245 @@ describe('Posts API', () => {
   })
 })
 ```
+
+## BrowserTestCase
+
+`BrowserTestCase` boots a real Bun HTTP server on an ephemeral port, launches Playwright, and gives you a typed DSL for navigation, interaction, computed-style assertions, mail capture, and direct session minting. Use it for the parts of your app `TestCase` can't reach: server-rendered HTML, Vue islands, redirect chains, the magic-link auth flow, typography fidelity.
+
+### Setup
+
+```bash
+# devDep — already declared on @strav/testing as an optional peer
+bun add -D playwright-core
+
+# install the matching Chromium binary (~150 MB; one-time)
+bun x playwright install chromium
+
+# in CI, also cache ~/.cache/ms-playwright (Linux) or ~/Library/Caches/ms-playwright (macOS)
+```
+
+If `chrome-headless-shell` surfaces flakiness on your platform, set `PLAYWRIGHT_CHROMIUM_USE_HEADLESS_SHELL=0` to use the full Chromium binary.
+
+### Quick start
+
+```typescript
+import { describe, test } from 'bun:test'
+import { BrowserTestCase } from '@strav/testing'
+
+const t = await BrowserTestCase.boot({
+  bootstrap: () => import('../start/routes'),
+  auth: true,
+})
+
+describe('Dashboard', () => {
+  test('renders the editorial header for a signed-in user', async () => {
+    await t.signInAs('user-1')
+    await t.goto('/dashboard')
+    await t.expectVisible('h1.welcome', 'Dashboard')
+    await t.expectComputedStyle('h1.welcome', 'font-family', /Newsreader/)
+  })
+})
+```
+
+### Boot options
+
+```typescript
+const t = await BrowserTestCase.boot({
+  bootstrap:    () => import('../start/routes'),  // run once during setup
+  routes:       () => import('../start/routes'),  // alias when you only register routes
+  auth:         true,                             // boot Auth + SessionManager (default: true)
+  views:        false,                            // boot ViewEngine
+  fresh:        false,                            // run `bun strav fresh` once before setup (APP_ENV=test|local)
+  mail:         'capture',                        // 'capture' (default) swaps in MemoryMailTransport; 'real' leaves the configured driver
+  browser:      'chromium',                       // 'chromium' | 'firefox' | 'webkit'
+  headless:     true,                             // PLAYWRIGHT_HEADLESS=0 forces visible
+  slowMo:       0,                                // ms between actions when debugging
+  timeout:      5000,                             // default action timeout
+  port:         0,                                // 0 = ephemeral
+  hostname:     '127.0.0.1',
+  transaction:  false,                            // see "Test isolation" below
+})
+```
+
+### Lifecycle
+
+`BrowserTestCase.boot()` registers `beforeAll`, `afterAll`, `beforeEach`, and `afterEach` hooks automatically. For manual control, instantiate and wire each hook yourself (`new BrowserTestCase(opts)` then `t.setup()`/`t.teardown()`/`t.beforeEach()`/`t.afterEach()`).
+
+### Navigation and interaction
+
+```typescript
+await t.goto('/dashboard')          // resolves against baseUrl
+await t.click('a:has-text("Posts")')
+await t.fill('input[name="title"]', 'My post')
+await t.press('input[name="title"]', 'Enter')
+await t.check('input[type="checkbox"]')
+await t.selectOption('select[name="role"]', 'editor')
+await t.uploadFile('input[type="file"]', './fixtures/avatar.png')
+await t.hover('.menu-trigger')
+await t.reload()
+```
+
+### Waits
+
+```typescript
+await t.waitFor('.toast-success')
+await t.waitForUrl(/\/checkout\/success$/, { timeout: 10_000 })
+await t.waitForRequest(/\/api\/orders/)
+```
+
+### Assertions
+
+```typescript
+await t.expectUrl(/\/dashboard$/)
+await t.expectVisible('h1', 'Welcome')
+await t.expectHidden('.spinner')
+await t.expectText('h1', 'Welcome')
+await t.expectAttribute('img.avatar', 'alt', /avatar/i)
+await t.expectCount('li.post', 5)
+```
+
+### Computed styles
+
+`expectComputedStyle(selector, property, matcher)` reads `getComputedStyle()` in the page. The matcher accepts a string (substring match), a RegExp, or a numeric comparator object — handy for asserting font fidelity, drop-cap sizes, and accent colours without snapshotting.
+
+```typescript
+await t.expectComputedStyle('h1', 'font-family', /Newsreader/)
+await t.expectComputedStyle('h1', 'color', 'rgb(184, 68, 44)')
+await t.expectComputedStyle('h1', 'font-size', { gt: 20 })
+await t.expectComputedStyle('p.lede::first-letter', 'font-size', { gt: 40 })
+```
+
+### Sign-in
+
+Two helpers — pick by intent.
+
+```typescript
+// Default — mints a session row directly via Session.createForUser and
+// injects the cookie into Playwright's context. No email loop.
+await t.signInAs('user-1')
+
+// Use this when the test is verifying the magic-link flow itself: posts
+// to the magic-link endpoint, waits for the captured mail, follows the
+// link, and injects the resulting session cookie. Requires mail: 'capture'.
+await t.signInWithMagicLink({
+  email:      'demo@example.com',
+  endpoint:   '/auth/magic',         // default
+  tokenParam: 'token',                // default
+  subject:    /Sign in/,              // optional — narrows the mail match
+})
+```
+
+### Mail capture
+
+When `mail: 'capture'` (the default), an in-memory `MemoryMailTransport` replaces the configured driver. Query it directly:
+
+```typescript
+const captured = t.capturedMail().all()
+const mail     = await t.capturedMail().waitFor({ to: 'demo@example.com' })
+const link     = t.capturedMail().lastMagicLinkFor('demo@example.com')
+t.capturedMail().clear()
+```
+
+### Escape hatches
+
+```typescript
+const buf = await t.screenshot()                   // Buffer
+const out = await t.evaluate(() => document.title)
+const cookies = await t.cookies()
+await t.setCookie({ name: 'flag', value: 'on', domain: t.hostname, path: '/' })
+
+// Direct Playwright access for anything not covered by the DSL
+const locator = t.page.locator('[data-test=submit]')
+```
+
+### Test isolation
+
+Unlike `TestCase`, `BrowserTestCase` defaults `transaction: false`. The real-HTTP server runs in-process and a single navigation triggers multiple in-flight requests (page + favicon + static + session writes) that contend for one reserved connection — pool starvation results.
+
+For per-test DB isolation, prefer one of:
+
+- `fresh: true` — run `bun strav fresh` once before the file's tests (slower but bulletproof).
+- Hand-rolled cleanup in `afterEach` — `await t.db.sql\`TRUNCATE … CASCADE\``.
+- File-level scoping: keep mutating tests in their own file with a fresh DB.
+
+### Composing slice flows with DemoFlow
+
+`DemoFlow` is an opinionated wrapper for AGON-style slice/demo tests. It boots a `BrowserTestCase` with `fresh: true` and `mail: 'capture'`, exposes a tighter DSL, and composes via fixture flows:
+
+```typescript
+import { describe, test } from 'bun:test'
+import { DemoFlow } from '@strav/testing'
+
+const flow = await DemoFlow.boot({
+  bootstrap: () => import('../start/routes'),
+  auth:      true,
+})
+
+describe('Slice 003 — reader demo flow', () => {
+  test('user signs in and sees editorial typography', async () => {
+    await flow.signIn({ email: 'demo@example.com' })
+
+    await flow.goto('/workspaces/new')
+    await flow.fill('input[name="name"]', 'Demo Cloud')
+    await flow.click('button[type="submit"]')
+
+    await flow.expectUrl(/\/workspaces\/demo-cloud$/)
+    await flow.click('a:has-text("Welcome to Runbooks")')
+    await flow.expectComputedStyle('.read h1', 'font-family', /Newsreader/)
+    await flow.expectComputedStyle('.read .lede::first-letter', 'font-size', { gt: 40 })
+  })
+})
+```
+
+#### Fixture composition
+
+```typescript
+// tests/utils/flows.ts
+import { DemoFlow } from '@strav/testing'
+
+export const signedInUser = DemoFlow.fixture(async (flow) => {
+  await flow.signIn({ email: 'demo@example.com' })
+  return flow
+})
+
+export const withWorkspace = DemoFlow.fixture(async (flow) => {
+  await flow.signIn({ email: 'demo@example.com' })
+  await flow.goto('/workspaces/new')
+  await flow.fill('input[name="name"]', 'Demo Cloud')
+  await flow.click('button[type="submit"]')
+  return flow
+})
+```
+
+```typescript
+// tests/spaces/slice-003.flow.test.ts
+import { withWorkspace } from '../utils/flows'
+
+test('reader renders inside a workspace', async () => {
+  const flow = await withWorkspace()
+  await flow.click('a:has-text("Welcome to Runbooks")')
+  await flow.expectComputedStyle('.read h1', 'font-family', /Newsreader/)
+})
+```
+
+Each slice's flow file imports a fixture and only writes the steps for its own surface — the auth + workspace preamble is one import, not 12 lines repeated per slice.
+
+## MemoryMailTransport
+
+`MemoryMailTransport` (in `@strav/signal`) is the capture driver `BrowserTestCase` installs by default, but you can use it standalone in any test that asserts on outgoing mail:
+
+```typescript
+import { MailManager, MemoryMailTransport } from '@strav/signal'
+
+const mail = new MemoryMailTransport({ maxSize: 100 })
+MailManager.useTransport(mail)
+
+// … exercise code that sends mail …
+
+const m = await mail.waitFor({ to: 'user@example.com', subject: /Welcome/ })
+const link = mail.extractLink(m, /https?:\/\/[^\s"'<>]+token=[^\s"'<>&]+/)
+const magic = mail.lastMagicLinkFor('user@example.com')  // convenience
+mail.clear()
+```
+
+The buffer is a ring (`maxSize` defaults to 100; oldest entries drop). `waitFor` polls until a matching mail arrives or the timeout (`5000` ms by default) elapses — useful when the send happens in a queued job or async middleware.

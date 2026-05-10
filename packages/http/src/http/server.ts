@@ -60,13 +60,27 @@ export default class Server {
       },
     } as any)
 
-    console.log(`Server listening on ${hostname}:${port}`)
+    console.log(`Server listening on ${this.instance.hostname}:${this.instance.port}`)
   }
 
   /** Gracefully stop the server. */
   stop(): void {
     this.instance?.stop()
     this.instance = null
+  }
+
+  /** OS-assigned port the server is listening on. Throws if not started or bound to a unix socket. */
+  get port(): number {
+    if (!this.instance) throw new Error('Server not started')
+    const port = this.instance.port
+    if (port === undefined) throw new Error('Server has no port (likely bound to a unix socket)')
+    return port
+  }
+
+  /** Hostname the server is bound to. Throws if not started. */
+  get hostname(): string {
+    if (!this.instance) throw new Error('Server not started')
+    return this.instance.hostname ?? '127.0.0.1'
   }
 
   /**

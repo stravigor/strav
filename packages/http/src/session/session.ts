@@ -245,6 +245,38 @@ export default class Session {
     return session
   }
 
+  /**
+   * Mint and persist a session for a user without an HTTP context.
+   *
+   * Useful for tests, CLI seeds, and admin impersonation. Returns the
+   * persisted Session — the caller is responsible for delivering the session
+   * id to the client (e.g. setting the cookie on a response or a Playwright
+   * browser context).
+   */
+  static async createForUser(
+    user: unknown,
+    options: { ipAddress?: string; userAgent?: string } = {}
+  ): Promise<Session> {
+    const id = crypto.randomUUID()
+    const csrfToken = randomHex(32)
+    const userId = extractUserId(user)
+    const now = new Date()
+
+    const session = new Session(
+      id,
+      userId,
+      csrfToken,
+      {},
+      options.ipAddress ?? null,
+      options.userAgent ?? null,
+      now,
+      now
+    )
+    session._dirty = true
+    await session.save()
+    return session
+  }
+
   /** Look up a session by ID. Returns null if not found. */
   static async find(id: string): Promise<Session | null> {
     const record = await SessionManager.store.find(id)
