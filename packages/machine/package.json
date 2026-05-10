@@ -1,6 +1,6 @@
 {
   "name": "@strav/machine",
-  "version": "0.4.14",
+  "version": "0.4.15",
   "type": "module",
   "description": "State machine for the Strav framework",
   "license": "MIT",
