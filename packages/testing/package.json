@@ -1,6 +1,6 @@
 {
   "name": "@strav/testing",
-  "version": "0.4.13",
+  "version": "0.4.14",
   "type": "module",
   "description": "Testing utilities for the Strav framework",
   "license": "MIT",
@@ -18,10 +18,21 @@
     "@strav/kernel": "workspace:*",
     "@strav/http": "workspace:*",
     "@strav/view": "workspace:*",
-    "@strav/database": "workspace:*"
+    "@strav/database": "workspace:*",
+    "@strav/signal": "workspace:*",
+    "@strav/cli": "workspace:*",
+    "playwright-core": "^1.45.0"
+  },
+  "peerDependenciesMeta": {
+    "@strav/signal": { "optional": true },
+    "@strav/cli": { "optional": true },
+    "playwright-core": { "optional": true }
   },
   "scripts": {
     "test": "bun test tests/",
     "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.45.0"
   }
 }
