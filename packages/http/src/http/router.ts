@@ -76,17 +76,16 @@ interface GroupState {
 function parsePattern(pattern: string): { regex: RegExp; paramNames: string[] } {
   const paramNames: string[] = []
 
-  const regexStr = pattern
-    // wildcard catch-all: *path → (.+)
-    .replace(/\/\*(\w+)/, (_, name) => {
-      paramNames.push(name)
+  // Single pass over the pattern so paramNames stay aligned with capture groups
+  // even when `:name` and `*wildcard` appear in the same route.
+  const regexStr = pattern.replace(/\/\*(\w+)|:(\w+)/g, (_, wildcardName, namedName) => {
+    if (wildcardName !== undefined) {
+      paramNames.push(wildcardName)
       return '/(.+)'
-    })
-    // named params: :id → ([^/]+)
-    .replace(/:(\w+)/g, (_, name) => {
-      paramNames.push(name)
-      return '([^/]+)'
-    })
+    }
+    paramNames.push(namedName)
+    return '([^/]+)'
+  })
 
   return { regex: new RegExp(`^${regexStr}$`), paramNames }
 }
