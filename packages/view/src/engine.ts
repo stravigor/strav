@@ -157,8 +157,21 @@ export default class ViewEngine {
     }
 
     const source = await file.text()
-    const tokens = tokenize(source)
-    const result = compile(tokens)
+    let result
+    try {
+      const tokens = tokenize(source)
+      result = compile(tokens)
+    } catch (err) {
+      // Decorate template compile errors with the file path so the location
+      // becomes clickable in IDEs/terminals (path:line). The original message
+      // already includes "at line N"; we extract N to build the link.
+      if (err instanceof TemplateError) {
+        const lineMatch = err.message.match(/\bat line (\d+)/)
+        const location = lineMatch ? `${filePath}:${lineMatch[1]}` : filePath
+        throw new TemplateError(`${err.message}\n  at ${location}`)
+      }
+      throw err
+    }
     const fn = this.createRenderFunction(result.code)
 
     const entry: CacheEntry = {

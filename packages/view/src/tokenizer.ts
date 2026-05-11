@@ -38,6 +38,26 @@ const DIRECTIVES = new Set([
   'set',
 ])
 
+// Directives whose syntax always requires parenthesised arguments — used to
+// detect the common typo of writing "@if (cond)" with a space before the
+// paren, which would otherwise silently parse as "@if" with no args followed
+// by literal text.
+const DIRECTIVES_REQUIRING_ARGS = new Set([
+  'if',
+  'elseif',
+  'each',
+  'layout',
+  'section',
+  'show',
+  'include',
+  'class',
+  'style',
+  'push',
+  'prepend',
+  'stack',
+  'set',
+])
+
 export function tokenize(source: string): Token[] {
   const tokens: Token[] = []
   let pos = 0
@@ -193,6 +213,20 @@ export function tokenize(source: string): Token[] {
       const directive = dirMatch[1]!
       pos += dirMatch[0].length
       let args: string | undefined
+
+      // Catch the common typo: "@if (cond)" with a space before the paren.
+      // Without this check, the parser would treat "@if" as an arg-less
+      // directive and leave "(cond)" as literal text — leading to a
+      // confusing downstream "@if requires a condition" error.
+      if (
+        DIRECTIVES_REQUIRING_ARGS.has(directive) &&
+        pos < source.length &&
+        /^[ \t]+\(/.test(source.slice(pos))
+      ) {
+        throw new TemplateError(
+          `@${directive} cannot have whitespace before its arguments at line ${line} — remove the space between "@${directive}" and "(".`
+        )
+      }
 
       // Parse arguments in parentheses (if present)
       if (pos < source.length && source[pos] === '(') {
