@@ -215,7 +215,7 @@ function compileDirective(
       const nameStr = JSON.stringify(name)
       // Capture content between @section and @end into __blocks.
       // Does not output inline — content flows to parent layout via result.blocks.
-      lines.push(`__blocks[${nameStr}] = (function() { let __out = "";`)
+      lines.push(`__blocks[${nameStr}] = await (async function() { let __out = "";`)
       stack.push({ type: 'section', line: token.line, blockName: name })
       break
     }
@@ -361,7 +361,7 @@ function compileDirective(
       const nameStr = JSON.stringify(name)
       // Initialize stack array if it doesn't exist, then capture content and push
       lines.push(`if (!__stacks[${nameStr}]) __stacks[${nameStr}] = [];`)
-      lines.push(`__stacks[${nameStr}].push((function() { let __out = "";`)
+      lines.push(`__stacks[${nameStr}].push(await (async function() { let __out = "";`)
       stack.push({ type: 'push', line: token.line, stackName: name })
       break
     }
@@ -372,7 +372,7 @@ function compileDirective(
       const nameStr = JSON.stringify(name)
       // Initialize stack array if it doesn't exist, then capture content and unshift
       lines.push(`if (!__stacks[${nameStr}]) __stacks[${nameStr}] = [];`)
-      lines.push(`__stacks[${nameStr}].unshift((function() { let __out = "";`)
+      lines.push(`__stacks[${nameStr}].unshift(await (async function() { let __out = "";`)
       stack.push({ type: 'prepend', line: token.line, stackName: name })
       break
     }

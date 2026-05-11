@@ -7,15 +7,20 @@ import { escapeHtml } from '../src/escape.ts'
  * Compile a template string and evaluate it with the given data.
  * Returns the rendered HTML output and stacks for testing.
  */
-async function render(template: string, data: Record<string, unknown> = {}): Promise<{ output: string; stacks: Record<string, string[]> }> {
+async function render(
+  template: string,
+  data: Record<string, unknown> = {},
+  includeFn: (name: string, data?: Record<string, unknown>) => string | Promise<string> = () => ''
+): Promise<{ output: string; stacks: Record<string, string[]>; blocks: Record<string, string> }> {
   const tokens = tokenize(template)
   const result = compile(tokens)
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
   const fn = new AsyncFunction('__data', '__escape', '__include', `with (__data) {\n${result.code}\n}`)
-  const renderResult = await fn(data, escapeHtml, () => '')
+  const renderResult = await fn(data, escapeHtml, includeFn)
   return {
     output: renderResult.output,
-    stacks: renderResult.stacks
+    stacks: renderResult.stacks,
+    blocks: renderResult.blocks,
   }
 }
 
@@ -150,5 +155,35 @@ describe('Stack return values', () => {
   test('empty template returns empty stacks', async () => {
     const result = await render('Hello world')
     expect(result.stacks).toEqual({})
+  })
+})
+
+// ── @include nested inside capturing block directives ────────────────────────
+
+describe('@include nested inside block directives', () => {
+  const stubInclude = async (name: string) => `<from:${name}>`
+
+  test('@include works inside @section', async () => {
+    const tpl = `@section('content')Hello @include('partial')@end`
+    const result = await render(tpl, {}, stubInclude)
+    expect(result.blocks['content']).toBe('Hello <from:partial>')
+  })
+
+  test('@include works inside @push', async () => {
+    const tpl = `@push('scripts')<x>@include('inline')</x>@end@stack('scripts')`
+    const result = await render(tpl, {}, stubInclude)
+    expect(result.output.trim()).toBe('<x><from:inline></x>')
+  })
+
+  test('@include works inside @prepend', async () => {
+    const tpl = `@push('s')B@end@prepend('s')A:@include('p')@end@stack('s')`
+    const result = await render(tpl, {}, stubInclude)
+    expect(result.output.trim()).toBe('A:<from:p>B')
+  })
+
+  test('multiple @includes inside a single @section', async () => {
+    const tpl = `@section('content')@include('one') and @include('two')@end`
+    const result = await render(tpl, {}, stubInclude)
+    expect(result.blocks['content']).toBe('<from:one> and <from:two>')
   })
 })
