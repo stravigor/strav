@@ -141,7 +141,17 @@ describe('TrueType embedding (§10.4, M5 acceptance)', () => {
   })
 
   test('embedded fonts are allowed under conformance (unlike Standard-14)', async () => {
+    // PDF/A-2b also requires an output intent (enforced in M11); the point
+    // here is that the embedded font itself is accepted.
+    const icc = new Uint8Array(132)
+    for (const [i, ch] of [...'acsp'].entries()) icc[36 + i] = ch.charCodeAt(0)
+    for (const [i, ch] of [...'GRAY'].entries()) icc[16 + i] = ch.charCodeAt(0)
     const doc = PdfDocument.create({ ...deterministicOpts, conformance: 'PDF/A-2b' })
+    doc.setOutputIntent({
+      subtype: 'GTS_PDFA1',
+      outputConditionIdentifier: 'sGray',
+      destOutputProfile: icc,
+    })
     const p = doc.addPage({ size: { widthPt: 200, heightPt: 200 } })
     p.content().text((t) => t.setFont(PdfFont.fromTrueType(FONT), 12).moveTo(10, 100).show('Hi'))
     await expect(doc.save()).resolves.toBeInstanceOf(Uint8Array)

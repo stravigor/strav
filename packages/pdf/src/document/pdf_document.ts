@@ -4,13 +4,16 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto'
-import { PdfGenError, UnsupportedFontError } from '../util/errors.ts'
+import { PdfGenError, UnsupportedFontError, ConformanceError } from '../util/errors.ts'
 import type { IndirectRef, PdfObject } from '../objects/types.ts'
 import { arr, dict, name, num } from '../objects/types.ts'
-import { textString, dateString } from '../objects/string.ts'
+import { textString } from '../objects/string.ts'
 import { encodeObject } from '../objects/encode.ts'
 import { makeContentStream, makeStream } from '../streams/stream.ts'
 import { parseIccProfile } from '../color/icc.ts'
+import { buildInfoDict } from '../metadata/info_dict.ts'
+import { buildXmpStream } from '../metadata/xmp.ts'
+import { validateConformance } from '../standards/index.ts'
 import { extGState, type ExtGStateOptions } from '../ext-gstate/ext_gstate.ts'
 import { tilingPattern, type TilingPatternOptions } from '../patterns/tiling_pattern.ts'
 import {
@@ -40,7 +43,7 @@ const PRODUCER = '@strav/pdf'
 
 export class PdfDocument {
   private readonly info: DocumentInfo
-  private readonly conformance: ConformanceLevel
+  private conformance: ConformanceLevel
   private readonly creationDate: Date
   private readonly fixedId?: Uint8Array
   private readonly pages: Page[] = []
@@ -106,9 +109,22 @@ export class PdfDocument {
     return shadingPattern(shading, matrix)
   }
 
-  /** Conformance target (validation lands in M11). */
+  /** Conformance target. */
   getConformance(): ConformanceLevel {
     return this.conformance
+  }
+
+  /**
+   * Opt into a conformance mode (spec §15). Validated at `save()`, which
+   * throws `ConformanceError` listing every violation. A Standard-14 font
+   * used under any mode throws `UnsupportedFontError` (fail-fast).
+   */
+  setConformance(level: ConformanceLevel): this {
+    if (this.saved) {
+      throw new PdfGenError('PDF_DOCUMENT_FINALIZED', 'Cannot set conformance after save()')
+    }
+    this.conformance = level
+    return this
   }
 
   /** Serialize pass — returns the complete PDF bytes (spec §3.2, §3.3). */
@@ -119,12 +135,47 @@ export class PdfDocument {
     if (this.pages.length === 0) {
       throw new PdfGenError('PDF_INVALID_PAGE', 'Document has no pages')
     }
+
+    // Conformance (spec §15) — before finalizing so the caller may fix and
+    // retry. Standard-14 fails fast (a distinct, typed error) ahead of the
+    // aggregate validation.
+    if (this.conformance) {
+      for (const page of this.pages) {
+        const cs = page.getContentStream()
+        for (const font of cs ? cs.usedFonts() : []) {
+          if (font.isStandard14) {
+            throw new UnsupportedFontError(
+              `Standard-14 font "${font.baseFont}" cannot be used under ${this.conformance}; ` +
+                'embed a TrueType/OpenType font instead'
+            )
+          }
+        }
+      }
+      const profileColorSpace = this.outputIntent
+        ? parseIccProfile(this.outputIntent.destOutputProfile).colorSpace
+        : undefined
+      const violations = validateConformance(this.conformance, {
+        pages: this.pages.map(p => ({
+          hasTrimOrArt: p
+            .getOptionalBoxes()
+            .some(b => b.key === 'TrimBox' || b.key === 'ArtBox'),
+        })),
+        outputIntent: { present: !!this.outputIntent, profileColorSpace },
+      })
+      if (violations.length) {
+        throw new ConformanceError(
+          `${this.conformance} conformance failed:\n  - ${violations.join('\n  - ')}`,
+          violations
+        )
+      }
+    }
+
     this.saved = true
 
     const table = new ObjectTable()
 
     // Info dictionary (spec §14.1). ModDate == CreateDate for determinism.
-    const infoRef = table.add(this.buildInfo())
+    const infoRef = table.add(buildInfoDict(this.info, this.creationDate, PRODUCER))
 
     // Leaf page refs, then the page tree, then the leaf page dicts.
     const leafRefs = this.pages.map(() => table.allocate())
@@ -140,6 +191,18 @@ export class PdfDocument {
     if (this.outputIntent) {
       catalog.entries.set('OutputIntents', arr([this.buildOutputIntent(table)]))
     }
+    // XMP is always present (spec §14.2) — uncompressed /Metadata stream.
+    catalog.entries.set(
+      'Metadata',
+      table.add(
+        buildXmpStream({
+          info: this.info,
+          creationDate: this.creationDate,
+          producer: PRODUCER,
+          conformance: this.conformance,
+        })
+      )
+    )
     const catalogRef = table.add(catalog)
 
     const id = this.computeId(infoRef, table)
@@ -175,20 +238,6 @@ export class PdfDocument {
     return d
   }
 
-  private buildInfo() {
-    const d = dateString(this.creationDate)
-    const entries: Record<string, PdfObject> = {}
-    if (this.info.title) entries.Title = textString(this.info.title)
-    if (this.info.author) entries.Author = textString(this.info.author)
-    if (this.info.subject) entries.Subject = textString(this.info.subject)
-    if (this.info.keywords) entries.Keywords = textString(this.info.keywords)
-    if (this.info.creator) entries.Creator = textString(this.info.creator)
-    entries.Producer = textString(PRODUCER)
-    entries.CreationDate = d
-    entries.ModDate = d
-    return dict(entries)
-  }
-
   private buildPageDict(table: ObjectTable, page: Page, parent: IndirectRef) {
     const mb = page.getMediaBox()
     const entries: Record<string, PdfObject> = {
@@ -205,16 +254,7 @@ export class PdfDocument {
     const cs = page.getContentStream()
     if (cs) {
       cs.assertBalanced()
-      if (this.conformance) {
-        for (const font of cs.usedFonts()) {
-          if (font.isStandard14) {
-            throw new UnsupportedFontError(
-              `Standard-14 font "${font.baseFont}" cannot be used under ${this.conformance}; ` +
-                'embed a TrueType/OpenType font instead (milestone 5)'
-            )
-          }
-        }
-      }
+      // Standard-14-under-conformance is checked up front in save().
       const contentRef = table.add(makeContentStream(cs.toBytes()))
       entries.Contents = contentRef
       entries.Resources = cs.buildResources(table)
