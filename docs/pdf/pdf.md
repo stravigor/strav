@@ -7,9 +7,10 @@ No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
 > **Scope.** This is the engine for higher-level document libraries. It draws
 > exactly what you tell it to — layout, line breaking, and hyphenation are the
 > caller's job. Implemented today: the object/serialization core, pages and
-> content streams, device color, stream filters, and the Standard-14 fonts
-> (spec milestones 1–4). Embedded fonts, images, ICC color, transparency, and
-> PDF/A · PDF/X conformance are on the roadmap (see [Status](#status)).
+> content streams, device color, stream filters, the Standard-14 fonts, and
+> embedded TrueType fonts (spec milestones 1–5). Font subsetting, images, ICC
+> color, transparency, and PDF/A · PDF/X conformance are on the roadmap (see
+> [Status](#status)).
 
 ## Quick start
 
@@ -160,7 +161,8 @@ considered dependencies.
 | Device color (Gray / RGB / CMYK) | ✅ available |
 | Stream filters (Flate / ASCII85 / ASCIIHex) | ✅ available |
 | Standard-14 fonts + text | ✅ available — see [fonts.md](fonts.md) |
-| Embedded TrueType/OpenType, subsetting, CJK | 🔜 roadmap |
+| Embedded TrueType (Type0/CIDFontType2 + ToUnicode) | ✅ available — see [fonts.md](fonts.md) |
+| Font subsetting, OpenType/CFF, complex-script shaping | 🔜 roadmap |
 | Images (JPEG/PNG), SMask | 🔜 roadmap |
 | ICC color, Separation/DeviceN, output intents | 🔜 roadmap |
 | Transparency, patterns, shadings | 🔜 roadmap |
@@ -174,4 +176,5 @@ under any conformance mode throws `UnsupportedFontError` at `save()`.
 
 - [content.md](content.md) — the content-stream builder: paths, painting,
   graphics state, transforms, color.
-- [fonts.md](fonts.md) — Standard-14 fonts, text objects, and encoding.
+- [fonts.md](fonts.md) — Standard-14 and embedded TrueType fonts, text
+  objects, and encoding.

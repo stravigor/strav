@@ -1,9 +1,15 @@
 # Fonts & Text
 
-Text is drawn inside a `text()` block on the content-stream builder. Today the
-library supports the **Standard-14** fonts — the fonts every PDF viewer is
-required to have, referenced by name and never embedded. Embedded
-TrueType/OpenType fonts, subsetting, and CJK are on the roadmap.
+Text is drawn inside a `text()` block on the content-stream builder. Two kinds
+of font are available:
+
+- **Standard-14** — the fonts every PDF viewer is required to have, referenced
+  by name and never embedded (`PdfFont.standard`).
+- **Embedded TrueType** — a `.ttf`/`.ttc` font fully embedded as a Type0 /
+  CIDFontType2 with a ToUnicode CMap (`PdfFont.fromTrueType`).
+
+Glyph subsetting, OpenType/CFF (`.otf`), and complex-script shaping are on the
+roadmap; embedded TrueType today ships the *whole* font program.
 
 ```typescript
 import { PdfFont } from '@strav/pdf'
@@ -44,6 +50,55 @@ font.baseFont          // 'Times-Roman'
 font.isStandard14      // true
 font.widthOfText('Hello', 12)   // rendered width in points
 ```
+
+## Embedded TrueType fonts
+
+`PdfFont.fromTrueType(bytes)` embeds a TrueType (`glyf`) font from its raw
+`.ttf`/`.ttc` bytes. The font is emitted as a composite **Type0 /
+CIDFontType2** with **Identity-H** encoding and a **ToUnicode** CMap, so any
+script the font covers renders and the text stays selectable and
+copy/pasteable.
+
+```typescript
+import { PdfFont } from '@strav/pdf'
+import { readFile } from 'node:fs/promises'
+
+const inter = PdfFont.fromTrueType(await readFile('./fonts/Inter-Regular.ttf'))
+
+page.content().text((t) =>
+  t.setFont(inter, 14).moveTo(72, 720).show('Hello — Καλημέρα — Привет')
+)
+```
+
+For a `.ttc` collection, pick the face by index:
+
+```typescript
+PdfFont.fromTrueType(bytes, { faceIndex: 1 })
+```
+
+What is emitted, automatically: a `FontFile2` stream (Flate-compressed, with
+`/Length1`), a `FontDescriptor` (flags, bbox, metrics derived from `head` /
+`hhea` / `OS/2` / `post`), the descendant `CIDFontType2` with a `/W` width
+array, and the `ToUnicode` CMap. Only the glyphs you actually draw are listed
+in `/W` and `ToUnicode`.
+
+```typescript
+const font = PdfFont.fromTrueType(ttfBytes)
+font.isStandard14      // false
+font.baseFont          // the font's PostScript name
+font.widthOfText('Hi', 12)   // exact, from the font's hmtx table
+```
+
+Notes and current limits:
+
+- **No subsetting yet** — the whole font program is embedded (subsetting is a
+  later milestone). Expect large output for big CJK fonts until then.
+- **TrueType `glyf` only.** OpenType/CFF (`.otf`, `OTTO`) throws
+  `UnsupportedFontError` — embed a `glyf` `.ttf`.
+- Code points the font's `cmap` doesn't cover map to `.notdef` (glyph 0).
+- No OpenType layout (ligatures, contextual shaping, GPOS kerning) and no
+  complex-script shaping — text is drawn in the order given. Use `showRun`
+  for manual kerning (see below).
 
 ## Text objects
 
@@ -102,22 +157,26 @@ t.setRenderMode(0)     // Tr — 0 fill, 1 stroke, 2 fill+stroke, 3 invisible, 4
 
 ## Encoding
 
-Text-drawing fonts use **WinAnsiEncoding**. ASCII and the Latin-1 upper half
-map directly; the CP1252 0x80–0x9F band is supported (€, '', "", –, —, …, ™,
-etc.). A character outside WinAnsi (e.g. CJK) throws `PDF_TEXT_ENCODING` —
-encoding never silently substitutes. Embed a Unicode font (roadmap) for
-non-WinAnsi scripts.
-
-`Symbol` and `ZapfDingbats` use their own built-in encoding and have no
+**Standard-14** text fonts use **WinAnsiEncoding**: ASCII and the Latin-1 upper
+half map directly and the CP1252 0x80–0x9F band is supported (€, '', "", –, —,
+…, ™, etc.). A character outside WinAnsi (e.g. CJK) throws `PDF_TEXT_ENCODING` —
+encoding never silently substitutes; use an embedded font for non-WinAnsi
+scripts. `Symbol` and `ZapfDingbats` use their own built-in encoding and have no
 `/Encoding` entry; pass bytes already in that encoding.
+
+**Embedded TrueType** fonts use **Identity-H**: each character is mapped through
+the font's `cmap` to a glyph and written as a 2-byte code, so any code point
+the font covers works (a `ToUnicode` CMap keeps the text extractable).
 
 ## Widths
 
-`font.widthOfText(text, sizePt)` returns the rendered width in points using the
-canonical Adobe Core-14 AFM metrics. ASCII (32–126) is exact; the non-ASCII
-WinAnsi range currently uses a per-font approximation (refined in a later
-milestone). This affects only measurement — rendering is unaffected, because
-Standard-14 fonts carry no `/Widths` array and the viewer supplies metrics.
+`font.widthOfText(text, sizePt)` returns the rendered width in points.
+
+- **Embedded TrueType:** exact, from the font's `hmtx` table.
+- **Standard-14:** canonical Adobe Core-14 AFM metrics — exact for ASCII
+  (32–126); the non-ASCII WinAnsi range uses a per-font approximation (refined
+  in a later milestone). This affects only measurement: rendering is
+  unaffected, since Standard-14 fonts carry no `/Widths` array.
 
 ## Guards
 
@@ -130,4 +189,8 @@ Standard-14 fonts carry no `/Widths` array and the viewer supplies metrics.
 Standard-14 fonts are **referenced, never embedded**. PDF/A and PDF/X require
 all fonts embedded, so using a Standard-14 font under any `conformance` mode
 throws `UnsupportedFontError` at `save()` — explicitly, with no automatic
-substitution. Embedded fonts (the conformant path) are on the roadmap.
+substitution.
+
+Use `PdfFont.fromTrueType(...)` for the conformant path: embedded fonts (with
+their ToUnicode CMap) are accepted under a conformance mode. Full PDF/A-2b and
+PDF/X-4 validation lands with the conformance milestone.
