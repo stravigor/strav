@@ -1,8 +1,8 @@
 {
   "name": "@strav/pdf",
-  "version": "0.4.17",
+  "version": "0.4.18",
   "type": "module",
-  "description": "Low-level, zero-dependency PDF generation (write side) for the Strav ecosystem",
+  "description": "Low-level, zero-dependency PDF generation (write side) and layout-aware text extraction (read side) for the Strav ecosystem",
   "license": "MIT",
   "keywords": ["bun", "pdf", "typescript", "strav"],
   "files": ["src/", "README.md", "package.json", "tsconfig.json"],
@@ -29,7 +29,9 @@
     "./color": "./src/color/index.ts",
     "./color/*": "./src/color/*.ts",
     "./document": "./src/document/index.ts",
-    "./document/*": "./src/document/*.ts"
+    "./document/*": "./src/document/*.ts",
+    "./reader": "./src/reader/index.ts",
+    "./reader/*": "./src/reader/*.ts"
   },
   "scripts": {
     "test": "bun test tests/",
