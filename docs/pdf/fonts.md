@@ -189,7 +189,9 @@ scripts. `Symbol` and `ZapfDingbats` use their own built-in encoding and have no
 
 **Embedded TrueType** fonts use **Identity-H**: each character is mapped through
 the font's `cmap` to a glyph and written as a 2-byte code, so any code point
-the font covers works (a `ToUnicode` CMap keeps the text extractable).
+the font covers works. Every embedded font also carries a `ToUnicode` CMap, so
+the text round-trips through the read-side extractor — see
+[extraction.md](extraction.md).
 
 ## Widths
 

@@ -1,9 +1,10 @@
 # @strav/pdf
 
-Low-level, **zero-dependency** PDF generation (the *write* side of PDF) for
-the Strav ecosystem. Produces conformant PDF 1.7 byte streams — it does not
-parse, render or display PDFs. No `@strav/*` dependency and no npm runtime
-dependency; only Node/Bun built-ins.
+Low-level, **zero-dependency** PDF generation (the *write* side) plus
+layout-aware text extraction (the *read* side) for the Strav ecosystem.
+Produces conformant PDF 1.7 byte streams and extracts plain text from existing
+PDFs — it does not render or display PDFs. No `@strav/*` dependency and no npm
+runtime dependency; only Node/Bun built-ins.
 
 ## Install
 
@@ -47,6 +48,21 @@ await doc.saveToStream(createWriteStream('out.pdf'))
 `saveToStream` resolves once the stream has flushed; it rejects on a stream
 error or a build/conformance error, exactly like `save()`.
 
+## Text extraction (read side)
+
+```typescript
+import { extractText } from '@strav/pdf'
+
+const { pages, text, info } = await extractText(await Bun.file('doc.pdf').bytes())
+console.log(info.pageCount, pages[0].text)
+```
+
+Layout-aware plain text per page (heuristic spacing/line breaks), `/ToUnicode`
+and encoding-based glyph decoding, classic + xref-stream + object-stream
+parsing with broken-xref recovery, and empty-password decryption (RC4,
+AES-128, AES-256). See [`docs/pdf/extraction.md`](../../docs/pdf/extraction.md)
+— including the `@strav/rag` ingestion snippet.
+
 ## What's supported
 
 Object model & serialization, pages, the full content-stream operator set,
@@ -56,13 +72,15 @@ with ToUnicode, JPEG/PNG images with alpha, transparency (ExtGState) and
 tiling/shading patterns, XMP metadata, and PDF/A-2b / PDF/X-4 conformance
 validation. Output is byte-deterministic with a fixed creation date and id.
 
-Browser builds, encryption, signatures, forms, and reading/parsing PDFs are
-out of scope.
+On the read side: classic/xref-stream/object-stream parsing, layout-aware text
+extraction, and empty-password decryption. Browser builds, write-side
+encryption, signatures, forms, OCR, and PDF rendering remain out of scope.
 
 ## Documentation
 
 Full guides live in [`docs/pdf`](../../docs/pdf/pdf.md): the content builder,
-fonts, images, color, transparency/patterns, and conformance.
+fonts, images, color, transparency/patterns, conformance, and
+[text extraction](../../docs/pdf/extraction.md).
 
 ## Examples
 

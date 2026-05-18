@@ -1,8 +1,10 @@
 # PDF Generation
 
-Low-level, zero-dependency PDF **writer**. Produces conformant PDF 1.7 byte
-streams from a programmatic API — it does not parse, render, or display PDFs.
-No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
+Low-level, zero-dependency PDF **writer** plus a layout-aware **text
+extractor** (read side — see [extraction.md](extraction.md)). The writer
+produces conformant PDF 1.7 byte streams from a programmatic API; it does not
+render or display PDFs. No `@strav/*` dependency and no npm runtime dependency;
+only Node/Bun built-ins.
 
 > **Scope.** This is the engine for higher-level document libraries. It draws
 > exactly what you tell it to — layout, line breaking, and hyphenation are the
@@ -11,7 +13,8 @@ No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
 > (subsetted) and OpenType/CFF fonts, JPEG/PNG images, and color management
 > (device, ICC, Separation/DeviceN, output intents), transparency, tiling
 > patterns and shadings, document metadata + PDF/A-2b / PDF/X-4 conformance,
-> and buffered or streaming output — **all 12 spec milestones** (see
+> and buffered or streaming output — **all 12 writer milestones**, plus
+> read-side text extraction (M13, see [extraction.md](extraction.md) and
 > [Status](#status)). The browser build is intentionally out of scope.
 
 ## Quick start
@@ -142,6 +145,8 @@ import {
   ConformanceError,
   UnsupportedFontError,
   InvalidImageError,
+  PdfParseError,      // read side: unrecoverable parse failure
+  EncryptedPdfError,  // read side: needs a password / unsupported handler
 } from '@strav/pdf'
 
 try {
@@ -154,7 +159,7 @@ try {
 Common codes: `PDF_INVALID_NUMBER`, `PDF_INVALID_COLOR`,
 `PDF_UNBALANCED_GRAPHICS_STATE`, `PDF_PATH_NOT_CONSUMED`, `PDF_NO_PATH`,
 `PDF_TEXT_STATE`, `PDF_TEXT_ENCODING`, `PDF_NO_FONT`, `PDF_UNSUPPORTED_FONT`,
-`PDF_DOCUMENT_FINALIZED`.
+`PDF_DOCUMENT_FINALIZED`. Read side: `PDF_PARSE`, `PDF_ENCRYPTED`.
 
 ## Stream compression
 
@@ -186,6 +191,7 @@ considered dependencies.
 | Transparency (ExtGState), tiling & axial/radial shadings | ✅ available — see [patterns.md](patterns.md) |
 | Document metadata (Info + XMP), PDF/A-2b & PDF/X-4 validation | ✅ available — see [conformance.md](conformance.md) |
 | Streaming output (`saveToStream`) | ✅ available — see [Streaming output](#streaming-output) |
+| Text extraction (read side) — `extractText` / `PdfReader` | ✅ available — see [extraction.md](extraction.md) |
 
 Every PDF carries an uncompressed XMP `/Metadata` stream plus the legacy Info
 dictionary. `setConformance('PDF/A-2b' | 'PDF/X-4')` validates at `save()` and
@@ -193,9 +199,10 @@ throws `ConformanceError` listing all violations; a Standard-14 font under any
 conformance mode throws `UnsupportedFontError` (fail-fast). See
 [conformance.md](conformance.md) for the enforced rules and limits.
 
-All 12 spec milestones are complete. The remaining 🔜 rows (CFF subsetting,
-complex-script shaping, image `iCCP`→ICCBased) are explicitly post-v1 per the
-spec, not part of the v1 milestone set.
+All 12 writer milestones are complete, plus M13 read-side text extraction. The
+remaining 🔜 rows (CFF subsetting, complex-script shaping, image
+`iCCP`→ICCBased) are explicitly post-v1 per the spec, not part of the v1
+milestone set.
 
 ## See also
 
@@ -207,3 +214,5 @@ spec, not part of the v1 milestone set.
 - [color.md](color.md) — ICC/Separation/DeviceN/CIE color and output intents.
 - [patterns.md](patterns.md) — transparency, tiling patterns, shadings.
 - [conformance.md](conformance.md) — metadata (Info/XMP), PDF/A-2b & PDF/X-4.
+- [extraction.md](extraction.md) — read side: layout-aware text extraction,
+  encryption support, and `@strav/rag` integration.
