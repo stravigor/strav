@@ -64,7 +64,7 @@ cd "$WORKSPACE_ROOT"
 # All packages in dependency order
 ALL_PACKAGES=(
     # Core (tier 1)
-    kernel
+    kernel pdf
     # Tier 2 - depend on kernel
     http database view queue workflow
     # Tier 3 - depend on multiple core packages

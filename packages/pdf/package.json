@@ -1,0 +1,29 @@
+{
+  "name": "@strav/pdf",
+  "version": "0.4.16",
+  "type": "module",
+  "description": "Low-level, zero-dependency PDF generation (write side) for the Strav ecosystem",
+  "license": "MIT",
+  "keywords": ["bun", "pdf", "typescript", "strav"],
+  "files": ["src/", "package.json", "tsconfig.json"],
+  "exports": {
+    ".": "./src/index.ts",
+    "./objects": "./src/objects/index.ts",
+    "./objects/*": "./src/objects/*.ts",
+    "./streams": "./src/streams/index.ts",
+    "./streams/*": "./src/streams/*.ts",
+    "./content": "./src/content/index.ts",
+    "./content/*": "./src/content/*.ts",
+    "./color": "./src/color/index.ts",
+    "./color/*": "./src/color/*.ts",
+    "./document": "./src/document/index.ts",
+    "./document/*": "./src/document/*.ts"
+  },
+  "scripts": {
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.9"
+  }
+}
