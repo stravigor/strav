@@ -8,7 +8,7 @@ No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
 > exactly what you tell it to — layout, line breaking, and hyphenation are the
 > caller's job. Implemented today: the object/serialization core, pages and
 > content streams, device color, stream filters, the Standard-14 fonts, and
-> embedded TrueType fonts (spec milestones 1–5). Font subsetting, images, ICC
+> embedded + subsetted TrueType fonts (spec milestones 1–6). Images, ICC
 > color, transparency, and PDF/A · PDF/X conformance are on the roadmap (see
 > [Status](#status)).
 
@@ -161,8 +161,8 @@ considered dependencies.
 | Device color (Gray / RGB / CMYK) | ✅ available |
 | Stream filters (Flate / ASCII85 / ASCIIHex) | ✅ available |
 | Standard-14 fonts + text | ✅ available — see [fonts.md](fonts.md) |
-| Embedded TrueType (Type0/CIDFontType2 + ToUnicode) | ✅ available — see [fonts.md](fonts.md) |
-| Font subsetting, OpenType/CFF, complex-script shaping | 🔜 roadmap |
+| Embedded + subsetted TrueType (Type0/CIDFontType2 + ToUnicode) | ✅ available — see [fonts.md](fonts.md) |
+| OpenType/CFF, complex-script shaping | 🔜 roadmap |
 | Images (JPEG/PNG), SMask | 🔜 roadmap |
 | ICC color, Separation/DeviceN, output intents | 🔜 roadmap |
 | Transparency, patterns, shadings | 🔜 roadmap |

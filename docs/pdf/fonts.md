@@ -8,8 +8,8 @@ of font are available:
 - **Embedded TrueType** — a `.ttf`/`.ttc` font fully embedded as a Type0 /
   CIDFontType2 with a ToUnicode CMap (`PdfFont.fromTrueType`).
 
-Glyph subsetting, OpenType/CFF (`.otf`), and complex-script shaping are on the
-roadmap; embedded TrueType today ships the *whole* font program.
+Embedded TrueType fonts are **subsetted** to the glyphs you actually use.
+OpenType/CFF (`.otf`) and complex-script shaping are on the roadmap.
 
 ```typescript
 import { PdfFont } from '@strav/pdf'
@@ -70,10 +70,11 @@ page.content().text((t) =>
 )
 ```
 
-For a `.ttc` collection, pick the face by index:
+Options:
 
 ```typescript
-PdfFont.fromTrueType(bytes, { faceIndex: 1 })
+PdfFont.fromTrueType(bytes, { faceIndex: 1 }) // pick a .ttc face (default 0)
+PdfFont.fromTrueType(bytes, { subset: false }) // embed the whole font program
 ```
 
 What is emitted, automatically: a `FontFile2` stream (Flate-compressed, with
@@ -81,6 +82,21 @@ What is emitted, automatically: a `FontFile2` stream (Flate-compressed, with
 `hhea` / `OS/2` / `post`), the descendant `CIDFontType2` with a `/W` width
 array, and the `ToUnicode` CMap. Only the glyphs you actually draw are listed
 in `/W` and `ToUnicode`.
+
+### Subsetting
+
+By default the embedded `FontFile2` is **subsetted** to the glyphs the document
+uses (plus `.notdef` and the transitive components of composite glyphs), so a
+large font costs only the outlines you actually draw — typically a 10–50×
+reduction. Original glyph indices are preserved, so Identity-H codes, `/W`,
+`ToUnicode` and `CIDToGIDMap` are unaffected.
+
+A subsetted font's PostScript name carries the spec-mandated six-letter prefix,
+e.g. `ABCDEF+Inter`. The tag is **deterministic** — derived from the glyph set,
+not random — so identical input produces a byte-identical font. `cmap` and the
+OpenType layout tables are passed through unchanged (not subsetted), so a very
+large font's floor is the size of those tables. Pass `{ subset: false }` to
+embed the whole program with an untagged name.
 
 ```typescript
 const font = PdfFont.fromTrueType(ttfBytes)
@@ -91,8 +107,6 @@ font.widthOfText('Hi', 12)   // exact, from the font's hmtx table
 
 Notes and current limits:
 
-- **No subsetting yet** — the whole font program is embedded (subsetting is a
-  later milestone). Expect large output for big CJK fonts until then.
 - **TrueType `glyf` only.** OpenType/CFF (`.otf`, `OTTO`) throws
   `UnsupportedFontError` — embed a `glyf` `.ttf`.
 - Code points the font's `cmap` doesn't cover map to `.notdef` (glyph 0).
