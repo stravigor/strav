@@ -109,6 +109,10 @@ for production color):
 import { rgbToGray, cmykToRgb, rgbToCmyk } from '@strav/pdf'
 ```
 
+ICC-managed, spot (Separation), DeviceN and CIE color spaces are also
+supported and used the same way via `setFillColor`/`setStrokeColor` — see
+[color.md](color.md).
+
 ## Text
 
 Text lives in a `text()` block (`BT … ET`). The block always closes, even if

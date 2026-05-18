@@ -7,10 +7,10 @@ No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
 > **Scope.** This is the engine for higher-level document libraries. It draws
 > exactly what you tell it to — layout, line breaking, and hyphenation are the
 > caller's job. Implemented today: the object/serialization core, pages and
-> content streams, device color, stream filters, the Standard-14 fonts, and
-> embedded TrueType (subsetted) and OpenType/CFF fonts, and JPEG/PNG images
-> (spec milestones 1–8). ICC color, transparency, and PDF/A · PDF/X
-> conformance are on the roadmap (see
+> content streams, stream filters, the Standard-14 fonts, embedded TrueType
+> (subsetted) and OpenType/CFF fonts, JPEG/PNG images, and color management
+> (device, ICC, Separation/DeviceN, output intents) — spec milestones 1–9.
+> Transparency and PDF/A · PDF/X conformance are on the roadmap (see
 > [Status](#status)).
 
 ## Quick start
@@ -159,14 +159,15 @@ considered dependencies.
 |---|---|
 | Object model, serialization, xref, trailer | ✅ available |
 | Pages, content streams, graphics state | ✅ available — see [content.md](content.md) |
-| Device color (Gray / RGB / CMYK) | ✅ available |
+| Device color (Gray / RGB / CMYK) | ✅ available — see [color.md](color.md) |
 | Stream filters (Flate / ASCII85 / ASCIIHex) | ✅ available |
 | Standard-14 fonts + text | ✅ available — see [fonts.md](fonts.md) |
 | Embedded TrueType — subsetted, Type0/CIDFontType2 + ToUnicode | ✅ available — see [fonts.md](fonts.md) |
 | Embedded OpenType/CFF — Type0/CIDFontType0 (whole) | ✅ available — see [fonts.md](fonts.md) |
 | CFF subsetting, complex-script shaping | 🔜 roadmap |
 | Images — JPEG (DCTDecode) & PNG (decoded), alpha → SMask | ✅ available — see [images.md](images.md) |
-| ICC color (incl. image iCCP), Separation/DeviceN, output intents | 🔜 roadmap |
+| ICCBased / Separation / DeviceN / CIE color + output intents | ✅ available — see [color.md](color.md) |
+| Image iCCP → ICCBased | 🔜 roadmap |
 | Transparency, patterns, shadings | 🔜 roadmap |
 | PDF/A-2b and PDF/X-4 conformance validation | 🔜 roadmap |
 
@@ -181,3 +182,4 @@ under any conformance mode throws `UnsupportedFontError` at `save()`.
 - [fonts.md](fonts.md) — Standard-14 and embedded TrueType/OpenType fonts, text
   objects, and encoding.
 - [images.md](images.md) — JPEG/PNG embedding, transparency, color spaces.
+- [color.md](color.md) — ICC/Separation/DeviceN/CIE color and output intents.
