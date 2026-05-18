@@ -10,9 +10,9 @@ No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
 > content streams, stream filters, the Standard-14 fonts, embedded TrueType
 > (subsetted) and OpenType/CFF fonts, JPEG/PNG images, and color management
 > (device, ICC, Separation/DeviceN, output intents), transparency, tiling
-> patterns and shadings, and document metadata + PDF/A-2b / PDF/X-4
-> conformance — spec milestones 1–11. Streaming output is the last roadmap
-> item (see [Status](#status)).
+> patterns and shadings, document metadata + PDF/A-2b / PDF/X-4 conformance,
+> and buffered or streaming output — **all 12 spec milestones** (see
+> [Status](#status)). The browser build is intentionally out of scope.
 
 ## Quick start
 
@@ -42,6 +42,20 @@ await Bun.write('out.pdf', bytes)
 
 `save()` returns the complete PDF as a `Uint8Array`. It is single-use — calling
 it twice, or adding a page after it, throws.
+
+### Streaming output
+
+For large documents or HTTP responses, stream straight to a Node `Writable`
+instead of buffering — `saveToStream` resolves once the stream has flushed and
+rejects on a stream or build/conformance error (spec §3.3):
+
+```typescript
+import { createWriteStream } from 'node:fs'
+
+await doc.saveToStream(createWriteStream('out.pdf')) // Promise<void>
+```
+
+The streamed bytes are identical to `save()` for the same document.
 
 ## Document model
 
@@ -171,13 +185,17 @@ considered dependencies.
 | Image iCCP → ICCBased | 🔜 roadmap |
 | Transparency (ExtGState), tiling & axial/radial shadings | ✅ available — see [patterns.md](patterns.md) |
 | Document metadata (Info + XMP), PDF/A-2b & PDF/X-4 validation | ✅ available — see [conformance.md](conformance.md) |
-| Streaming output (StreamSink) | 🔜 roadmap |
+| Streaming output (`saveToStream`) | ✅ available — see [Streaming output](#streaming-output) |
 
 Every PDF carries an uncompressed XMP `/Metadata` stream plus the legacy Info
 dictionary. `setConformance('PDF/A-2b' | 'PDF/X-4')` validates at `save()` and
 throws `ConformanceError` listing all violations; a Standard-14 font under any
 conformance mode throws `UnsupportedFontError` (fail-fast). See
 [conformance.md](conformance.md) for the enforced rules and limits.
+
+All 12 spec milestones are complete. The remaining 🔜 rows (CFF subsetting,
+complex-script shaping, image `iCCP`→ICCBased) are explicitly post-v1 per the
+spec, not part of the v1 milestone set.
 
 ## See also
 
