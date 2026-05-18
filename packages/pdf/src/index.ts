@@ -48,10 +48,20 @@ export type { Shading, ShadingPattern, ColorStop } from './patterns/shading.ts'
 
 export { mm, cm, inch, pt } from './util/units.ts'
 
+export { extractText, PdfReader } from './reader/extract.ts'
+export type {
+  ExtractOptions,
+  ExtractResult,
+  ExtractedPage,
+  PdfInfo,
+} from './reader/extract.ts'
+
 export {
   PdfGenError,
   ConformanceError,
   UnsupportedFontError,
   InvalidImageError,
+  PdfParseError,
+  EncryptedPdfError,
 } from './util/errors.ts'
 export type { PdfGenErrorCode } from './util/errors.ts'

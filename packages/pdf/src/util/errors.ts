@@ -23,6 +23,9 @@ export type PdfGenErrorCode =
   | 'PDF_TEXT_STATE'
   | 'PDF_TEXT_ENCODING'
   | 'PDF_NO_FONT'
+  | 'PDF_PARSE'
+  | 'PDF_ENCRYPTED'
+  | 'PDF_UNSUPPORTED_DECODE'
 
 export class PdfGenError extends Error {
   readonly code: PdfGenErrorCode
@@ -57,5 +60,22 @@ export class UnsupportedFontError extends PdfGenError {
 export class InvalidImageError extends PdfGenError {
   constructor(message: string) {
     super('PDF_INVALID_IMAGE', message)
+  }
+}
+
+/** Thrown when an existing PDF cannot be parsed (read side, M13). */
+export class PdfParseError extends PdfGenError {
+  constructor(message: string) {
+    super('PDF_PARSE', message)
+  }
+}
+
+/**
+ * Thrown when a PDF is encrypted in a way M13 does not support: a non-empty
+ * user password, or a non-standard / unsupported security handler.
+ */
+export class EncryptedPdfError extends PdfGenError {
+  constructor(message: string) {
+    super('PDF_ENCRYPTED', message)
   }
 }
