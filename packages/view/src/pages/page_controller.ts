@@ -1,6 +1,6 @@
 import type { Context } from '@strav/http'
 import Configuration from '@strav/kernel/config/configuration'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { join, normalize, resolve } from 'node:path'
 import type { PageResolutionResult, ViewConfigWithPages } from './types.ts'
 import { inject } from '@strav/kernel'
@@ -69,45 +69,118 @@ export default class PageController {
     }
 
     // Normalize the request path
-    let normalizedPath = normalize(requestPath).replace(/^\/+/, '')
+    const normalizedPath = normalize(requestPath).replace(/^\/+/, '')
 
-    // Handle root path
-    if (!normalizedPath || normalizedPath === '.') {
-      normalizedPath = indexFile
+    // Root and trailing-slash requests must resolve to a directory index,
+    // never to a sibling `<segment>.strav` file.
+    const requireIndex =
+      !normalizedPath || normalizedPath === '.' || normalizedPath.endsWith('/')
+
+    // URL path segments, with empties and '.' stripped.
+    const segments = normalizedPath
+      .replace(/\/+$/, '')
+      .split('/')
+      .filter((s) => s && s !== '.')
+
+    // Group folders are on by default; disable restores legacy resolution.
+    const groupsEnabled = pagesConfig.groupFolders !== false
+
+    let resolved = this.findPage(pagesDir, segments, indexFile, basePagesDir, requireIndex, groupsEnabled)
+
+    // Try fallback to default directory if enabled and page not found
+    if (
+      !resolved &&
+      subdomain &&
+      pagesConfig.subdomains?.fallbackToDefault !== false &&
+      pagesConfig.subdomains?.defaultDirectory
+    ) {
+      const defaultDir = join(basePagesDir, pagesConfig.subdomains.defaultDirectory)
+      resolved = this.findPage(defaultDir, segments, indexFile, basePagesDir, requireIndex, groupsEnabled)
+    }
+
+    if (resolved) {
+      return { filePath: resolved, exists: true, isValid: true }
+    }
+
+    // Best-effort path for the (404) result; handler only checks exists/isValid.
+    const missPath = resolve(pagesDir, (segments.join('/') || indexFile) + (requireIndex ? `/${indexFile}` : '.strav'))
+    return { filePath: missPath, exists: false, isValid: false }
+  }
+
+  /**
+   * Recursively resolve URL segments to a `.strav` file, treating any
+   * directory matching `(group)` as transparent (consumes no URL segment).
+   * Direct (non-group) matches are attempted before descending into group
+   * folders, so direct always wins; groups are tried in alphabetical order.
+   * Returns the absolute file path, or null if nothing matches.
+   */
+  private findPage(
+    searchDir: string,
+    segments: string[],
+    indexFile: string,
+    basePagesDir: string,
+    requireIndex: boolean,
+    groupsEnabled: boolean
+  ): string | null {
+    if (segments.length === 0) {
+      const indexPath = resolve(searchDir, indexFile)
+      if (this.isValidPath(indexPath, basePagesDir) && existsSync(indexPath)) {
+        return indexPath
+      }
     } else {
-      // Handle directory paths (with or without trailing slash)
-      if (normalizedPath.endsWith('/')) {
-        normalizedPath = join(normalizedPath, indexFile)
-      } else {
-        // Try as direct file first, then as directory with index
-        const directFile = `${normalizedPath}.strav`
-        const directFilePath = resolve(pagesDir, directFile)
+      // `head` always defined here (segments is non-empty in this branch);
+      // the default only satisfies noUncheckedIndexedAccess.
+      const [head = '', ...rest] = segments
 
-        if (this.isValidPath(directFilePath, basePagesDir) && existsSync(directFilePath)) {
-          normalizedPath = directFile
-        } else {
-          normalizedPath = join(normalizedPath, indexFile)
+      // Leaf segment may map directly to `<head>.strav` (unless an index
+      // was explicitly requested via a trailing slash).
+      if (rest.length === 0 && !requireIndex) {
+        const filePath = resolve(searchDir, `${head}.strav`)
+        if (this.isValidPath(filePath, basePagesDir) && existsSync(filePath)) {
+          return filePath
         }
       }
-    }
 
-    let filePath = resolve(pagesDir, normalizedPath)
-    let exists = existsSync(filePath)
-
-    // Try fallback to default directory if enabled and file doesn't exist
-    if (!exists && subdomain && pagesConfig.subdomains?.fallbackToDefault !== false && pagesConfig.subdomains?.defaultDirectory) {
-      const defaultDir = join(basePagesDir, pagesConfig.subdomains.defaultDirectory)
-      const fallbackPath = resolve(defaultDir, normalizedPath)
-      if (existsSync(fallbackPath) && this.isValidPath(fallbackPath, basePagesDir)) {
-        filePath = fallbackPath
-        exists = true
+      // Descend into a real subdirectory named after the segment.
+      const subDir = resolve(searchDir, head)
+      if (this.isValidPath(subDir, basePagesDir) && existsSync(subDir)) {
+        const found = this.findPage(subDir, rest, indexFile, basePagesDir, requireIndex, groupsEnabled)
+        if (found) return found
       }
     }
 
-    return {
-      filePath,
-      exists,
-      isValid: this.isValidPath(filePath, basePagesDir) && normalizedPath.endsWith('.strav')
+    // Only after direct resolution fails: descend into transparent group
+    // folders, keeping the same segments (a group consumes no URL part).
+    if (groupsEnabled) {
+      for (const group of this.listGroupDirs(searchDir)) {
+        const found = this.findPage(
+          resolve(searchDir, group),
+          segments,
+          indexFile,
+          basePagesDir,
+          requireIndex,
+          groupsEnabled
+        )
+        if (found) return found
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * List immediate subdirectories whose name matches `(group)`, sorted
+   * alphabetically for deterministic resolution. Missing/unreadable
+   * directories yield an empty list.
+   */
+  private listGroupDirs(dir: string): string[] {
+    try {
+      return readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && /^\(.+\)$/.test(entry.name))
+        .map((entry) => entry.name)
+        .sort()
+    } catch {
+      return []
     }
   }
 

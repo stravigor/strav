@@ -21,6 +21,15 @@ export interface PagesConfig {
   indexFile?: string
 
   /**
+   * Enable Next.js-style grouping folders. A directory named `(group)`
+   * organizes files without affecting the URL — e.g.
+   * `pages/(marketing)/contact.strav` serves `/contact`. Groups may nest
+   * at any depth; direct (non-group) matches take precedence.
+   * @default true
+   */
+  groupFolders?: boolean
+
+  /**
    * Subdomain routing configuration
    */
   subdomains?: SubdomainConfig
