@@ -9,8 +9,9 @@ No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
 > caller's job. Implemented today: the object/serialization core, pages and
 > content streams, stream filters, the Standard-14 fonts, embedded TrueType
 > (subsetted) and OpenType/CFF fonts, JPEG/PNG images, and color management
-> (device, ICC, Separation/DeviceN, output intents) — spec milestones 1–9.
-> Transparency and PDF/A · PDF/X conformance are on the roadmap (see
+> (device, ICC, Separation/DeviceN, output intents), and transparency,
+> tiling patterns and shadings — spec milestones 1–10. PDF/A · PDF/X
+> conformance and document metadata are on the roadmap (see
 > [Status](#status)).
 
 ## Quick start
@@ -168,8 +169,8 @@ considered dependencies.
 | Images — JPEG (DCTDecode) & PNG (decoded), alpha → SMask | ✅ available — see [images.md](images.md) |
 | ICCBased / Separation / DeviceN / CIE color + output intents | ✅ available — see [color.md](color.md) |
 | Image iCCP → ICCBased | 🔜 roadmap |
-| Transparency, patterns, shadings | 🔜 roadmap |
-| PDF/A-2b and PDF/X-4 conformance validation | 🔜 roadmap |
+| Transparency (ExtGState), tiling & axial/radial shadings | ✅ available — see [patterns.md](patterns.md) |
+| Document metadata (Info/XMP), PDF/A-2b & PDF/X-4 validation | 🔜 roadmap |
 
 Setting `conformance` is accepted today, but full validation lands with the
 conformance milestone. The one rule enforced now: a Standard-14 font used
@@ -183,3 +184,4 @@ under any conformance mode throws `UnsupportedFontError` at `save()`.
   objects, and encoding.
 - [images.md](images.md) — JPEG/PNG embedding, transparency, color spaces.
 - [color.md](color.md) — ICC/Separation/DeviceN/CIE color and output intents.
+- [patterns.md](patterns.md) — transparency, tiling patterns, shadings.

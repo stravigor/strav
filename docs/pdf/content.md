@@ -149,6 +149,19 @@ c.drawImage(logo, { x: mm(20), y: mm(20), width: mm(50), height: mm(50) })
 Rejected inside a `text()` block. See [images.md](images.md) for formats,
 transparency and color spaces.
 
+## Transparency & patterns
+
+`setExtGState` applies constant alpha and a blend mode; `setFillPattern` /
+`setStrokePattern` paint with a tiling or shading pattern; `shade` paints a
+gradient over the current clip.
+
+```typescript
+const half = doc.createExtGState({ fillAlpha: 0.5, blendMode: 'Multiply' })
+c.save().setExtGState(half).setFillColor(rgb(1, 0, 0)).rect(0, 0, 80, 80).fill().restore()
+```
+
+See [patterns.md](patterns.md) for ExtGState, tiling patterns and shadings.
+
 ## Determinism
 
 Content-stream bytes are stable: operator order follows call order, numbers go
