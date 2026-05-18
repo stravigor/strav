@@ -21,7 +21,7 @@ export { ContentStream } from './content/content_stream.ts'
 export type { TextObject, RunPart } from './content/text_object.ts'
 
 export { PdfFont } from './fonts/font.ts'
-export type { StandardFontName } from './fonts/font.ts'
+export type { StandardFontName, TrueTypeOptions } from './fonts/font.ts'
 
 export { Color, rgb, cmyk, gray } from './color/color.ts'
 export type { Color as ColorValue, ColorSpace } from './color/color.ts'

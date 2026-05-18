@@ -271,7 +271,7 @@ export class ContentStream {
     if (this.resources.isEmpty) return dict({})
     const fontDict = dict({})
     for (const { name: resName, font } of this.resources.usedFonts()) {
-      fontDict.entries.set(resName, table.add(font.toFontDictionary()))
+      fontDict.entries.set(resName, font.register(table))
     }
     return dict({ Font: fontDict })
   }
