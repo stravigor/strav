@@ -31,12 +31,15 @@ import { parseName } from './name_table.ts'
 import { parseOs2, type Os2Metrics } from './os2.ts'
 import { encodeIdentityH, buildWidthsArray } from './cid_encoding.ts'
 import { buildToUnicode } from './to_unicode.ts'
+import { subsetTrueType } from './subset.ts'
 
 export type { StandardFontName }
 
 export interface TrueTypeOptions {
   /** Face to select from a `.ttc` collection (default 0). */
   faceIndex?: number
+  /** Subset to the glyphs actually used (default true). */
+  subset?: boolean
 }
 
 export abstract class PdfFont {
@@ -60,7 +63,7 @@ export abstract class PdfFont {
 
   /** Embed a TrueType (`glyf`) font from its `.ttf`/`.ttc` bytes. */
   static fromTrueType(bytes: Uint8Array, opts: TrueTypeOptions = {}): PdfFont {
-    return new EmbeddedTrueTypeFont(bytes, opts.faceIndex ?? 0)
+    return new EmbeddedTrueTypeFont(bytes, opts.faceIndex ?? 0, opts.subset !== false)
   }
 }
 
@@ -135,7 +138,11 @@ class EmbeddedTrueTypeFont extends PdfFont {
 
   private static counter = 0
 
-  constructor(bytes: Uint8Array, faceIndex: number) {
+  constructor(
+    bytes: Uint8Array,
+    faceIndex: number,
+    private readonly doSubset: boolean
+  ) {
     super()
     this.sfnt = new SfntFont(bytes, faceIndex)
 
@@ -220,8 +227,18 @@ class EmbeddedTrueTypeFont extends PdfFont {
     const scale = 1000 / upm
     const s = (v: number) => Math.round(v * scale)
 
-    // FontFile2: the whole font program, FlateDecoded, with /Length1.
-    const program = this.sfnt.programBytes
+    // FontFile2: the subset (default) or whole font program, FlateDecoded.
+    // A subset font carries a 6-letter `TAG+` prefix on its PostScript name.
+    let program: Uint8Array
+    let fontName: string
+    if (this.doSubset) {
+      const { bytes, tag } = subsetTrueType(this.sfnt, this.usedGids)
+      program = bytes
+      fontName = `${tag}+${this.baseFont}`
+    } else {
+      program = this.sfnt.programBytes
+      fontName = this.baseFont
+    }
     const fontFileRef = table.add(
       makeStream(program, { filter: 'FlateDecode', extra: { Length1: num(program.length) } })
     )
@@ -235,7 +252,7 @@ class EmbeddedTrueTypeFont extends PdfFont {
     const descriptorRef = table.add(
       dict({
         Type: name('FontDescriptor'),
-        FontName: name(this.baseFont),
+        FontName: name(fontName),
         Flags: num(this.flags()),
         FontBBox: arr(
           [this.sfnt.head.xMin, this.sfnt.head.yMin, this.sfnt.head.xMax, this.sfnt.head.yMax]
@@ -256,7 +273,7 @@ class EmbeddedTrueTypeFont extends PdfFont {
       dict({
         Type: name('Font'),
         Subtype: name('CIDFontType2'),
-        BaseFont: name(this.baseFont),
+        BaseFont: name(fontName),
         CIDSystemInfo: dict({
           Registry: { kind: 'str', value: ascii('Adobe'), encoding: 'literal' },
           Ordering: { kind: 'str', value: ascii('Identity'), encoding: 'literal' },
@@ -277,7 +294,7 @@ class EmbeddedTrueTypeFont extends PdfFont {
       dict({
         Type: name('Font'),
         Subtype: name('Type0'),
-        BaseFont: name(this.baseFont),
+        BaseFont: name(fontName),
         Encoding: name('Identity-H'),
         DescendantFonts: arr([cidFontRef]),
         ToUnicode: toUnicodeRef,
