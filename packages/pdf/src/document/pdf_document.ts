@@ -4,7 +4,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto'
-import { PdfGenError } from '../util/errors.ts'
+import { PdfGenError, UnsupportedFontError } from '../util/errors.ts'
 import type { IndirectRef, PdfObject } from '../objects/types.ts'
 import { arr, dict, name, num } from '../objects/types.ts'
 import { textString, dateString } from '../objects/string.ts'
@@ -121,9 +121,19 @@ export class PdfDocument {
     const cs = page.getContentStream()
     if (cs) {
       cs.assertBalanced()
+      if (this.conformance) {
+        for (const font of cs.usedFonts()) {
+          if (font.isStandard14) {
+            throw new UnsupportedFontError(
+              `Standard-14 font "${font.baseFont}" cannot be used under ${this.conformance}; ` +
+                'embed a TrueType/OpenType font instead (milestone 5)'
+            )
+          }
+        }
+      }
       const contentRef = table.add(makeContentStream(cs.toBytes()))
       entries.Contents = contentRef
-      entries.Resources = cs.buildResources()
+      entries.Resources = cs.buildResources(table)
     }
     return dict(entries)
   }

@@ -11,3 +11,6 @@ export {
 } from './graphics_state.ts'
 export { PathTracker } from './path.ts'
 export type { PathMode } from './path.ts'
+export { TextObject } from './text_object.ts'
+export type { RunPart } from './text_object.ts'
+export { ResourceCollector } from './resources.ts'

@@ -20,6 +20,9 @@ export type PdfGenErrorCode =
   | 'PDF_CONFORMANCE'
   | 'PDF_UNSUPPORTED_FONT'
   | 'PDF_INVALID_IMAGE'
+  | 'PDF_TEXT_STATE'
+  | 'PDF_TEXT_ENCODING'
+  | 'PDF_NO_FONT'
 
 export class PdfGenError extends Error {
   readonly code: PdfGenErrorCode

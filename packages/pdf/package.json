@@ -14,6 +14,8 @@
     "./streams/*": "./src/streams/*.ts",
     "./content": "./src/content/index.ts",
     "./content/*": "./src/content/*.ts",
+    "./fonts": "./src/fonts/index.ts",
+    "./fonts/*": "./src/fonts/*.ts",
     "./color": "./src/color/index.ts",
     "./color/*": "./src/color/*.ts",
     "./document": "./src/document/index.ts",

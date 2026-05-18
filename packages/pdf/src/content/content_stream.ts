@@ -10,7 +10,9 @@ import { PdfGenError } from '../util/errors.ts'
 import { formatNumber } from '../objects/number.ts'
 import { dict } from '../objects/types.ts'
 import type { PdfDictionary } from '../objects/types.ts'
+import type { ObjectTable } from '../document/object_table.ts'
 import type { Color } from '../color/color.ts'
+import type { PdfFont } from '../fonts/font.ts'
 import { fillColorOp, strokeColorOp } from '../color/device.ts'
 import { OP } from './operators.ts'
 import {
@@ -21,6 +23,8 @@ import {
   multiply,
 } from './graphics_state.ts'
 import { PathTracker } from './path.ts'
+import { ResourceCollector } from './resources.ts'
+import { TextObject } from './text_object.ts'
 
 function n(v: number): string {
   return formatNumber(v)
@@ -31,21 +35,35 @@ export class ContentStream {
   private readonly stack: GraphicsState[] = []
   private state: GraphicsState = initialState()
   private readonly path = new PathTracker()
+  private readonly resources = new ResourceCollector()
+  private inText = false
 
   private emit(line: string): this {
     this.lines.push(line)
     return this
   }
 
+  /** Reject graphics/path operators that are illegal inside a BT…ET block. */
+  private assertNotInText(op: string): void {
+    if (this.inText) {
+      throw new PdfGenError(
+        'PDF_TEXT_STATE',
+        `${op} is not allowed inside a text() block (BT…ET)`
+      )
+    }
+  }
+
   // ── Graphics state ──────────────────────────────────────────────────────
 
   save(): this {
+    this.assertNotInText('q (save)')
     this.path.assertClear('q (save)')
     this.stack.push(cloneState(this.state))
     return this.emit(OP.save)
   }
 
   restore(): this {
+    this.assertNotInText('Q (restore)')
     this.path.assertClear('Q (restore)')
     const prev = this.stack.pop()
     if (!prev) {
@@ -60,6 +78,7 @@ export class ContentStream {
 
   /** Concatenate a matrix to the CTM (`a b c d e f cm`). */
   transform(m: Matrix): this {
+    this.assertNotInText('cm (transform)')
     this.state.ctm = multiply(m, this.state.ctm)
     return this.emit(`${m.map(n).join(' ')} ${OP.cm}`)
   }
@@ -112,11 +131,13 @@ export class ContentStream {
   // ── Path construction ───────────────────────────────────────────────────
 
   moveTo(x: number, y: number): this {
+    this.assertNotInText('m (moveTo)')
     this.path.open()
     return this.emit(`${n(x)} ${n(y)} ${OP.moveTo}`)
   }
 
   lineTo(x: number, y: number): this {
+    this.assertNotInText('l (lineTo)')
     this.path.open()
     return this.emit(`${n(x)} ${n(y)} ${OP.lineTo}`)
   }
@@ -130,6 +151,7 @@ export class ContentStream {
     x3: number,
     y3: number
   ): this {
+    this.assertNotInText('c (curveTo)')
     this.path.open()
     return this.emit(
       `${n(x1)} ${n(y1)} ${n(x2)} ${n(y2)} ${n(x3)} ${n(y3)} ${OP.curveTo}`
@@ -137,11 +159,13 @@ export class ContentStream {
   }
 
   rect(x: number, y: number, w: number, h: number): this {
+    this.assertNotInText('re (rect)')
     this.path.open()
     return this.emit(`${n(x)} ${n(y)} ${n(w)} ${n(h)} ${OP.rect}`)
   }
 
   closePath(): this {
+    this.assertNotInText('h (closePath)')
     this.path.open()
     return this.emit(OP.closePath)
   }
@@ -196,10 +220,35 @@ export class ContentStream {
     return this.emit(OP.endPath)
   }
 
+  // ── Text (spec §8, §10.7) ───────────────────────────────────────────────
+
+  /**
+   * A text object: emits `BT`, runs `cb` with a {@link TextObject}, emits `ET`.
+   * Blocks must not nest and no path may be open (mirrors the q/Q guard).
+   */
+  text(cb: (t: TextObject) => void): this {
+    this.assertNotInText('BT (text block)')
+    this.path.assertClear('BT (text block)')
+    this.inText = true
+    this.emit(OP.beginText)
+    try {
+      cb(new TextObject(line => this.emit(line), this.resources))
+    } finally {
+      // Always close the block, even if the callback threw, so the stream
+      // can never be left structurally unbalanced (BT without ET).
+      this.inText = false
+      this.emit(OP.endText)
+    }
+    return this
+  }
+
   // ── Finalization ────────────────────────────────────────────────────────
 
-  /** Throws on unbalanced q/Q or an unconsumed path (called from save()). */
+  /** Throws on unbalanced q/Q, an open text block, or an unconsumed path. */
   assertBalanced(): void {
+    if (this.inText) {
+      throw new PdfGenError('PDF_TEXT_STATE', 'text() block did not close (missing ET)')
+    }
     this.path.assertClear('end of content stream')
     if (this.stack.length !== 0) {
       throw new PdfGenError(
@@ -209,12 +258,22 @@ export class ContentStream {
     }
   }
 
+  /** Fonts referenced by this stream, in first-use order. */
+  usedFonts(): PdfFont[] {
+    return this.resources.usedFonts().map(f => f.font)
+  }
+
   /**
-   * Page resource dictionary for resources referenced by this stream. M1–M3
-   * only use device color, which needs no resources, so this is empty.
+   * Build the page `/Resources` dictionary. Font objects are added to the
+   * object table here and referenced by their stable resource names.
    */
-  buildResources(): PdfDictionary {
-    return dict({})
+  buildResources(table: ObjectTable): PdfDictionary {
+    if (this.resources.isEmpty) return dict({})
+    const fontDict = dict({})
+    for (const { name: resName, font } of this.resources.usedFonts()) {
+      fontDict.entries.set(resName, table.add(font.toFontDictionary()))
+    }
+    return dict({ Font: fontDict })
   }
 
   /** Raw, unfiltered content-stream bytes (filtering happens in the stream). */
