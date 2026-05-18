@@ -132,7 +132,9 @@ describe('TrueType embedding (§10.4, M5 acceptance)', () => {
     expect(Buffer.compare(Buffer.from(await build()), Buffer.from(await build()))).toBe(0)
   })
 
-  test('OpenType/CFF (OTTO) is rejected with a typed error', () => {
+  test('a malformed OTTO (no required tables) still throws a typed error', () => {
+    // OTTO is accepted as a container (M7), but this one has no table
+    // directory entries, so a required table is missing.
     const otto = new Uint8Array(64)
     otto.set([0x4f, 0x54, 0x54, 0x4f]) // 'OTTO'
     expect(() => PdfFont.fromTrueType(otto)).toThrow(UnsupportedFontError)

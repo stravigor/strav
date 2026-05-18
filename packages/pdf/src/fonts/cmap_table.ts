@@ -89,6 +89,32 @@ function parseFormat12(b: Uint8Array, o: number): CmapLookup {
   }
 }
 
+/** Format 13: like 12, but every code in a group maps to the SAME glyph
+ *  (used by LastResort and many fallback fonts). */
+function parseFormat13(b: Uint8Array, o: number): CmapLookup {
+  const r = new BinaryReader(b, o + 12)
+  const nGroups = r.u32()
+  const base = o + 16
+  return {
+    gidFor(cp) {
+      let lo = 0
+      let hi = nGroups - 1
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        const g = base + mid * 12
+        const start =
+          ((b[g]! << 24) | (b[g + 1]! << 16) | (b[g + 2]! << 8) | b[g + 3]!) >>> 0
+        const end =
+          ((b[g + 4]! << 24) | (b[g + 5]! << 16) | (b[g + 6]! << 8) | b[g + 7]!) >>> 0
+        if (cp < start) hi = mid - 1
+        else if (cp > end) lo = mid + 1
+        else return ((b[g + 8]! << 24) | (b[g + 9]! << 16) | (b[g + 10]! << 8) | b[g + 11]!) >>> 0
+      }
+      return 0
+    },
+  }
+}
+
 function parseSubtable(b: Uint8Array, o: number): CmapLookup | null {
   const format = (b[o]! << 8) | b[o + 1]!
   switch (format) {
@@ -100,6 +126,8 @@ function parseSubtable(b: Uint8Array, o: number): CmapLookup | null {
       return parseFormat6(b, o)
     case 12:
       return parseFormat12(b, o)
+    case 13:
+      return parseFormat13(b, o)
     default:
       return null
   }

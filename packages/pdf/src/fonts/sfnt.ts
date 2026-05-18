@@ -70,14 +70,13 @@ export class SfntFont {
       for (let i = 0; i < numFonts; i++) offsets.push(r.u32())
       this.readDirectory(bytes, offsets[faceIndex]!)
       this.programBytes = this.rebuildSfnt(bytes)
-    } else if (sfntVersion === TTF_TRUE || sfntVersion === TTF_TAG_true) {
+    } else if (
+      sfntVersion === TTF_TRUE ||
+      sfntVersion === TTF_TAG_true ||
+      sfntVersion === TTF_TAG_OTTO // OpenType/CFF — same SFNT container
+    ) {
       this.readDirectory(bytes, 0)
-      this.programBytes = bytes // single-face TrueType — embed verbatim
-    } else if (sfntVersion === TTF_TAG_OTTO) {
-      throw new UnsupportedFontError(
-        'OpenType/CFF fonts (OTTO) are not supported yet — embed a TrueType ' +
-          '(glyf) font; CFF arrives in a later milestone'
-      )
+      this.programBytes = bytes // single face — embed verbatim
     } else {
       throw new UnsupportedFontError(
         `Unrecognized font format (sfnt version 0x${sfntVersion.toString(16)})`
@@ -87,6 +86,11 @@ export class SfntFont {
     this.head = this.parseHead()
     this.hhea = this.parseHhea()
     this.numGlyphs = this.parseMaxpNumGlyphs()
+  }
+
+  /** True for an OpenType/CFF font (`CFF ` outlines, no `glyf`/`loca`). */
+  get isCFF(): boolean {
+    return this.tables.has('CFF ')
   }
 
   private readDirectory(bytes: Uint8Array, dirOffset: number): void {

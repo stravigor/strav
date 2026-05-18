@@ -32,6 +32,7 @@ import { parseOs2, type Os2Metrics } from './os2.ts'
 import { encodeIdentityH, buildWidthsArray } from './cid_encoding.ts'
 import { buildToUnicode } from './to_unicode.ts'
 import { subsetTrueType } from './subset.ts'
+import { parseCff } from './cff.ts'
 
 export type { StandardFontName }
 
@@ -61,9 +62,18 @@ export abstract class PdfFont {
     return new Standard14Font(fontName)
   }
 
-  /** Embed a TrueType (`glyf`) font from its `.ttf`/`.ttc` bytes. */
+  /**
+   * Embed an SFNT font from its `.ttf`/`.otf`/`.ttc` bytes. TrueType (`glyf`)
+   * is subsetted by default; OpenType/CFF (`OTTO`) is embedded whole as a
+   * CIDFontType0 (CFF subsetting is deferred — `subset` is ignored for CFF).
+   */
   static fromTrueType(bytes: Uint8Array, opts: TrueTypeOptions = {}): PdfFont {
     return new EmbeddedTrueTypeFont(bytes, opts.faceIndex ?? 0, opts.subset !== false)
+  }
+
+  /** Alias of {@link fromTrueType} — clearer when embedding an `.otf`. */
+  static fromOpenType(bytes: Uint8Array, opts: TrueTypeOptions = {}): PdfFont {
+    return PdfFont.fromTrueType(bytes, opts)
   }
 }
 
@@ -131,6 +141,8 @@ class EmbeddedTrueTypeFont extends PdfFont {
   private readonly os2: Os2Metrics | null
   private readonly italicAngle: number
   private readonly fixedPitch: boolean
+  /** OpenType/CFF (embedded whole as FontFile3 / CIDFontType0). */
+  private readonly isCFF: boolean
 
   /** Glyphs referenced so far (drives `/W`); gid → code points for ToUnicode. */
   private readonly usedGids = new Set<number>()
@@ -156,11 +168,20 @@ class EmbeddedTrueTypeFont extends PdfFont {
 
     this.os2 = parseOs2(this.sfnt.table('OS/2'))
 
+    this.isCFF = this.sfnt.isCFF
+    const cffTable = this.isCFF ? this.sfnt.table('CFF ') : undefined
+    const cffInfo = cffTable ? parseCff(cffTable) : null
+
     const nameTable = this.sfnt.table('name')
     const names = nameTable ? parseName(nameTable) : { postScriptName: null, family: null }
-    const ps = (names.postScriptName || names.family || 'EmbeddedFont').replace(/[\s()<>[\]{}/%]/g, '')
+    const ps = (
+      names.postScriptName ||
+      cffInfo?.name ||
+      names.family ||
+      'EmbeddedFont'
+    ).replace(/[\s()<>[\]{}/%]/g, '')
     this.baseFont = ps
-    this.id = `ttf:${ps}:${(EmbeddedTrueTypeFont.counter++).toString()}`
+    this.id = `${this.isCFF ? 'otf' : 'ttf'}:${ps}:${(EmbeddedTrueTypeFont.counter++).toString()}`
 
     const post = this.sfnt.table('post')
     if (post && post.length >= 16) {
@@ -227,21 +248,38 @@ class EmbeddedTrueTypeFont extends PdfFont {
     const scale = 1000 / upm
     const s = (v: number) => Math.round(v * scale)
 
-    // FontFile2: the subset (default) or whole font program, FlateDecoded.
-    // A subset font carries a 6-letter `TAG+` prefix on its PostScript name.
+    // Font program. TrueType: FontFile2 (subset by default, `TAG+` name).
+    // OpenType/CFF: the bare `CFF ` table as FontFile3 /CIDFontType0C,
+    // embedded whole — CFF subsetting is deferred (spec §10.3, §23).
     let program: Uint8Array
     let fontName: string
-    if (this.doSubset) {
-      const { bytes, tag } = subsetTrueType(this.sfnt, this.usedGids)
-      program = bytes
-      fontName = `${tag}+${this.baseFont}`
-    } else {
-      program = this.sfnt.programBytes
+    let fontFileRef: IndirectRef
+    let fontFileKey: 'FontFile2' | 'FontFile3'
+
+    if (this.isCFF) {
+      program = this.sfnt.table('CFF ')!
       fontName = this.baseFont
+      fontFileKey = 'FontFile3'
+      fontFileRef = table.add(
+        makeStream(program, {
+          filter: 'FlateDecode',
+          extra: { Subtype: name('CIDFontType0C') },
+        })
+      )
+    } else {
+      if (this.doSubset) {
+        const { bytes, tag } = subsetTrueType(this.sfnt, this.usedGids)
+        program = bytes
+        fontName = `${tag}+${this.baseFont}`
+      } else {
+        program = this.sfnt.programBytes
+        fontName = this.baseFont
+      }
+      fontFileKey = 'FontFile2'
+      fontFileRef = table.add(
+        makeStream(program, { filter: 'FlateDecode', extra: { Length1: num(program.length) } })
+      )
     }
-    const fontFileRef = table.add(
-      makeStream(program, { filter: 'FlateDecode', extra: { Length1: num(program.length) } })
-    )
 
     const ascent = this.os2 && this.os2.typoAscender ? this.os2.typoAscender : this.sfnt.hhea.ascent
     const descent =
@@ -264,27 +302,27 @@ class EmbeddedTrueTypeFont extends PdfFont {
         Descent: num(s(descent)),
         CapHeight: num(s(capHeight)),
         StemV: num(stemV),
-        FontFile2: fontFileRef,
+        [fontFileKey]: fontFileRef,
       })
     )
 
     const usedGids = [...this.usedGids]
-    const cidFontRef = table.add(
-      dict({
-        Type: name('Font'),
-        Subtype: name('CIDFontType2'),
-        BaseFont: name(fontName),
-        CIDSystemInfo: dict({
-          Registry: { kind: 'str', value: ascii('Adobe'), encoding: 'literal' },
-          Ordering: { kind: 'str', value: ascii('Identity'), encoding: 'literal' },
-          Supplement: num(0),
-        }),
-        FontDescriptor: descriptorRef,
-        CIDToGIDMap: name('Identity'),
-        DW: num(Math.round(this.hmtx.advance(0) * scale) || 1000),
-        W: buildWidthsArray(usedGids, g => this.hmtx.advance(g), upm),
-      })
-    )
+    const cidFont = dict({
+      Type: name('Font'),
+      Subtype: name(this.isCFF ? 'CIDFontType0' : 'CIDFontType2'),
+      BaseFont: name(fontName),
+      CIDSystemInfo: dict({
+        Registry: { kind: 'str', value: ascii('Adobe'), encoding: 'literal' },
+        Ordering: { kind: 'str', value: ascii('Identity'), encoding: 'literal' },
+        Supplement: num(0),
+      }),
+      FontDescriptor: descriptorRef,
+      DW: num(Math.round(this.hmtx.advance(0) * scale) || 1000),
+      W: buildWidthsArray(usedGids, g => this.hmtx.advance(g), upm),
+    })
+    // CIDToGIDMap applies only to CIDFontType2 (TrueType).
+    if (!this.isCFF) cidFont.entries.set('CIDToGIDMap', name('Identity'))
+    const cidFontRef = table.add(cidFont)
 
     const toUnicodeRef = table.add(
       makeStream(ascii(buildToUnicode(this.gidToCps)), { filter: 'FlateDecode' })
