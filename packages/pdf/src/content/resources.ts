@@ -9,10 +9,12 @@
 
 import type { PdfFont } from '../fonts/font.ts'
 import type { PdfImage } from '../images/image.ts'
+import type { ManagedColorSpace } from '../color/space.ts'
 
 export class ResourceCollector {
   private readonly fonts = new Map<string, { name: string; font: PdfFont }>()
   private readonly images = new Map<PdfImage, string>()
+  private readonly colorSpaces = new Map<string, { name: string; cs: ManagedColorSpace }>()
 
   /** Register a font, returning its stable `/Font` resource name. */
   useFont(font: PdfFont): string {
@@ -32,6 +34,15 @@ export class ResourceCollector {
     return name
   }
 
+  /** Register a managed color space, returning its `/ColorSpace` name. */
+  useColorSpace(cs: ManagedColorSpace): string {
+    const existing = this.colorSpaces.get(cs.id)
+    if (existing) return existing.name
+    const name = `CS${this.colorSpaces.size + 1}`
+    this.colorSpaces.set(cs.id, { name, cs })
+    return name
+  }
+
   /** Fonts in first-use order. */
   usedFonts(): { name: string; font: PdfFont }[] {
     return [...this.fonts.values()]
@@ -42,7 +53,12 @@ export class ResourceCollector {
     return [...this.images].map(([image, name]) => ({ name, image }))
   }
 
+  /** Color spaces in first-use order. */
+  usedColorSpaces(): { name: string; cs: ManagedColorSpace }[] {
+    return [...this.colorSpaces.values()]
+  }
+
   get isEmpty(): boolean {
-    return this.fonts.size === 0 && this.images.size === 0
+    return this.fonts.size === 0 && this.images.size === 0 && this.colorSpaces.size === 0
   }
 }

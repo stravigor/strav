@@ -1,5 +1,15 @@
-export type { ColorSpace } from './color.ts'
+export type { ColorSpace, Color as ColorValue, DeviceColor } from './color.ts'
 // A named re-export carries both the type and value meanings of `Color`.
-export { Color, gray, rgb, cmyk } from './color.ts'
+export { Color, gray, rgb, cmyk, deviceComponents, deviceSpaceName } from './color.ts'
 export { rgbToGray, cmykToRgb, rgbToCmyk } from './conversion.ts'
 export { fillColorOp, strokeColorOp } from './device.ts'
+
+export type { ManagedColorSpace, ManagedColor } from './space.ts'
+export { managedColor } from './space.ts'
+export { parseIccProfile, iccBased } from './icc.ts'
+export type { IccProfile, IccColorSpace, IccBasedColorSpace } from './icc.ts'
+export { separation, type4Function } from './separation.ts'
+export type { SeparationColorSpace } from './separation.ts'
+export { deviceN } from './devicen.ts'
+export type { DeviceNColorSpace } from './devicen.ts'
+export { calGray, calRGB, lab } from './cie.ts'

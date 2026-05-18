@@ -7,14 +7,35 @@
  */
 
 import { PdfGenError } from '../util/errors.ts'
+import type { ManagedColor } from './space.ts'
 
-/** Device color space names available in this milestone. */
+/** Device color space names. */
 export type ColorSpace = 'DeviceGray' | 'DeviceRGB' | 'DeviceCMYK'
 
-export type Color =
+export type DeviceColor =
   | { space: 'DeviceGray'; g: number }
   | { space: 'DeviceRGB'; r: number; g: number; b: number }
   | { space: 'DeviceCMYK'; c: number; m: number; y: number; k: number }
+
+/** A color in any space — device or managed (ICCBased/Separation/…). */
+export type Color = DeviceColor | ManagedColor
+
+/** Components of a device color, in PDF operand order. */
+export function deviceComponents(c: DeviceColor): number[] {
+  switch (c.space) {
+    case 'DeviceGray':
+      return [c.g]
+    case 'DeviceRGB':
+      return [c.r, c.g, c.b]
+    case 'DeviceCMYK':
+      return [c.c, c.m, c.y, c.k]
+  }
+}
+
+/** The device color-space name for a device color. */
+export function deviceSpaceName(c: DeviceColor): ColorSpace {
+  return c.space
+}
 
 function unit(name: string, v: number): number {
   if (!Number.isFinite(v) || v < 0 || v > 1) {

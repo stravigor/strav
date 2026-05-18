@@ -121,11 +121,21 @@ export class ContentStream {
 
   setFillColor(c: Color): this {
     this.state.fillColor = c
+    if (c.space === 'Managed') {
+      const cs = this.resources.useColorSpace(c.cs)
+      this.emit(`/${cs} ${OP.fillColorSpace}`)
+      return this.emit(`${c.comps.map(n).join(' ')} ${OP.fillColorN}`)
+    }
     return this.emit(fillColorOp(c))
   }
 
   setStrokeColor(c: Color): this {
     this.state.strokeColor = c
+    if (c.space === 'Managed') {
+      const cs = this.resources.useColorSpace(c.cs)
+      this.emit(`/${cs} ${OP.strokeColorSpace}`)
+      return this.emit(`${c.comps.map(n).join(' ')} ${OP.strokeColorN}`)
+    }
     return this.emit(strokeColorOp(c))
   }
 
@@ -306,6 +316,14 @@ export class ContentStream {
         xobjDict.entries.set(resName, image.register(table))
       }
       res.entries.set('XObject', xobjDict)
+    }
+    const spaces = this.resources.usedColorSpaces()
+    if (spaces.length) {
+      const csDict = dict({})
+      for (const { name: resName, cs } of spaces) {
+        csDict.entries.set(resName, cs.build(table))
+      }
+      res.entries.set('ColorSpace', csDict)
     }
     return res
   }

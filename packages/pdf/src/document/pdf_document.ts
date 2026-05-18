@@ -9,7 +9,8 @@ import type { IndirectRef, PdfObject } from '../objects/types.ts'
 import { arr, dict, name, num } from '../objects/types.ts'
 import { textString, dateString } from '../objects/string.ts'
 import { encodeObject } from '../objects/encode.ts'
-import { makeContentStream } from '../streams/stream.ts'
+import { makeContentStream, makeStream } from '../streams/stream.ts'
+import { parseIccProfile } from '../color/icc.ts'
 import { BufferSink } from '../output/buffer_sink.ts'
 import { ObjectTable } from './object_table.ts'
 import { buildPageTree } from './page_tree.ts'
@@ -17,7 +18,13 @@ import { buildCatalog } from './catalog.ts'
 import { serializeDocument } from './xref.ts'
 import { Page } from './page.ts'
 import { rectToBox } from './types.ts'
-import type { AddPageOptions, CreateOptions, DocumentInfo, ConformanceLevel } from './types.ts'
+import type {
+  AddPageOptions,
+  CreateOptions,
+  DocumentInfo,
+  ConformanceLevel,
+  OutputIntentConfig,
+} from './types.ts'
 
 const PRODUCER = '@strav/pdf'
 
@@ -27,6 +34,7 @@ export class PdfDocument {
   private readonly creationDate: Date
   private readonly fixedId?: Uint8Array
   private readonly pages: Page[] = []
+  private outputIntent?: OutputIntentConfig
   private saved = false
 
   private constructor(opts: CreateOptions) {
@@ -48,6 +56,19 @@ export class PdfDocument {
     const page = new Page(this.pages.length, opts.size, opts.rotation ?? 0)
     this.pages.push(page)
     return page
+  }
+
+  /**
+   * Set the document's output intent (spec §9.3). Embeds the destination ICC
+   * profile and adds it to the catalog `/OutputIntents`. Required for PDF/X-4.
+   */
+  setOutputIntent(cfg: OutputIntentConfig): this {
+    if (this.saved) {
+      throw new PdfGenError('PDF_DOCUMENT_FINALIZED', 'Cannot set output intent after save()')
+    }
+    parseIccProfile(cfg.destOutputProfile) // validate eagerly
+    this.outputIntent = cfg
+    return this
   }
 
   /** Conformance target (validation lands in M11). */
@@ -80,7 +101,11 @@ export class PdfDocument {
       table.set(leafRef, this.buildPageDict(table, page, parent))
     })
 
-    const catalogRef = table.add(buildCatalog(rootRef))
+    const catalog = buildCatalog(rootRef)
+    if (this.outputIntent) {
+      catalog.entries.set('OutputIntents', arr([this.buildOutputIntent(table)]))
+    }
+    const catalogRef = table.add(catalog)
 
     const id = this.computeId(infoRef, table)
 
@@ -90,6 +115,30 @@ export class PdfDocument {
   }
 
   // ── build helpers ───────────────────────────────────────────────────────
+
+  private buildOutputIntent(table: ObjectTable): PdfObject {
+    const cfg = this.outputIntent!
+    const profile = parseIccProfile(cfg.destOutputProfile)
+    const profileRef = table.add(
+      makeStream(cfg.destOutputProfile, {
+        filter: 'FlateDecode',
+        extra: { N: num(profile.components) },
+      })
+    )
+    // These identifier fields are ASCII by convention (FOGRA39, URLs);
+    // PDF/X readers expect a readable literal string, not UTF-16BE.
+    const ascii = (s: string) => textString(s, { encoding: 'pdfdoc' })
+    const d = dict({
+      Type: name('OutputIntent'),
+      S: name(cfg.subtype),
+      OutputConditionIdentifier: ascii(cfg.outputConditionIdentifier),
+      DestOutputProfile: profileRef,
+    })
+    if (cfg.outputCondition) d.entries.set('OutputCondition', ascii(cfg.outputCondition))
+    if (cfg.registryName) d.entries.set('RegistryName', ascii(cfg.registryName))
+    if (cfg.info) d.entries.set('Info', ascii(cfg.info))
+    return d
+  }
 
   private buildInfo() {
     const d = dateString(this.creationDate)

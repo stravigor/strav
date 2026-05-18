@@ -26,8 +26,14 @@ export type { StandardFontName, TrueTypeOptions } from './fonts/font.ts'
 export { PdfImage } from './images/image.ts'
 
 export { Color, rgb, cmyk, gray } from './color/color.ts'
-export type { Color as ColorValue, ColorSpace } from './color/color.ts'
+export type { Color as ColorValue, ColorSpace, DeviceColor } from './color/color.ts'
 export { rgbToGray, cmykToRgb, rgbToCmyk } from './color/conversion.ts'
+export { separation } from './color/separation.ts'
+export { iccBased, parseIccProfile } from './color/icc.ts'
+export { deviceN } from './color/devicen.ts'
+export { calGray, calRGB, lab } from './color/cie.ts'
+export type { ManagedColorSpace } from './color/space.ts'
+export type { OutputIntentConfig } from './document/types.ts'
 
 export { mm, cm, inch, pt } from './util/units.ts'
 

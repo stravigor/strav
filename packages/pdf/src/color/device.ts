@@ -6,14 +6,14 @@
 
 import { formatNumber } from '../objects/number.ts'
 import { OP } from '../content/operators.ts'
-import type { Color } from './color.ts'
+import type { DeviceColor } from './color.ts'
 
 function n(v: number): string {
   return formatNumber(v)
 }
 
 /** Operator line that sets the non-stroking (fill) color. */
-export function fillColorOp(c: Color): string {
+export function fillColorOp(c: DeviceColor): string {
   switch (c.space) {
     case 'DeviceGray':
       return `${n(c.g)} ${OP.fillGray}`
@@ -25,7 +25,7 @@ export function fillColorOp(c: Color): string {
 }
 
 /** Operator line that sets the stroking color. */
-export function strokeColorOp(c: Color): string {
+export function strokeColorOp(c: DeviceColor): string {
   switch (c.space) {
     case 'DeviceGray':
       return `${n(c.g)} ${OP.strokeGray}`

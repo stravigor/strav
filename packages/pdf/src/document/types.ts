@@ -47,6 +47,18 @@ export interface AddPageOptions {
   rotation?: 0 | 90 | 180 | 270
 }
 
+/** Output intent (spec §9.3) — embeds a destination ICC profile. */
+export interface OutputIntentConfig {
+  /** `GTS_PDFX` (print) or `GTS_PDFA1` (archival). */
+  subtype: 'GTS_PDFX' | 'GTS_PDFA1' | string
+  outputConditionIdentifier: string
+  outputCondition?: string
+  registryName?: string
+  info?: string
+  /** Raw ICC profile bytes (CMYK or Gray for PDF/X). */
+  destOutputProfile: Uint8Array
+}
+
 /** Convert a {@link Rect} to a PDF box array `[llx lly urx ury]`. */
 export function rectToBox(r: Rect): [number, number, number, number] {
   return [r.x, r.y, r.x + r.w, r.y + r.h]
