@@ -5,11 +5,13 @@ of font are available:
 
 - **Standard-14** — the fonts every PDF viewer is required to have, referenced
   by name and never embedded (`PdfFont.standard`).
-- **Embedded TrueType** — a `.ttf`/`.ttc` font fully embedded as a Type0 /
-  CIDFontType2 with a ToUnicode CMap (`PdfFont.fromTrueType`).
+- **Embedded SFNT** — a `.ttf`/`.ttc`/`.otf` font embedded as a Type0 font
+  with a ToUnicode CMap (`PdfFont.fromTrueType` / `PdfFont.fromOpenType`).
+  TrueType (`glyf`) becomes a CIDFontType2 and is **subsetted** to the glyphs
+  you use; OpenType/CFF (`OTTO`) becomes a CIDFontType0 and is embedded whole
+  (CFF subsetting is deferred).
 
-Embedded TrueType fonts are **subsetted** to the glyphs you actually use.
-OpenType/CFF (`.otf`) and complex-script shaping are on the roadmap.
+Complex-script shaping is on the roadmap.
 
 ```typescript
 import { PdfFont } from '@strav/pdf'
@@ -51,19 +53,25 @@ font.isStandard14      // true
 font.widthOfText('Hello', 12)   // rendered width in points
 ```
 
-## Embedded TrueType fonts
+## Embedded fonts
 
-`PdfFont.fromTrueType(bytes)` embeds a TrueType (`glyf`) font from its raw
-`.ttf`/`.ttc` bytes. The font is emitted as a composite **Type0 /
-CIDFontType2** with **Identity-H** encoding and a **ToUnicode** CMap, so any
+`PdfFont.fromTrueType(bytes)` (alias `PdfFont.fromOpenType`) embeds an SFNT
+font from its raw `.ttf`/`.ttc`/`.otf` bytes. It is emitted as a composite
+**Type0** font with **Identity-H** encoding and a **ToUnicode** CMap, so any
 script the font covers renders and the text stays selectable and
-copy/pasteable.
+copy/pasteable. The container type is detected automatically:
+
+| Input | Descendant | Program | Subset |
+|---|---|---|---|
+| TrueType (`glyf`) | `CIDFontType2` | `FontFile2` | yes (default) |
+| OpenType/CFF (`OTTO`) | `CIDFontType0` | `FontFile3` (`/CIDFontType0C`) | no — embedded whole |
 
 ```typescript
 import { PdfFont } from '@strav/pdf'
 import { readFile } from 'node:fs/promises'
 
 const inter = PdfFont.fromTrueType(await readFile('./fonts/Inter-Regular.ttf'))
+const src = PdfFont.fromOpenType(await readFile('./fonts/SourceSans3.otf'))
 
 page.content().text((t) =>
   t.setFont(inter, 14).moveTo(72, 720).show('Hello — Καλημέρα — Привет')
@@ -77,19 +85,20 @@ PdfFont.fromTrueType(bytes, { faceIndex: 1 }) // pick a .ttc face (default 0)
 PdfFont.fromTrueType(bytes, { subset: false }) // embed the whole font program
 ```
 
-What is emitted, automatically: a `FontFile2` stream (Flate-compressed, with
-`/Length1`), a `FontDescriptor` (flags, bbox, metrics derived from `head` /
-`hhea` / `OS/2` / `post`), the descendant `CIDFontType2` with a `/W` width
-array, and the `ToUnicode` CMap. Only the glyphs you actually draw are listed
-in `/W` and `ToUnicode`.
+What is emitted, automatically: the embedded font program (Flate-compressed),
+a `FontDescriptor` (flags, bbox, metrics derived from `head` / `hhea` / `OS/2`
+/ `post`), the descendant CIDFont with a `/W` width array, and the `ToUnicode`
+CMap. Only the glyphs you actually draw are listed in `/W` and `ToUnicode`.
 
-### Subsetting
+### Subsetting (TrueType only)
 
-By default the embedded `FontFile2` is **subsetted** to the glyphs the document
+By default a TrueType `FontFile2` is **subsetted** to the glyphs the document
 uses (plus `.notdef` and the transitive components of composite glyphs), so a
 large font costs only the outlines you actually draw — typically a 10–50×
 reduction. Original glyph indices are preserved, so Identity-H codes, `/W`,
-`ToUnicode` and `CIDToGIDMap` are unaffected.
+`ToUnicode` and `CIDToGIDMap` are unaffected. **OpenType/CFF is not subsetted**
+(the whole `CFF ` program is embedded; CFF subsetting is deferred), so `subset`
+has no effect on `.otf` input.
 
 A subsetted font's PostScript name carries the spec-mandated six-letter prefix,
 e.g. `ABCDEF+Inter`. The tag is **deterministic** — derived from the glyph set,
@@ -107,8 +116,8 @@ font.widthOfText('Hi', 12)   // exact, from the font's hmtx table
 
 Notes and current limits:
 
-- **TrueType `glyf` only.** OpenType/CFF (`.otf`, `OTTO`) throws
-  `UnsupportedFontError` — embed a `glyf` `.ttf`.
+- TrueType (`glyf`) and OpenType/CFF (`OTTO`) are supported. CFF is embedded
+  whole (no CFF subsetting yet); a CID-keyed or name-keyed CFF both work.
 - Code points the font's `cmap` doesn't cover map to `.notdef` (glyph 0).
 - No OpenType layout (ligatures, contextual shaping, GPOS kerning) and no
   complex-script shaping — text is drawn in the order given. Use `showRun`
