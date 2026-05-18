@@ -16,6 +16,8 @@
     "./content/*": "./src/content/*.ts",
     "./fonts": "./src/fonts/index.ts",
     "./fonts/*": "./src/fonts/*.ts",
+    "./images": "./src/images/index.ts",
+    "./images/*": "./src/images/*.ts",
     "./color": "./src/color/index.ts",
     "./color/*": "./src/color/*.ts",
     "./document": "./src/document/index.ts",

@@ -13,6 +13,7 @@ import type { PdfDictionary } from '../objects/types.ts'
 import type { ObjectTable } from '../document/object_table.ts'
 import type { Color } from '../color/color.ts'
 import type { PdfFont } from '../fonts/font.ts'
+import type { PdfImage } from '../images/image.ts'
 import { fillColorOp, strokeColorOp } from '../color/device.ts'
 import { OP } from './operators.ts'
 import {
@@ -220,6 +221,26 @@ export class ContentStream {
     return this.emit(OP.endPath)
   }
 
+  // ── Images (spec §11.3) ─────────────────────────────────────────────────
+
+  /**
+   * Draw an image into the rectangle `(x, y)`–`(x+width, y+height)` in user
+   * space. The image's pixel dimensions are preserved in the XObject; the
+   * rectangle just sets the CTM scale. Emits `q  w 0 0 h x y cm  /Im Do  Q`.
+   */
+  drawImage(
+    image: PdfImage,
+    rect: { x: number; y: number; width: number; height: number }
+  ): this {
+    this.assertNotInText('Do (drawImage)')
+    this.path.assertClear('Do (drawImage)')
+    const resName = this.resources.useImage(image)
+    this.emit(OP.save)
+    this.emit(`${n(rect.width)} 0 0 ${n(rect.height)} ${n(rect.x)} ${n(rect.y)} ${OP.cm}`)
+    this.emit(`/${resName} ${OP.xobject}`)
+    return this.emit(OP.restore)
+  }
+
   // ── Text (spec §8, §10.7) ───────────────────────────────────────────────
 
   /**
@@ -269,11 +290,24 @@ export class ContentStream {
    */
   buildResources(table: ObjectTable): PdfDictionary {
     if (this.resources.isEmpty) return dict({})
-    const fontDict = dict({})
-    for (const { name: resName, font } of this.resources.usedFonts()) {
-      fontDict.entries.set(resName, font.register(table))
+    const res = dict({})
+    const fonts = this.resources.usedFonts()
+    if (fonts.length) {
+      const fontDict = dict({})
+      for (const { name: resName, font } of fonts) {
+        fontDict.entries.set(resName, font.register(table))
+      }
+      res.entries.set('Font', fontDict)
     }
-    return dict({ Font: fontDict })
+    const images = this.resources.usedImages()
+    if (images.length) {
+      const xobjDict = dict({})
+      for (const { name: resName, image } of images) {
+        xobjDict.entries.set(resName, image.register(table))
+      }
+      res.entries.set('XObject', xobjDict)
+    }
+    return res
   }
 
   /** Raw, unfiltered content-stream bytes (filtering happens in the stream). */

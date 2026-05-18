@@ -23,6 +23,8 @@ export type { TextObject, RunPart } from './content/text_object.ts'
 export { PdfFont } from './fonts/font.ts'
 export type { StandardFontName, TrueTypeOptions } from './fonts/font.ts'
 
+export { PdfImage } from './images/image.ts'
+
 export { Color, rgb, cmyk, gray } from './color/color.ts'
 export type { Color as ColorValue, ColorSpace } from './color/color.ts'
 export { rgbToGray, cmykToRgb, rgbToCmyk } from './color/conversion.ts'
