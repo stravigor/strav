@@ -24,7 +24,10 @@ import {
   type RadialOptions,
   type Shading,
 } from '../patterns/shading.ts'
+import type { Writable } from 'node:stream'
+import type { ByteSink } from '../output/byte_sink.ts'
 import { BufferSink } from '../output/buffer_sink.ts'
+import { StreamSink } from '../output/stream_sink.ts'
 import { ObjectTable } from './object_table.ts'
 import { buildPageTree } from './page_tree.ts'
 import { buildCatalog } from './catalog.ts'
@@ -127,8 +130,25 @@ export class PdfDocument {
     return this
   }
 
-  /** Serialize pass — returns the complete PDF bytes (spec §3.2, §3.3). */
+  /** Serialize and return the complete PDF bytes (spec §3.2, §3.3). */
   async save(): Promise<Uint8Array> {
+    const sink = new BufferSink()
+    this.finalize(sink)
+    return sink.toBytes()
+  }
+
+  /**
+   * Serialize, streaming to a Node `Writable` (spec §3.3) — no full-document
+   * buffer. Resolves once the stream has flushed; rejects on a stream error
+   * or a build/conformance error (the same as {@link save}).
+   */
+  async saveToStream(writable: Writable): Promise<void> {
+    const sink = new StreamSink(writable)
+    this.finalize(sink)
+    await sink.done()
+  }
+
+  private finalize(sink: ByteSink): void {
     if (this.saved) {
       throw new PdfGenError('PDF_DOCUMENT_FINALIZED', 'Document already saved')
     }
@@ -207,9 +227,7 @@ export class PdfDocument {
 
     const id = this.computeId(infoRef, table)
 
-    const sink = new BufferSink()
     serializeDocument({ table, root: catalogRef, info: infoRef, id, sink })
-    return sink.toBytes()
   }
 
   // ── build helpers ───────────────────────────────────────────────────────

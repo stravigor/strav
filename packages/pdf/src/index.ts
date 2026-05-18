@@ -17,6 +17,10 @@ export type {
   AddPageOptions,
 } from './document/types.ts'
 
+export { BufferSink } from './output/buffer_sink.ts'
+export { StreamSink } from './output/stream_sink.ts'
+export type { ByteSink } from './output/byte_sink.ts'
+
 export { ContentStream } from './content/content_stream.ts'
 export type { TextObject, RunPart } from './content/text_object.ts'
 

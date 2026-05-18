@@ -5,7 +5,7 @@
   "description": "Low-level, zero-dependency PDF generation (write side) for the Strav ecosystem",
   "license": "MIT",
   "keywords": ["bun", "pdf", "typescript", "strav"],
-  "files": ["src/", "package.json", "tsconfig.json"],
+  "files": ["src/", "README.md", "package.json", "tsconfig.json"],
   "exports": {
     ".": "./src/index.ts",
     "./objects": "./src/objects/index.ts",
