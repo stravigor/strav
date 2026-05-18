@@ -9,10 +9,10 @@ No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
 > caller's job. Implemented today: the object/serialization core, pages and
 > content streams, stream filters, the Standard-14 fonts, embedded TrueType
 > (subsetted) and OpenType/CFF fonts, JPEG/PNG images, and color management
-> (device, ICC, Separation/DeviceN, output intents), and transparency,
-> tiling patterns and shadings — spec milestones 1–10. PDF/A · PDF/X
-> conformance and document metadata are on the roadmap (see
-> [Status](#status)).
+> (device, ICC, Separation/DeviceN, output intents), transparency, tiling
+> patterns and shadings, and document metadata + PDF/A-2b / PDF/X-4
+> conformance — spec milestones 1–11. Streaming output is the last roadmap
+> item (see [Status](#status)).
 
 ## Quick start
 
@@ -77,8 +77,8 @@ page.rotation         // 0 | 90 | 180 | 270
 // All boxes take a Rect { x, y, w, h } in points (origin bottom-left).
 page.setMediaBox({ x: 0, y: 0, w: 595, h: 842 })
 page.setCropBox(/* … */)
-page.setBleedBox(/* … */)      // for PDF/X-4 (enforced in a later milestone)
-page.setTrimBox(/* … */)       // for PDF/X-4
+page.setBleedBox(/* … */)      // for PDF/X-4
+page.setTrimBox(/* … */)       // PDF/X-4 needs a TrimBox or ArtBox per page
 page.setArtBox(/* … */)
 
 page.content()                 // the content-stream builder — see content.md
@@ -170,11 +170,14 @@ considered dependencies.
 | ICCBased / Separation / DeviceN / CIE color + output intents | ✅ available — see [color.md](color.md) |
 | Image iCCP → ICCBased | 🔜 roadmap |
 | Transparency (ExtGState), tiling & axial/radial shadings | ✅ available — see [patterns.md](patterns.md) |
-| Document metadata (Info/XMP), PDF/A-2b & PDF/X-4 validation | 🔜 roadmap |
+| Document metadata (Info + XMP), PDF/A-2b & PDF/X-4 validation | ✅ available — see [conformance.md](conformance.md) |
+| Streaming output (StreamSink) | 🔜 roadmap |
 
-Setting `conformance` is accepted today, but full validation lands with the
-conformance milestone. The one rule enforced now: a Standard-14 font used
-under any conformance mode throws `UnsupportedFontError` at `save()`.
+Every PDF carries an uncompressed XMP `/Metadata` stream plus the legacy Info
+dictionary. `setConformance('PDF/A-2b' | 'PDF/X-4')` validates at `save()` and
+throws `ConformanceError` listing all violations; a Standard-14 font under any
+conformance mode throws `UnsupportedFontError` (fail-fast). See
+[conformance.md](conformance.md) for the enforced rules and limits.
 
 ## See also
 
@@ -185,3 +188,4 @@ under any conformance mode throws `UnsupportedFontError` at `save()`.
 - [images.md](images.md) — JPEG/PNG embedding, transparency, color spaces.
 - [color.md](color.md) — ICC/Separation/DeviceN/CIE color and output intents.
 - [patterns.md](patterns.md) — transparency, tiling patterns, shadings.
+- [conformance.md](conformance.md) — metadata (Info/XMP), PDF/A-2b & PDF/X-4.
