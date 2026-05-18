@@ -128,6 +128,23 @@ c.text((t) => {
 See [fonts.md](fonts.md) for the full text API (fonts, `showRun` kerning,
 line/leading control, encoding).
 
+## Images
+
+`drawImage` places an image XObject into the rectangle `(x, y)` –
+`(x+width, y+height)` in user space. The image's pixel dimensions are
+preserved; the rectangle just sets the CTM scale.
+
+```typescript
+import { PdfImage } from '@strav/pdf'
+
+const logo = PdfImage.fromPng(pngBytes) // or PdfImage.fromJpeg(jpegBytes)
+c.drawImage(logo, { x: mm(20), y: mm(20), width: mm(50), height: mm(50) })
+// → q  141.7 0 0 141.7 56.7 56.7 cm  /Im1 Do  Q
+```
+
+Rejected inside a `text()` block. See [images.md](images.md) for formats,
+transparency and color spaces.
+
 ## Determinism
 
 Content-stream bytes are stable: operator order follows call order, numbers go

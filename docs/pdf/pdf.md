@@ -8,9 +8,9 @@ No `@strav/*` dependency and no npm runtime dependency; only Node/Bun built-ins.
 > exactly what you tell it to — layout, line breaking, and hyphenation are the
 > caller's job. Implemented today: the object/serialization core, pages and
 > content streams, device color, stream filters, the Standard-14 fonts, and
-> embedded TrueType (subsetted) and OpenType/CFF fonts (spec milestones 1–7).
-> Images, ICC color, transparency, and PDF/A · PDF/X conformance are on the
-> roadmap (see
+> embedded TrueType (subsetted) and OpenType/CFF fonts, and JPEG/PNG images
+> (spec milestones 1–8). ICC color, transparency, and PDF/A · PDF/X
+> conformance are on the roadmap (see
 > [Status](#status)).
 
 ## Quick start
@@ -165,8 +165,8 @@ considered dependencies.
 | Embedded TrueType — subsetted, Type0/CIDFontType2 + ToUnicode | ✅ available — see [fonts.md](fonts.md) |
 | Embedded OpenType/CFF — Type0/CIDFontType0 (whole) | ✅ available — see [fonts.md](fonts.md) |
 | CFF subsetting, complex-script shaping | 🔜 roadmap |
-| Images (JPEG/PNG), SMask | 🔜 roadmap |
-| ICC color, Separation/DeviceN, output intents | 🔜 roadmap |
+| Images — JPEG (DCTDecode) & PNG (decoded), alpha → SMask | ✅ available — see [images.md](images.md) |
+| ICC color (incl. image iCCP), Separation/DeviceN, output intents | 🔜 roadmap |
 | Transparency, patterns, shadings | 🔜 roadmap |
 | PDF/A-2b and PDF/X-4 conformance validation | 🔜 roadmap |
 
@@ -180,3 +180,4 @@ under any conformance mode throws `UnsupportedFontError` at `save()`.
   graphics state, transforms, color.
 - [fonts.md](fonts.md) — Standard-14 and embedded TrueType/OpenType fonts, text
   objects, and encoding.
+- [images.md](images.md) — JPEG/PNG embedding, transparency, color spaces.
