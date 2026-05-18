@@ -11,6 +11,16 @@ import { textString, dateString } from '../objects/string.ts'
 import { encodeObject } from '../objects/encode.ts'
 import { makeContentStream, makeStream } from '../streams/stream.ts'
 import { parseIccProfile } from '../color/icc.ts'
+import { extGState, type ExtGStateOptions } from '../ext-gstate/ext_gstate.ts'
+import { tilingPattern, type TilingPatternOptions } from '../patterns/tiling_pattern.ts'
+import {
+  axialShading,
+  radialShading,
+  shadingPattern,
+  type AxialOptions,
+  type RadialOptions,
+  type Shading,
+} from '../patterns/shading.ts'
 import { BufferSink } from '../output/buffer_sink.ts'
 import { ObjectTable } from './object_table.ts'
 import { buildPageTree } from './page_tree.ts'
@@ -69,6 +79,31 @@ export class PdfDocument {
     parseIccProfile(cfg.destOutputProfile) // validate eagerly
     this.outputIntent = cfg
     return this
+  }
+
+  /** Create an ExtGState (spec §13). Convenience for {@link extGState}. */
+  createExtGState(opts: ExtGStateOptions) {
+    return extGState(opts)
+  }
+
+  /** Create a tiling pattern (spec §12.1). */
+  createTilingPattern(opts: TilingPatternOptions) {
+    return tilingPattern(opts)
+  }
+
+  /** Create an axial (linear) shading (spec §12.2). */
+  createAxialShading(opts: AxialOptions) {
+    return axialShading(opts)
+  }
+
+  /** Create a radial shading (spec §12.2). */
+  createRadialShading(opts: RadialOptions) {
+    return radialShading(opts)
+  }
+
+  /** Wrap a shading as a fill/stroke pattern. */
+  createShadingPattern(shading: Shading, matrix?: number[]) {
+    return shadingPattern(shading, matrix)
   }
 
   /** Conformance target (validation lands in M11). */

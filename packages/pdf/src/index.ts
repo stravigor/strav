@@ -35,6 +35,13 @@ export { calGray, calRGB, lab } from './color/cie.ts'
 export type { ManagedColorSpace } from './color/space.ts'
 export type { OutputIntentConfig } from './document/types.ts'
 
+export { extGState } from './ext-gstate/ext_gstate.ts'
+export type { ExtGState, ExtGStateOptions, BlendMode } from './ext-gstate/ext_gstate.ts'
+export { tilingPattern } from './patterns/tiling_pattern.ts'
+export type { TilingPattern, TilingPatternOptions } from './patterns/tiling_pattern.ts'
+export { axialShading, radialShading, shadingPattern } from './patterns/shading.ts'
+export type { Shading, ShadingPattern, ColorStop } from './patterns/shading.ts'
+
 export { mm, cm, inch, pt } from './util/units.ts'
 
 export {

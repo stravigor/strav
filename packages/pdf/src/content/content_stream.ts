@@ -14,6 +14,7 @@ import type { ObjectTable } from '../document/object_table.ts'
 import type { Color } from '../color/color.ts'
 import type { PdfFont } from '../fonts/font.ts'
 import type { PdfImage } from '../images/image.ts'
+import type { Buildable } from './resources.ts'
 import { fillColorOp, strokeColorOp } from '../color/device.ts'
 import { OP } from './operators.ts'
 import {
@@ -137,6 +138,34 @@ export class ContentStream {
       return this.emit(`${c.comps.map(n).join(' ')} ${OP.strokeColorN}`)
     }
     return this.emit(strokeColorOp(c))
+  }
+
+  // ── Transparency & patterns (spec §12, §13) ─────────────────────────────
+
+  /** Apply an ExtGState (alpha / blend mode) via the `gs` operator. */
+  setExtGState(gs: Buildable): this {
+    return this.emit(`/${this.resources.useExtGState(gs)} ${OP.extGState}`)
+  }
+
+  /** Use a tiling/shading pattern as the non-stroking (fill) color. */
+  setFillPattern(pattern: Buildable): this {
+    const p = this.resources.usePattern(pattern)
+    this.emit(`/Pattern ${OP.fillColorSpace}`)
+    return this.emit(`/${p} ${OP.fillColorN}`)
+  }
+
+  /** Use a tiling/shading pattern as the stroking color. */
+  setStrokePattern(pattern: Buildable): this {
+    const p = this.resources.usePattern(pattern)
+    this.emit(`/Pattern ${OP.strokeColorSpace}`)
+    return this.emit(`/${p} ${OP.strokeColorN}`)
+  }
+
+  /** Paint a shading over the current clip region (`sh` operator). */
+  shade(shading: Buildable): this {
+    this.assertNotInText('sh (shade)')
+    this.path.assertClear('sh (shade)')
+    return this.emit(`/${this.resources.useShading(shading)} ${OP.shading}`)
   }
 
   // ── Path construction ───────────────────────────────────────────────────
@@ -325,6 +354,15 @@ export class ContentStream {
       }
       res.entries.set('ColorSpace', csDict)
     }
+    const fill = (key: string, items: { name: string; res: Buildable }[]) => {
+      if (!items.length) return
+      const d = dict({})
+      for (const { name: resName, res: r } of items) d.entries.set(resName, r.build(table))
+      res.entries.set(key, d)
+    }
+    fill('ExtGState', this.resources.usedExtGStates())
+    fill('Pattern', this.resources.usedPatterns())
+    fill('Shading', this.resources.usedShadings())
     return res
   }
 
