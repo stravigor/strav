@@ -7,7 +7,19 @@ import CheckoutBuilder from './checkout_builder.ts'
 import Invoice from './invoice.ts'
 import PaymentMethod from './payment_method.ts'
 import Receipt from './receipt.ts'
-import type { CustomerData, SubscriptionData, ReceiptData } from './types.ts'
+import StripeConnect from './connect/connect.ts'
+import Hold from './hold/hold.ts'
+import Ledger from './ledger/ledger.ts'
+import type {
+  CustomerData,
+  SubscriptionData,
+  ReceiptData,
+  ConnectAccountData,
+  HoldData,
+  HoldStatus,
+  LedgerEntryData,
+  LedgerEntryType,
+} from './types.ts'
 
 /**
  * Stripe helper object — the primary convenience API.
@@ -101,10 +113,36 @@ export const stripe = {
     return PaymentMethod.setDefault(user, paymentMethodId)
   },
 
-  // ----- Receipts -----
+  // ----- Receipts (legacy; prefer `ledger`) -----
 
-  /** List receipts for a user. */
+  /** @deprecated Use `stripe.ledger(user)` — backed by `strav_stripe_ledger`. */
   receipts(user: unknown): Promise<ReceiptData[]> {
     return Receipt.findByUser(user)
+  },
+
+  // ----- Marketplace: Connect, Holds, Ledger -----
+
+  /** Stripe Connect account management (gated by `connect.enabled`). */
+  connect: StripeConnect,
+
+  /** Escrow hold primitive (authorize → release | refund | cancel). */
+  hold: Hold,
+
+  /** Append-only ledger entries (charges, refunds, transfers, fees, payouts). */
+  ledger(
+    user: unknown,
+    options?: { limit?: number; entryType?: LedgerEntryType }
+  ): Promise<LedgerEntryData[]> {
+    return Ledger.findByUser(user, options)
+  },
+
+  /** Look up a user's local Connect account row. */
+  connectAccount(user: unknown): Promise<ConnectAccountData | null> {
+    return StripeConnect.findByUser(user)
+  },
+
+  /** List a user's holds, optionally filtered by status. */
+  holds(user: unknown, status?: HoldStatus): Promise<HoldData[]> {
+    return Hold.findByUser(user, status)
   },
 }

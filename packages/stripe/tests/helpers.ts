@@ -124,6 +124,20 @@ export function mockStripe() {
     },
     paymentIntents: {
       create: makeMethod('paymentIntents.create'),
+      capture: makeMethod('paymentIntents.capture'),
+      cancel: makeMethod('paymentIntents.cancel'),
+      retrieve: makeMethod('paymentIntents.retrieve'),
+    },
+    accounts: {
+      create: makeMethod('accounts.create'),
+      retrieve: makeMethod('accounts.retrieve'),
+      del: makeMethod('accounts.del'),
+    },
+    accountLinks: {
+      create: makeMethod('accountLinks.create'),
+    },
+    transfers: {
+      create: makeMethod('transfers.create'),
     },
     paymentMethods: {
       list: makeMethod('paymentMethods.list'),
@@ -155,6 +169,7 @@ export function mockStripe() {
     },
     webhooks: {
       constructEvent: makeMethod('webhooks.constructEvent'),
+      constructEventAsync: makeMethod('webhooks.constructEventAsync'),
     },
   }
 
@@ -339,6 +354,133 @@ export function receiptRow(overrides: Partial<Record<string, unknown>> = {}) {
     currency: 'usd',
     description: null,
     receipt_url: null,
+    created_at: new Date('2025-01-01'),
+    ...overrides,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace fixtures (Connect, Hold, Ledger, Webhook dedup)
+// ---------------------------------------------------------------------------
+
+export function stripeAccount(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'acct_test123',
+    object: 'account',
+    type: 'express',
+    country: 'US',
+    charges_enabled: false,
+    payouts_enabled: false,
+    details_submitted: false,
+    capabilities: { transfers: 'inactive', card_payments: 'inactive' },
+    requirements: { disabled_reason: 'requirements.past_due' },
+    metadata: { strav_user_id: '1' },
+    ...overrides,
+  }
+}
+
+export function stripeAccountLink(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    object: 'account_link',
+    url: 'https://connect.stripe.com/setup/e/acct_test123/xxx',
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    created: Math.floor(Date.now() / 1000),
+    ...overrides,
+  }
+}
+
+export function stripeTransfer(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'tr_test123',
+    object: 'transfer',
+    amount: 90000,
+    currency: 'usd',
+    destination: 'acct_test123',
+    source_transaction: 'ch_test123',
+    ...overrides,
+  }
+}
+
+/** A local DB row matching the `strav_stripe_connect_account` table. */
+export function connectAccountRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 1,
+    user_id: 1,
+    stripe_account_id: 'acct_test123',
+    account_type: 'express',
+    country: 'US',
+    charges_enabled: false,
+    payouts_enabled: false,
+    details_submitted: false,
+    capabilities: null,
+    requirements: null,
+    created_at: new Date('2025-01-01'),
+    updated_at: new Date('2025-01-01'),
+    ...overrides,
+  }
+}
+
+/** A local DB row matching the `strav_stripe_hold` table. */
+export function holdRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 1,
+    user_id: 1,
+    payment_intent_id: 'pi_hold123',
+    amount: 100000,
+    currency: 'usd',
+    status: 'pending',
+    destination_account_id: null,
+    application_fee_amount: null,
+    expires_at: null,
+    metadata: null,
+    created_at: new Date('2025-01-01'),
+    updated_at: new Date('2025-01-01'),
+    ...overrides,
+  }
+}
+
+/** A local DB row matching the `strav_stripe_hold_event` table. */
+export function holdEventRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 1,
+    strav_stripe_hold_id: 1,
+    event_type: 'authorized',
+    from_status: 'pending',
+    to_status: 'authorized',
+    payload: null,
+    created_at: new Date('2025-01-01'),
+    ...overrides,
+  }
+}
+
+/** A local DB row matching the `strav_stripe_ledger` table. */
+export function ledgerRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 1,
+    user_id: 1,
+    entry_type: 'charge',
+    direction: 'debit',
+    amount: 2500,
+    currency: 'usd',
+    stripe_intent_id: 'pi_test123',
+    stripe_charge_id: null,
+    stripe_transfer_id: null,
+    connect_account_id: null,
+    hold_id: null,
+    description: null,
+    metadata: null,
+    created_at: new Date('2025-01-01'),
+    ...overrides,
+  }
+}
+
+/** A local DB row matching the `strav_stripe_webhook_event` table. */
+export function webhookEventRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 1,
+    stripe_event_id: 'evt_test123',
+    event_type: 'account.updated',
+    processed_at: null,
     created_at: new Date('2025-01-01'),
     ...overrides,
   }

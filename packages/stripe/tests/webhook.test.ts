@@ -43,7 +43,10 @@ describe('webhook', () => {
     })
 
     test('throws WebhookSignatureError for invalid signature', async () => {
-      // Override constructEvent to throw synchronously (as the real Stripe SDK does)
+      // Override constructEventAsync (what webhook.ts actually awaits) to reject
+      sql.stripe.stripe.webhooks.constructEventAsync = () => {
+        return Promise.reject(new Error('Invalid signature'))
+      }
       sql.stripe.stripe.webhooks.constructEvent = () => {
         throw new Error('Invalid signature')
       }

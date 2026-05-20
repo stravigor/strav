@@ -9,7 +9,18 @@ import CheckoutBuilder from './checkout_builder.ts'
 import Invoice from './invoice.ts'
 import PaymentMethod from './payment_method.ts'
 import StripeManager from './stripe_manager.ts'
-import type { CustomerData, SubscriptionData } from './types.ts'
+import StripeConnect from './connect/connect.ts'
+import Hold from './hold/hold.ts'
+import Ledger from './ledger/ledger.ts'
+import type {
+  CustomerData,
+  SubscriptionData,
+  ConnectAccountData,
+  HoldData,
+  HoldStatus,
+  LedgerEntryData,
+  LedgerEntryType,
+} from './types.ts'
 
 // ---------------------------------------------------------------------------
 // Bound builders (auto-pass user to .create())
@@ -162,6 +173,8 @@ export function billable<T extends NormalizeConstructor<typeof BaseModel>>(Base:
      *
      * @example
      * await user.charge(2500, 'pm_xxx', { description: 'Pro-rated upgrade' })
+     * // Manual capture (authorize-only hold; capture later via .capture()):
+     * await user.charge(2500, 'pm_xxx', { captureMethod: 'manual' })
      */
     async charge(
       amount: number,
@@ -170,19 +183,31 @@ export function billable<T extends NormalizeConstructor<typeof BaseModel>>(Base:
         currency?: string
         description?: string
         metadata?: Record<string, string>
+        /**
+         * `'automatic'` (default) confirms and captures in one call.
+         * `'manual'` authorizes only; use `.capture()` / `.cancelAuthorization()`
+         * to finalize. Used by `Hold.create()` under the hood.
+         */
+        captureMethod?: 'automatic' | 'manual'
       }
     ): Promise<Stripe.PaymentIntent> {
       const customer = await Customer.createOrGet(this)
+      const manual = options?.captureMethod === 'manual'
+
       return StripeManager.stripe.paymentIntents.create({
         amount,
         currency: options?.currency ?? StripeManager.config.currency,
         customer: customer.stripeId,
         payment_method: paymentMethodId,
         confirm: true,
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: 'never',
-        },
+        ...(manual
+          ? { capture_method: 'manual', off_session: false }
+          : {
+              automatic_payment_methods: {
+                enabled: true,
+                allow_redirects: 'never',
+              },
+            }),
         description: options?.description,
         metadata: {
           strav_user_id: String(extractUserId(this)),
@@ -191,12 +216,104 @@ export function billable<T extends NormalizeConstructor<typeof BaseModel>>(Base:
       })
     }
 
+    /**
+     * Authorize-only PaymentIntent (manual capture). Shorthand for
+     * `charge(..., { captureMethod: 'manual' })`. The authorization holds
+     * funds for ~7 days; capture or cancel before then.
+     */
+    async authorize(
+      amount: number,
+      paymentMethodId: string,
+      options?: {
+        currency?: string
+        description?: string
+        metadata?: Record<string, string>
+      }
+    ): Promise<Stripe.PaymentIntent> {
+      return this.charge(amount, paymentMethodId, { ...options, captureMethod: 'manual' })
+    }
+
+    /** Capture a manual-capture PaymentIntent (full or partial amount). */
+    async capture(paymentIntentId: string, amountToCapture?: number): Promise<Stripe.PaymentIntent> {
+      return StripeManager.stripe.paymentIntents.capture(paymentIntentId, {
+        ...(amountToCapture ? { amount_to_capture: amountToCapture } : {}),
+      })
+    }
+
+    /** Cancel an authorization before capture (releases the hold on funds). */
+    async cancelAuthorization(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+      return StripeManager.stripe.paymentIntents.cancel(paymentIntentId)
+    }
+
     /** Refund a payment intent (fully or partially). */
     async refund(paymentIntentId: string, amount?: number): Promise<Stripe.Refund> {
       return StripeManager.stripe.refunds.create({
         payment_intent: paymentIntentId,
         ...(amount ? { amount } : {}),
       })
+    }
+
+    // ----- Marketplace: transfers, Connect, Holds, Ledger -----
+
+    /** Transfer funds from the platform balance to a connected account. */
+    async transferTo(
+      destination: string,
+      amount: number,
+      currency?: string,
+      options?: {
+        sourceTransaction?: string
+        description?: string
+        metadata?: Record<string, string>
+      }
+    ): Promise<Stripe.Transfer> {
+      return StripeManager.stripe.transfers.create({
+        amount,
+        currency: currency ?? StripeManager.config.currency,
+        destination,
+        ...(options?.sourceTransaction ? { source_transaction: options.sourceTransaction } : {}),
+        description: options?.description,
+        metadata: {
+          strav_user_id: String(extractUserId(this)),
+          ...(options?.metadata ?? {}),
+        },
+      })
+    }
+
+    /** Get the local Stripe Connect account row for this user (if any). */
+    async connectAccount(): Promise<ConnectAccountData | null> {
+      return StripeConnect.findByUser(this)
+    }
+
+    /**
+     * Create an escrow hold (authorize-only PaymentIntent + local
+     * `strav_stripe_hold` row). Pair with {@link Hold.release} on the
+     * static class to capture + transfer + settle.
+     *
+     * @example
+     * const hold = await user.newHold(100000, pm.id, { description: 'Milestone 1' })
+     * // …on approval:
+     * await Hold.release(hold.id, { destination: freelancer.stripeAccountId, applicationFeeAmount: 10000 })
+     */
+    async newHold(
+      amount: number,
+      paymentMethodId: string,
+      options?: {
+        currency?: string
+        description?: string
+        metadata?: Record<string, string>
+      }
+    ): Promise<HoldData> {
+      return Hold.create(this, { amount, paymentMethodId, ...options })
+    }
+
+    /** List this user's holds, optionally filtered by status. */
+    async holds(status?: HoldStatus): Promise<HoldData[]> {
+      return Hold.findByUser(this, status)
+    }
+
+    /** Read this user's append-only ledger entries (newest first). */
+    async ledger(options?: { limit?: number; entryType?: LedgerEntryType }): Promise<LedgerEntryData[]> {
+      return Ledger.findByUser(this, options)
     }
 
     // ----- Payment Methods -----

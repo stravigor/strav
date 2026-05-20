@@ -11,6 +11,9 @@ export { default as SubscriptionItem } from './subscription_item.ts'
 export { default as Invoice } from './invoice.ts'
 export { default as PaymentMethod } from './payment_method.ts'
 export { default as Receipt } from './receipt.ts'
+export { default as Ledger } from './ledger/ledger.ts'
+export { default as StripeConnect } from './connect/connect.ts'
+export { default as Hold } from './hold/hold.ts'
 
 // Builders
 export { default as SubscriptionBuilder } from './subscription_builder.ts'
@@ -25,6 +28,8 @@ export { stripe } from './helpers.ts'
 
 // Webhook
 export { stripeWebhook, onWebhookEvent } from './webhook.ts'
+export type { StripeWebhookOptions } from './webhook.ts'
+export { checkAndRecordEvent, markEventProcessed } from './webhook/idempotency.ts'
 
 // Errors
 export {
@@ -34,6 +39,9 @@ export {
   SubscriptionNotFoundError,
   PaymentMethodError,
   SubscriptionCreationError,
+  HoldStateError,
+  ConnectNotConfiguredError,
+  IdempotencyError,
 } from './errors.ts'
 
 // Types
@@ -45,5 +53,15 @@ export type {
   ReceiptData,
   SubscriptionStatusValue,
   WebhookEventHandler,
+  ConnectAccountData,
+  ConnectAccountStatus,
+  ConnectAccountType,
+  HoldData,
+  HoldStatus,
+  HoldEventData,
+  HoldReleaseOptions,
+  LedgerEntryData,
+  LedgerEntryType,
+  LedgerDirection,
 } from './types.ts'
 export { SubscriptionStatus } from './types.ts'

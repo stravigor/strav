@@ -28,6 +28,23 @@ export default class StripeManager {
         success: config.get('stripe.urls.success', '/billing/success') as string,
         cancel: config.get('stripe.urls.cancel', '/billing/cancel') as string,
       },
+      connect: {
+        enabled: config.get('stripe.connect.enabled', false) as boolean,
+        accountType: config.get('stripe.connect.accountType', 'express') as
+          | 'express'
+          | 'custom'
+          | 'standard',
+        defaultCountry: config.get('stripe.connect.defaultCountry', 'US') as string,
+        defaultBusinessType: config.get(
+          'stripe.connect.defaultBusinessType',
+          'individual'
+        ) as 'individual' | 'company' | 'non_profit' | 'government_entity',
+        refreshUrl: config.get('stripe.connect.refreshUrl', '/billing/connect/refresh') as string,
+        returnUrl: config.get('stripe.connect.returnUrl', '/billing/connect/complete') as string,
+      },
+      webhook: {
+        idempotency: config.get('stripe.webhook.idempotency', false) as boolean,
+      },
     }
 
     if (secret) {

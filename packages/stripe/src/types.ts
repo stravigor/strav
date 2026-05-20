@@ -20,6 +20,136 @@ export interface StripeConfig {
     success: string
     cancel: string
   }
+  /** Stripe Connect (marketplace) settings. Disabled by default. */
+  connect: {
+    /** When false, all Connect APIs throw {@link ConnectNotConfiguredError}. */
+    enabled: boolean
+    /** Default account type for new Connect accounts. */
+    accountType: ConnectAccountType
+    /** Default ISO 3166-1 alpha-2 country (e.g. 'US'). */
+    defaultCountry: string
+    /** Default `business_type` for new accounts. */
+    defaultBusinessType: 'individual' | 'company' | 'non_profit' | 'government_entity'
+    /** URL the Stripe onboarding link redirects to when interrupted. */
+    refreshUrl: string
+    /** URL the Stripe onboarding link redirects to on completion. */
+    returnUrl: string
+  }
+  /** Webhook-handler settings. */
+  webhook: {
+    /**
+     * Enable idempotency dedup on the `strav_stripe_webhook_event` table.
+     * Defaults to `false` for backwards compatibility; flip in next major.
+     */
+    idempotency: boolean
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Connect
+// ---------------------------------------------------------------------------
+
+export type ConnectAccountType = 'express' | 'custom' | 'standard'
+
+export interface ConnectAccountData {
+  id: number
+  userId: string | number
+  stripeAccountId: string
+  accountType: ConnectAccountType
+  country: string
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  detailsSubmitted: boolean
+  capabilities: Record<string, unknown> | null
+  requirements: Record<string, unknown> | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ConnectAccountStatus {
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  detailsSubmitted: boolean
+  capabilities: Record<string, unknown> | null
+  requirements: Record<string, unknown> | null
+}
+
+// ---------------------------------------------------------------------------
+// Hold (escrow)
+// ---------------------------------------------------------------------------
+
+export type HoldStatus = 'pending' | 'authorized' | 'released' | 'refunded' | 'expired'
+
+export interface HoldData {
+  id: number
+  userId: string | number
+  paymentIntentId: string
+  amount: number
+  currency: string
+  status: HoldStatus
+  destinationAccountId: string | null
+  applicationFeeAmount: number | null
+  expiresAt: Date | null
+  metadata: Record<string, unknown> | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface HoldEventData {
+  id: number
+  holdId: number
+  eventType: string
+  fromStatus: HoldStatus | null
+  toStatus: HoldStatus
+  payload: Record<string, unknown> | null
+  createdAt: Date
+}
+
+export interface HoldReleaseOptions {
+  /** Connect account ID (`acct_…`) to transfer the captured funds to. */
+  destination: string
+  /** Platform fee in cents, withheld from the transfer. Default 0. */
+  applicationFeeAmount?: number
+  /** Partial capture amount (cents). Defaults to the full authorized amount. */
+  amountToCapture?: number
+  /** Description copied to the ledger entries. */
+  description?: string
+}
+
+// ---------------------------------------------------------------------------
+// Ledger (append-only)
+// ---------------------------------------------------------------------------
+
+export type LedgerEntryType =
+  | 'charge'
+  | 'refund'
+  | 'transfer'
+  | 'application_fee'
+  | 'hold_authorized'
+  | 'hold_released'
+  | 'hold_refunded'
+  | 'hold_expired'
+  | 'payout'
+  | 'dispute'
+  | 'adjustment'
+
+export type LedgerDirection = 'debit' | 'credit'
+
+export interface LedgerEntryData {
+  id: number
+  userId: string | number
+  entryType: LedgerEntryType
+  direction: LedgerDirection
+  amount: number
+  currency: string
+  stripeIntentId: string | null
+  stripeChargeId: string | null
+  stripeTransferId: string | null
+  connectAccountId: string | null
+  holdId: number | null
+  description: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: Date
 }
 
 // ---------------------------------------------------------------------------
