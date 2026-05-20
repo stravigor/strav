@@ -585,3 +585,224 @@ All subscription methods return or accept a `SubscriptionData` object:
 | `trialEndsAt` | `Date \| null` | Customer-level trial expiry |
 | `createdAt` | `Date` | Row creation time |
 | `updatedAt` | `Date` | Last update time |
+
+---
+
+# Marketplace primitives
+
+The marketplace surface (Stripe Connect, manual-capture holds, append-only
+ledger, webhook idempotency) is **opt-in** and gated by config. Existing
+SaaS-style apps that don't set `stripe.connect.enabled` see no behavior
+change.
+
+Enable Connect and webhook dedup in `config/stripe.ts`:
+
+```ts
+export default {
+  // …existing keys…
+  connect: {
+    enabled: true,
+    accountType: 'express', // 'express' | 'custom' | 'standard'
+    defaultCountry: 'US',
+    defaultBusinessType: 'individual',
+    refreshUrl: env('APP_URL') + '/billing/connect/refresh',
+    returnUrl: env('APP_URL') + '/billing/connect/complete',
+  },
+  webhook: {
+    idempotency: true, // dedup retries via strav_stripe_webhook_event
+  },
+}
+```
+
+Install the new schema stubs and apply the append-only triggers:
+
+```bash
+bun strav install:stubs @strav/stripe        # copies stubs/ into your app
+bun strav generate:migration -m "add stripe marketplace tables"
+bun strav migrate
+psql $DATABASE_URL -f stubs/migrations/strav_stripe_ledger_triggers.sql
+```
+
+## Stripe Connect
+
+Onboard a freelancer/merchant via a Stripe-hosted link:
+
+```ts
+import { stripe, StripeConnect } from '@strav/stripe'
+
+// Create the Connect account
+const acct = await StripeConnect.createAccount(freelancer, {
+  email: freelancer.email,
+  capabilities: { transfers: { requested: true }, card_payments: { requested: true } },
+})
+
+// Generate the onboarding URL
+const link = await StripeConnect.createAccountLink(acct.stripeAccountId)
+return ctx.redirect(link.url)
+
+// Later — check status
+const status = await StripeConnect.getAccountStatus(acct.stripeAccountId)
+// → { chargesEnabled, payoutsEnabled, detailsSubmitted, capabilities, requirements }
+```
+
+The local mirror in `strav_stripe_connect_account` is auto-synced from
+`account.updated` and `capability.updated` webhooks.
+
+## Manual capture (authorize-only PaymentIntents)
+
+```ts
+// Authorize a hold (no capture yet)
+const intent = await user.authorize(50000, paymentMethod.id, {
+  description: 'Posting deposit',
+})
+
+// Later — capture all or part
+await user.capture(intent.id)             // capture full amount
+await user.capture(intent.id, 30000)      // partial capture
+
+// Or release the hold
+await user.cancelAuthorization(intent.id)
+```
+
+Stripe authorizations expire after roughly 7 days.
+
+## Hold (escrow primitive)
+
+`Hold` composes manual-capture + transfer + application fee + reversal into
+a single state-machine. State transitions:
+
+```
+pending ──► authorized ──► released ──► refunded
+                    │
+                    ├──► refunded
+                    └──► expired
+```
+
+```ts
+import { Hold } from '@strav/stripe'
+
+// Authorize a milestone hold against the client
+const hold = await client.newHold(100_000, paymentMethod.id, {
+  description: 'Milestone 1',
+  metadata: { milestoneId: 'mst_01HXX' },
+})
+// hold.status === 'pending' until Stripe confirms via webhook
+
+// On the `payment_intent.amount_capturable_updated` webhook the built-in
+// handler transitions the hold to 'authorized'. After approval:
+await Hold.release(hold.id, {
+  destination: freelancer.stripeAccountId,
+  applicationFeeAmount: 10_000, // $100 platform fee, withheld from transfer
+})
+// → captures the PaymentIntent, transfers (amount - fee) to the freelancer
+//   account, writes 3 ledger entries (charge debit, application_fee credit,
+//   transfer debit), and transitions to 'released'.
+
+// Refund (works from 'authorized' or 'released')
+await Hold.refund(hold.id)
+
+// Cancel an authorization before capture
+await Hold.cancel(hold.id)
+
+// Inspect the append-only event trail
+const events = await Hold.events(hold.id)
+```
+
+`Hold.release` runs four steps; the DB writes are transactional, but Stripe
+API calls aren't part of that transaction. If the transfer fails after the
+capture succeeds, the hold stays in `authorized` and the operator retries
+`Hold.release()` — Stripe charges are idempotent on PaymentIntent ID, so
+double-capture is impossible.
+
+## Append-only ledger
+
+Every charge, refund, transfer, application fee, payout and dispute writes
+exactly one row to `strav_stripe_ledger`. Corrections happen via reversing
+entries (new row, opposite direction) — never updates. The schema enforces
+this with PostgreSQL triggers from
+`stubs/migrations/strav_stripe_ledger_triggers.sql`.
+
+```ts
+import { Ledger } from '@strav/stripe'
+
+// Read entries for a user, newest first
+const recent = await Ledger.findByUser(user, { limit: 50 })
+
+// Filter by entry type
+const refunds = await Ledger.findByUser(user, { entryType: 'refund' })
+
+// All entries for a payment intent (chronological)
+const trace = await Ledger.findByIntent('pi_xxx')
+
+// All entries for a hold (chronological)
+const audit = await Ledger.findByHold(holdId)
+
+// App-side manual entry (e.g. recording a chargeback adjustment)
+await Ledger.record({
+  user,
+  entryType: 'adjustment',
+  direction: 'debit',
+  amount: 500,
+  description: 'Manual fee adjustment',
+})
+```
+
+`Ledger` deliberately exposes no `update` or `delete` methods; mutation is
+impossible by API contract. The legacy `Receipt` static class still works
+but now delegates to `Ledger` and prints a one-time deprecation warning.
+Migrate with `bun strav stripe:migrate-receipts` (one-shot copy + prints
+`DROP TABLE receipt;` for the operator).
+
+## Webhook idempotency
+
+Stripe retries deliveries on 5xx / timeout. Without dedup, your handlers
+fire multiple times for the same event.
+
+```ts
+import { stripeWebhook } from '@strav/stripe'
+
+router.post('/stripe/webhook', stripeWebhook({ idempotency: true }))
+// Or set `stripe.webhook.idempotency = true` in config and omit the option.
+```
+
+With dedup on, each event id INSERTs (with `ON CONFLICT DO NOTHING`) into
+`strav_stripe_webhook_event` after signature verification. The first
+delivery wins the unique constraint and dispatches handlers; subsequent
+deliveries short-circuit with `{ received: true, duplicate: true }` 200.
+
+## Connect webhook events
+
+When `connect.enabled` is true, `stripeWebhook()` adds built-in handling
+for Connect-specific events. App code subscribes via the kernel `Emitter`:
+
+```ts
+import { Emitter } from '@strav/kernel'
+
+Emitter.on('stripe:connect.account.updated', async ({ account }) => {
+  // local strav_stripe_connect_account already synced; do app-side work
+})
+
+Emitter.on('stripe:connect.payout.paid', async ({ payout }) => {
+  // notify freelancer their payout landed
+})
+
+Emitter.on('stripe:dispute.created', async ({ dispute }) => {
+  // pause the disputed milestone, alert ops
+})
+```
+
+| Event | Built-in action | Emitter signal |
+|---|---|---|
+| `account.updated` | Sync local mirror | `stripe:connect.account.updated` |
+| `account.application.deauthorized` | Delete local row | `stripe:connect.account.deauthorized` |
+| `capability.updated` | Refetch + sync capabilities | `stripe:connect.capability.updated` |
+| `person.updated` | — | `stripe:connect.person.updated` |
+| `payout.paid` | `Ledger.record('payout', 'credit', …)` | `stripe:connect.payout.paid` |
+| `payout.failed` | — | `stripe:connect.payout.failed` |
+| `charge.dispute.created` | — | `stripe:dispute.created` |
+| `charge.dispute.funds_withdrawn` | — | `stripe:dispute.funds_withdrawn` |
+| `charge.dispute.closed` | — | `stripe:dispute.closed` |
+| `payment_intent.amount_capturable_updated` | `Hold.recordEvent → 'authorized'` | — |
+| `payment_intent.canceled` | `Hold.recordEvent → 'expired'` | — |
+| `charge.refunded` | `Ledger.record('refund', 'credit', …)` | — |
+
