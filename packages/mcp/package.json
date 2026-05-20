@@ -1,6 +1,6 @@
 {
   "name": "@strav/mcp",
-  "version": "0.4.19",
+  "version": "0.4.20",
   "type": "module",
   "description": "Model Context Protocol (MCP) server for the Strav framework",
   "license": "MIT",
