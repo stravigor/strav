@@ -12,6 +12,7 @@ import StripeManager from './stripe_manager.ts'
 import StripeConnect from './connect/connect.ts'
 import Hold from './hold/hold.ts'
 import Ledger from './ledger/ledger.ts'
+import StripeIdentity from './identity/identity.ts'
 import type {
   CustomerData,
   SubscriptionData,
@@ -20,6 +21,9 @@ import type {
   HoldStatus,
   LedgerEntryData,
   LedgerEntryType,
+  IdentitySessionData,
+  IdentitySessionCreated,
+  IdentitySessionType,
 } from './types.ts'
 
 // ---------------------------------------------------------------------------
@@ -314,6 +318,41 @@ export function billable<T extends NormalizeConstructor<typeof BaseModel>>(Base:
     /** Read this user's append-only ledger entries (newest first). */
     async ledger(options?: { limit?: number; entryType?: LedgerEntryType }): Promise<LedgerEntryData[]> {
       return Ledger.findByUser(this, options)
+    }
+
+    // ----- Identity (KYC verification) -----
+
+    /**
+     * Start a Stripe Identity verification session. Returns the local row
+     * plus `url` (redirect target) and `clientSecret` (for embedded flows).
+     *
+     * @example
+     * const session = await client.startIdentityVerification({
+     *   returnUrl: 'https://drafitr.com/post-job/identity/complete',
+     *   metadata: { purpose: 'high_value_post' },
+     * })
+     * return ctx.redirect(session.url)
+     */
+    async startIdentityVerification(
+      params: Parameters<typeof StripeIdentity.createVerificationSession>[1] = {}
+    ): Promise<IdentitySessionCreated> {
+      return StripeIdentity.createVerificationSession(this, params)
+    }
+
+    /** List all of this user's identity verification sessions, newest first. */
+    async identityVerifications(): Promise<IdentitySessionData[]> {
+      return StripeIdentity.findByUser(this)
+    }
+
+    /** The most recent identity verification session (or null). */
+    async latestIdentityVerification(): Promise<IdentitySessionData | null> {
+      return StripeIdentity.latestForUser(this)
+    }
+
+    /** Convenience: has this user ever completed an identity verification? */
+    async identityVerified(): Promise<boolean> {
+      const latest = await StripeIdentity.latestForUser(this)
+      return latest?.status === 'verified'
     }
 
     // ----- Payment Methods -----

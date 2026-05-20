@@ -153,6 +153,44 @@ export interface LedgerEntryData {
 }
 
 // ---------------------------------------------------------------------------
+// Identity (KYC verification sessions)
+// ---------------------------------------------------------------------------
+
+export type IdentitySessionType = 'document' | 'id_number'
+
+export type IdentitySessionStatus =
+  | 'requires_input'
+  | 'processing'
+  | 'verified'
+  | 'canceled'
+  | 'failed'
+
+export interface IdentitySessionData {
+  id: number
+  userId: string | number
+  stripeSessionId: string
+  type: IdentitySessionType
+  status: IdentitySessionStatus
+  documentCountry: string | null
+  documentType: string | null
+  lastErrorCode: string | null
+  lastErrorReason: string | null
+  verifiedAt: Date | null
+  canceledAt: Date | null
+  metadata: Record<string, unknown> | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+/** Created session — includes the secrets needed to redirect / embed. */
+export interface IdentitySessionCreated extends IdentitySessionData {
+  /** Hosted Stripe URL the user should be redirected to. */
+  url: string
+  /** Client secret for embedded flows. */
+  clientSecret: string | null
+}
+
+// ---------------------------------------------------------------------------
 // Data Records
 // ---------------------------------------------------------------------------
 

@@ -139,6 +139,13 @@ export function mockStripe() {
     transfers: {
       create: makeMethod('transfers.create'),
     },
+    identity: {
+      verificationSessions: {
+        create: makeMethod('identity.verificationSessions.create'),
+        retrieve: makeMethod('identity.verificationSessions.retrieve'),
+        cancel: makeMethod('identity.verificationSessions.cancel'),
+      },
+    },
     paymentMethods: {
       list: makeMethod('paymentMethods.list'),
       retrieve: makeMethod('paymentMethods.retrieve'),
@@ -482,6 +489,42 @@ export function webhookEventRow(overrides: Partial<Record<string, unknown>> = {}
     event_type: 'account.updated',
     processed_at: null,
     created_at: new Date('2025-01-01'),
+    ...overrides,
+  }
+}
+
+export function stripeIdentitySession(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'vs_test123',
+    object: 'identity.verification_session',
+    type: 'document',
+    status: 'requires_input',
+    url: 'https://verify.stripe.com/start/test_xxx',
+    client_secret: 'vs_test123_secret_xxx',
+    metadata: { strav_user_id: '1' },
+    last_error: null,
+    last_verification_report: null,
+    ...overrides,
+  }
+}
+
+/** A local DB row matching the `strav_stripe_identity_session` table. */
+export function identitySessionRow(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 1,
+    user_id: 1,
+    stripe_session_id: 'vs_test123',
+    type: 'document',
+    status: 'requires_input',
+    document_country: null,
+    document_type: null,
+    last_error_code: null,
+    last_error_reason: null,
+    verified_at: null,
+    canceled_at: null,
+    metadata: null,
+    created_at: new Date('2025-01-01'),
+    updated_at: new Date('2025-01-01'),
     ...overrides,
   }
 }

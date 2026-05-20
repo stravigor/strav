@@ -10,6 +10,7 @@ import Receipt from './receipt.ts'
 import StripeConnect from './connect/connect.ts'
 import Hold from './hold/hold.ts'
 import Ledger from './ledger/ledger.ts'
+import StripeIdentity from './identity/identity.ts'
 import type {
   CustomerData,
   SubscriptionData,
@@ -19,6 +20,7 @@ import type {
   HoldStatus,
   LedgerEntryData,
   LedgerEntryType,
+  IdentitySessionData,
 } from './types.ts'
 
 /**
@@ -144,5 +146,13 @@ export const stripe = {
   /** List a user's holds, optionally filtered by status. */
   holds(user: unknown, status?: HoldStatus): Promise<HoldData[]> {
     return Hold.findByUser(user, status)
+  },
+
+  /** Stripe Identity (KYC) verification session management. */
+  identity: StripeIdentity,
+
+  /** The most recent identity verification session for a user. */
+  latestIdentityVerification(user: unknown): Promise<IdentitySessionData | null> {
+    return StripeIdentity.latestForUser(user)
   },
 }

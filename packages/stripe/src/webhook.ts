@@ -8,6 +8,7 @@ import SubscriptionItem from './subscription_item.ts'
 import StripeConnect from './connect/connect.ts'
 import Hold from './hold/hold.ts'
 import Ledger from './ledger/ledger.ts'
+import StripeIdentity from './identity/identity.ts'
 import { checkAndRecordEvent, markEventProcessed } from './webhook/idempotency.ts'
 import { WebhookSignatureError } from './errors.ts'
 import type { WebhookEventHandler } from './types.ts'
@@ -343,6 +344,51 @@ async function handleBuiltinEvent(event: Stripe.Event): Promise<void> {
           })
         }
       }
+      break
+    }
+
+    // ---- Identity (KYC) events ----
+    //
+    // The `created` event fires both for sessions created via our
+    // `StripeIdentity.createVerificationSession` (where we already INSERTed a
+    // local row) and for sessions created out-of-band (e.g. via the Stripe
+    // dashboard). `upsertFromStripe` handles both cases.
+
+    case 'identity.verification_session.created': {
+      const session = event.data.object as Stripe.Identity.VerificationSession
+      const userIdMeta = session.metadata?.strav_user_id
+      if (userIdMeta) {
+        await StripeIdentity.upsertFromStripe(userIdMeta, session)
+      }
+      await Emitter.emit('stripe:identity.session_created', { session })
+      break
+    }
+
+    case 'identity.verification_session.processing': {
+      const session = event.data.object as Stripe.Identity.VerificationSession
+      await StripeIdentity.syncFromStripe(session)
+      await Emitter.emit('stripe:identity.processing', { session })
+      break
+    }
+
+    case 'identity.verification_session.verified': {
+      const session = event.data.object as Stripe.Identity.VerificationSession
+      await StripeIdentity.syncFromStripe(session)
+      await Emitter.emit('stripe:identity.verified', { session })
+      break
+    }
+
+    case 'identity.verification_session.requires_input': {
+      const session = event.data.object as Stripe.Identity.VerificationSession
+      await StripeIdentity.syncFromStripe(session)
+      await Emitter.emit('stripe:identity.requires_input', { session })
+      break
+    }
+
+    case 'identity.verification_session.canceled': {
+      const session = event.data.object as Stripe.Identity.VerificationSession
+      await StripeIdentity.syncFromStripe(session)
+      await Emitter.emit('stripe:identity.canceled', { session })
       break
     }
   }

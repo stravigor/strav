@@ -14,6 +14,7 @@ export { default as Receipt } from './receipt.ts'
 export { default as Ledger } from './ledger/ledger.ts'
 export { default as StripeConnect } from './connect/connect.ts'
 export { default as Hold } from './hold/hold.ts'
+export { default as StripeIdentity } from './identity/identity.ts'
 
 // Builders
 export { default as SubscriptionBuilder } from './subscription_builder.ts'
@@ -63,5 +64,9 @@ export type {
   LedgerEntryData,
   LedgerEntryType,
   LedgerDirection,
+  IdentitySessionData,
+  IdentitySessionStatus,
+  IdentitySessionType,
+  IdentitySessionCreated,
 } from './types.ts'
 export { SubscriptionStatus } from './types.ts'
