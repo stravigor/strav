@@ -28,6 +28,7 @@ Stripe billing integration — subscriptions, one-time charges, checkout session
 - src/connect/connect.ts — Stripe Connect account onboarding + mirror
 - src/hold/hold.ts — escrow Hold primitive (state machine)
 - src/ledger/ledger.ts — append-only money-movement log
+- src/identity/identity.ts — Stripe Identity (KYC) verification sessions + mirror
 - src/types.ts — type definitions
 - src/errors.ts — package-specific errors
 - stubs/schemas/* — Drizzle-style schema stubs copied into the consumer app
@@ -41,3 +42,4 @@ Stripe billing integration — subscriptions, one-time charges, checkout session
 - Ledger is append-only; corrections are reversing entries (new row, opposite direction), not updates
 - Connect APIs throw `ConnectNotConfiguredError` when `stripe.connect.enabled` is false; gate-checks live in `StripeConnect.assertEnabled()`
 - Webhook idempotency is opt-in via `stripeWebhook({ idempotency: true })` or `stripe.webhook.idempotency = true` config; defaults to off for backwards compat
+- Stripe Identity is **not** gated by `connect.enabled` (separate Stripe product); local mirror in `strav_stripe_identity_session` is webhook-driven, never written via app code's UPDATE

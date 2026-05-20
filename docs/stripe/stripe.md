@@ -753,6 +753,71 @@ but now delegates to `Ledger` and prints a one-time deprecation warning.
 Migrate with `bun strav stripe:migrate-receipts` (one-shot copy + prints
 `DROP TABLE receipt;` for the operator).
 
+## Stripe Identity (KYC)
+
+`StripeIdentity` wraps `stripe.identity.verificationSessions.*` and keeps a
+local mirror in `strav_stripe_identity_session`. Use it for any
+client/freelancer KYC checkpoint — at signup, at first high-value action,
+or any other risk-proportional gate.
+
+The framework stores only the session id + status + document-country code.
+Raw PII (document images, selfies) stays on Stripe's side.
+
+```ts
+import { StripeIdentity } from '@strav/stripe'
+
+// 1) Start a session and redirect the user
+const session = await client.startIdentityVerification({
+  returnUrl: 'https://drafitr.com/post-job/identity/complete',
+  metadata: { purpose: 'high_value_post_v1' },
+})
+return ctx.redirect(session.url)
+
+// 2) Check status anytime (live read from Stripe)
+const status = await StripeIdentity.getSessionStatus(session.stripeSessionId)
+// → { status, documentCountry, documentType, lastErrorCode, lastErrorReason }
+
+// 3) Convenience helpers on the billable mixin
+const verified = await client.identityVerified()        // boolean — latest session is 'verified'
+const latest   = await client.latestIdentityVerification()
+const history  = await client.identityVerifications()
+
+// 4) Cancel a stuck session
+await StripeIdentity.cancelSession(session.stripeSessionId)
+```
+
+`type` defaults to `'document'`; pass `'id_number'` for US-SSN-style checks.
+The document `allowed_types` defaults to
+`['driving_license', 'passport', 'id_card']` — override via
+`options.document.allowed_types`.
+
+App code reacts to verification outcomes via the kernel `Emitter`:
+
+```ts
+import { Emitter } from '@strav/kernel'
+
+Emitter.on('stripe:identity.verified', async ({ session }) => {
+  // local strav_stripe_identity_session already updated; do app-side work
+  // e.g. flip a `kyc_status` denormalization, emit your own audit event
+})
+
+Emitter.on('stripe:identity.requires_input', async ({ session }) => {
+  // session.last_error?.code + .reason tell you why
+})
+```
+
+| Event | Built-in action | Emitter signal |
+|---|---|---|
+| `identity.verification_session.created` | Upsert local row (when `metadata.strav_user_id` present) | `stripe:identity.session_created` |
+| `identity.verification_session.processing` | Sync status | `stripe:identity.processing` |
+| `identity.verification_session.verified` | Sync + set `verified_at` | `stripe:identity.verified` |
+| `identity.verification_session.requires_input` | Sync `last_error_*` | `stripe:identity.requires_input` |
+| `identity.verification_session.canceled` | Sync + set `canceled_at` | `stripe:identity.canceled` |
+
+`StripeIdentity` is **not gated** by `connect.enabled` — Stripe Identity
+is a separate product. It works out of the box once you've installed the
+`strav_stripe_identity_session` schema stub.
+
 ## Webhook idempotency
 
 Stripe retries deliveries on 5xx / timeout. Without dedup, your handlers
