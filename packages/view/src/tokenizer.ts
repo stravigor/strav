@@ -211,6 +211,7 @@ export function tokenize(source: string): Token[] {
     if (dirMatch && DIRECTIVES.has(dirMatch[1]!)) {
       flushText()
       const directive = dirMatch[1]!
+      const directiveLine = line
       pos += dirMatch[0].length
       let args: string | undefined
 
@@ -224,28 +225,47 @@ export function tokenize(source: string): Token[] {
         /^[ \t]+\(/.test(source.slice(pos))
       ) {
         throw new TemplateError(
-          `@${directive} cannot have whitespace before its arguments at line ${line} — remove the space between "@${directive}" and "(".`
+          `@${directive} cannot have whitespace before its arguments at line ${directiveLine} — remove the space between "@${directive}" and "(".`
         )
       }
 
-      // Parse arguments in parentheses (if present)
+      // Parse arguments in parentheses (if present). The scan balances
+      // nested parens and ignores any `(`/`)` inside string literals, so the
+      // argument expression may span multiple physical lines — e.g. an
+      // @include data object broken across lines for readability.
       if (pos < source.length && source[pos] === '(') {
         const argsStart = pos
         let depth = 1
+        let inSingle = false
+        let inDouble = false
+        let inBacktick = false
         pos++ // skip opening (
         while (pos < source.length && depth > 0) {
-          if (source[pos] === '(') depth++
-          else if (source[pos] === ')') depth--
+          const ch = source[pos]!
+          const escaped = source[pos - 1] === '\\'
+          if (!escaped) {
+            if (ch === "'" && !inDouble && !inBacktick) inSingle = !inSingle
+            else if (ch === '"' && !inSingle && !inBacktick) inDouble = !inDouble
+            else if (ch === '`' && !inSingle && !inDouble) inBacktick = !inBacktick
+            else if (!inSingle && !inDouble && !inBacktick) {
+              if (ch === '(') depth++
+              else if (ch === ')') depth--
+            }
+          }
           if (depth > 0) pos++
         }
         if (depth !== 0) {
-          throw new TemplateError(`Unclosed directive arguments at line ${line}`)
+          throw new TemplateError(`Unclosed directive arguments at line ${directiveLine}`)
         }
         args = source.slice(argsStart + 1, pos)
+        // Newlines consumed inside the argument list must still advance the
+        // line counter, or every token after a multi-line directive — and
+        // its error messages — would report a line number that is too low.
+        line += countLines(args)
         pos++ // skip closing )
       }
 
-      tokens.push({ type: 'directive', value: directive, directive, args, line })
+      tokens.push({ type: 'directive', value: directive, directive, args, line: directiveLine })
       textStart = pos
       continue
     }

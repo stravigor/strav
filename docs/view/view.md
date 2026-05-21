@@ -271,6 +271,19 @@ Render a partial template with its own data:
 
 The included template receives both the parent data and any additional data passed. Template names use `/` as separators, mapping to file paths inside the views directory.
 
+The data object may span multiple lines, which keeps partials with rich parameter sets readable:
+
+```html
+@include('partials/value-card', {
+  iconClass: 'fas fa-user',
+  label: 'For freelancers',
+  bullets: [
+    { t: 'Hard cap of 15 proposals', d: 'See slot fill before you apply' },
+    { t: 'Auto-refund when clients ghost', d: 'A deposit keeps them honest' },
+  ],
+})
+```
+
 ### Layouts and sections
 
 Layouts define the page shell. Child templates fill named sections.

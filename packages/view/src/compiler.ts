@@ -247,7 +247,9 @@ function compileDirective(
 
     case 'include': {
       if (!token.args) throw new TemplateError(`@include requires arguments at line ${token.line}`)
-      const match = token.args.match(/^\s*['"]([^'"]+)['"]\s*(?:,\s*(.+))?\s*$/)
+      // The data expression may span multiple lines, so match it with
+      // `[\s\S]` rather than `.` (which stops at the first newline).
+      const match = token.args.match(/^\s*['"]([^'"]+)['"]\s*(?:,\s*([\s\S]+))?\s*$/)
       if (!match) {
         throw new TemplateError(
           `@include syntax error at line ${token.line}: expected "'name'" or "'name', data"`
