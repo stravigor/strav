@@ -41,6 +41,7 @@ export function session(): Middleware {
       sameSite: cfg.sameSite,
       maxAge: cfg.lifetime * 60,
       path: '/',
+      domain: cfg.domain,
     })
   }
 }

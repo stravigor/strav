@@ -10,6 +10,14 @@ export interface SessionConfig {
   httpOnly: boolean
   secure: boolean
   sameSite: 'strict' | 'lax' | 'none'
+  /**
+   * Cookie `Domain` attribute. Leave unset for a host-only cookie (the
+   * default — the browser scopes it to the exact response host). Set to a
+   * registrable domain (e.g. `.example.com`) to share the session across
+   * subdomains, such as an SPA on `app.example.com` and an API on
+   * `api.example.com`.
+   */
+  domain?: string
 }
 
 /**

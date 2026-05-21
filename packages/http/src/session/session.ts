@@ -300,7 +300,7 @@ export default class Session {
       await SessionManager.store.destroy(sessionId)
     }
 
-    return clearCookie(response, cfg.cookie, { path: '/' })
+    return clearCookie(response, cfg.cookie, { path: '/', domain: cfg.domain })
   }
 
   // ---------------------------------------------------------------------------
