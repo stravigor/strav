@@ -6,6 +6,7 @@ import type { CorsOptions, ResolvedCorsConfig } from './cors.ts'
 import { compose } from './middleware.ts'
 import type { Handler, Middleware } from './middleware.ts'
 import type { ExceptionHandler } from '@strav/kernel/exceptions/exception_handler'
+import { HttpException, NotFoundError } from '@strav/kernel/exceptions/http_exception'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -590,7 +591,13 @@ export default class Router {
       return result
     }
 
-    return new Response('Not Found', { status: 404 })
+    // No route matched. Route through the exception pipeline so a renderer
+    // registered via `handler.render(NotFoundError, …)` produces the same
+    // branded 404 as a thrown NotFoundError — one pipeline for both cases.
+    return this.handleError(
+      new NotFoundError(`No route matched ${method} ${path}`),
+      new Context(request, {}, this.domain)
+    )
   }
 
   /**
@@ -623,6 +630,14 @@ export default class Router {
 
   private handleError(err: unknown, ctx: Context): Response {
     if (this.exceptionHandler) return this.exceptionHandler.handle(err, ctx)
+
+    // No handler registered — preserve an HttpException's status so a thrown
+    // (or no-route-match) 404/403/etc. is not masked as a 500. HTTP exceptions
+    // are expected control flow, so they are not logged as server errors.
+    if (err instanceof HttpException) {
+      return new Response(err.message, { status: err.status })
+    }
+
     console.error('Unhandled error:', err)
     return new Response('Internal Server Error', { status: 500 })
   }

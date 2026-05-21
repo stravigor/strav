@@ -1,8 +1,10 @@
 import { describe, test, expect } from 'bun:test'
 import { Router, Context } from '../src/http/index.ts'
+import { ExceptionHandler } from '@strav/kernel/exceptions/exception_handler'
+import { NotFoundError } from '@strav/kernel/exceptions/http_exception'
 
-function makeRequest(path: string): Request {
-  return new Request(`http://localhost${path}`)
+function makeRequest(path: string, method = 'GET'): Request {
+  return new Request(`http://localhost${path}`, { method })
 }
 
 describe('Router param extraction', () => {
@@ -48,5 +50,77 @@ describe('Router param extraction', () => {
 
     await router.handle(makeRequest('/files/a/b/c.md'))
     expect(captured).toEqual({ path: 'a/b/c.md' })
+  })
+})
+
+describe('Router no-route-match 404', () => {
+  test('unmatched URL returns 404 when no exception handler is registered', async () => {
+    const router = new Router()
+    router.get('/', () => new Response('home'))
+
+    const res = (await router.handle(makeRequest('/does-not-exist'))) as Response
+    expect(res.status).toBe(404)
+    expect(await res.text()).toContain('No route matched GET /does-not-exist')
+  })
+
+  test('unmatched URL is routed through a registered NotFoundError renderer', async () => {
+    const router = new Router()
+    const handler = new ExceptionHandler(false)
+    handler.render(NotFoundError, () => new Response('BRANDED 404', { status: 404 }))
+    router.useExceptionHandler(handler)
+    router.get('/', () => new Response('home'))
+
+    const res = (await router.handle(makeRequest('/does-not-exist'))) as Response
+    expect(res.status).toBe(404)
+    expect(await res.text()).toBe('BRANDED 404')
+  })
+
+  test('the renderer receives a context carrying the unmatched path', async () => {
+    const router = new Router()
+    const handler = new ExceptionHandler(false)
+    let seenPath: string | undefined
+    handler.render(NotFoundError, (_err, ctx) => {
+      seenPath = ctx?.path
+      return new Response('404', { status: 404 })
+    })
+    router.useExceptionHandler(handler)
+
+    await router.handle(makeRequest('/articles/missing'))
+    expect(seenPath).toBe('/articles/missing')
+  })
+
+  test('unmatched non-GET requests also reach the renderer (all verbs covered)', async () => {
+    const router = new Router()
+    const handler = new ExceptionHandler(false)
+    handler.render(NotFoundError, () => new Response('BRANDED 404', { status: 404 }))
+    router.useExceptionHandler(handler)
+    router.get('/', () => new Response('home'))
+
+    const res = (await router.handle(makeRequest('/does-not-exist', 'POST'))) as Response
+    expect(res.status).toBe(404)
+    expect(await res.text()).toBe('BRANDED 404')
+  })
+
+  test('a thrown NotFoundError uses the same renderer (unified pipeline)', async () => {
+    const router = new Router()
+    const handler = new ExceptionHandler(false)
+    handler.render(NotFoundError, () => new Response('BRANDED 404', { status: 404 }))
+    router.useExceptionHandler(handler)
+    router.get('/projects/:id', () => {
+      throw new NotFoundError('Project not found')
+    })
+
+    const res = (await router.handle(makeRequest('/projects/999'))) as Response
+    expect(res.status).toBe(404)
+    expect(await res.text()).toBe('BRANDED 404')
+  })
+
+  test('a matched route still resolves normally (no regression)', async () => {
+    const router = new Router()
+    router.get('/', () => new Response('home'))
+
+    const res = (await router.handle(makeRequest('/'))) as Response
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('home')
   })
 })
