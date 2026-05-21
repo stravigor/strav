@@ -85,7 +85,47 @@ The handler receives:
 - `payload` — the data passed to `Queue.push()`.
 - `meta` — job metadata: `{ id, queue, job, attempts, maxAttempts, progress }`.
 
-If no handler is registered for a job, it moves directly to the failed jobs table.
+If no handler is registered for a job, it moves to the failed jobs table.
+
+### Registering handlers for the worker
+
+`Queue.handle(...)` registrations are process-local — a handler is only known
+to the process that ran the registration. The web entry registers handlers
+because it imports the code that calls `Queue.handle(...)`; a separate
+`bun strav queue:work` process does **not**, unless you give it a file to load.
+
+That file is **`start/jobs.ts`** — the worker's entry point, the queue
+counterpart to `start/providers.ts`. It does two things:
+
+```typescript
+// start/jobs.ts
+import { ConfigProvider, EncryptionProvider } from '@strav/kernel'
+import { DatabaseProvider } from '@strav/database'
+import { QueueProvider } from '@strav/queue'
+import { MailProvider } from '@strav/signal'
+import { Queue } from '@strav/queue'
+
+// 1. The providers the worker boots. Curate this for the worker — include
+//    the facade providers your handlers call (mail, notification, …), and
+//    omit HttpProvider / ViewProvider so the worker never binds a port.
+export const providers = [
+  new ConfigProvider(),
+  new DatabaseProvider(),
+  new EncryptionProvider(),
+  new QueueProvider(),
+  new MailProvider(),
+]
+
+// 2. The handler registrations. These run when queue:work imports this file.
+Queue.handle('send-email', async (payload) => {
+  await mail.to(payload.to).send(new WelcomeMail())
+})
+```
+
+`bun strav queue:work` imports `start/jobs.ts`, boots the exported `providers`
+(so facades like `mail` are wired), and then starts the worker. Without this
+file the worker boots with no handlers — every dispatched job fails — and
+prints a warning telling you to create it.
 
 ### Payload validation
 
@@ -279,7 +319,14 @@ bun strav queue:work --queue emails --sleep 500
 - `--queue <name>` — Queue to process (default: `'default'`).
 - `--sleep <ms>` — Poll interval in milliseconds (default: `1000`).
 
-Press Ctrl+C to stop gracefully.
+The command loads `start/jobs.ts` (see [Registering handlers for the
+worker](#registering-handlers-for-the-worker)): it boots that file's exported
+`providers` — wiring the facades your handlers use — and runs its
+`Queue.handle(...)` registrations. On start it prints the registered handler
+names so you can confirm the worker is wired before jobs arrive.
+
+Press Ctrl+C to stop gracefully — the worker finishes the in-flight job, then
+the providers shut down in reverse order.
 
 ### schedule
 

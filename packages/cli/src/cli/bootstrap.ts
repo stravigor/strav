@@ -41,12 +41,23 @@ export async function shutdown(db: Database): Promise<void> {
   await db.close()
 }
 
+export interface WithProvidersOptions {
+  /**
+   * Install SIGINT/SIGTERM handlers for graceful shutdown. Default: `true`.
+   * Set to `false` when the caller owns signal handling and must control
+   * shutdown ordering — e.g. `queue:work`, which lets the worker drain its
+   * in-flight job before `app.shutdown()` tears down providers.
+   */
+  signalHandlers?: boolean
+}
+
 /**
  * Bootstrap an Application with the given service providers.
  *
  * Creates a fresh Application, registers all providers, boots them
  * in dependency order, and returns the running application.
- * Signal handlers for graceful shutdown are installed automatically.
+ * Signal handlers for graceful shutdown are installed automatically
+ * unless `options.signalHandlers` is `false`.
  *
  * @example
  * const app = await withProviders([
@@ -55,9 +66,12 @@ export async function shutdown(db: Database): Promise<void> {
  *   new AuthProvider({ resolver: (id) => User.find(id) }),
  * ])
  */
-export async function withProviders(providers: ServiceProvider[]): Promise<Application> {
+export async function withProviders(
+  providers: ServiceProvider[],
+  options?: WithProvidersOptions,
+): Promise<Application> {
   const app = new Application()
   for (const provider of providers) app.use(provider)
-  await app.start()
+  await app.start(options)
   return app
 }

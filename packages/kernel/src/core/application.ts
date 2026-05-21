@@ -68,8 +68,12 @@ export default class Application extends Container {
    * 4. Call `boot()` on every provider in dependency order (async init)
    * 5. Install SIGINT / SIGTERM handlers for graceful shutdown
    * 6. Emit `app:booted`
+   *
+   * Pass `{ signalHandlers: false }` to skip step 5 — for callers that
+   * install their own signal handling and must control shutdown ordering
+   * (e.g. a queue worker that drains its in-flight job before `shutdown()`).
    */
-  async start(): Promise<void> {
+  async start(options?: { signalHandlers?: boolean }): Promise<void> {
     if (this._booted) return
 
     await Emitter.emit('app:starting')
@@ -95,7 +99,9 @@ export default class Application extends Container {
     }
 
     this._booted = true
-    this.installSignalHandlers()
+    if (options?.signalHandlers !== false) {
+      this.installSignalHandlers()
+    }
 
     await Emitter.emit('app:booted')
   }

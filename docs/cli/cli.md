@@ -213,7 +213,14 @@ bun strav queue:work --queue emails --sleep 500
 - `--queue <name>` — Queue to process (default: `'default'`).
 - `--sleep <ms>` — Poll interval in milliseconds (default: `1000`).
 
-Press Ctrl+C to stop the worker gracefully (finishes current job before exiting).
+The command loads `start/jobs.ts`: it boots the providers exported from that
+file (so the facades your handlers call — `mail`, `notification`, … — are
+wired) and runs its `Queue.handle(...)` registrations. Without `start/jobs.ts`
+the worker boots with no handlers and warns. See the
+[Queue guide](../queue/queue.md#registering-handlers-for-the-worker).
+
+Press Ctrl+C to stop the worker gracefully — it finishes the in-flight job,
+then the booted providers shut down in reverse order.
 
 ### queue:retry
 
@@ -316,6 +323,8 @@ Returns `{ config, db, registry, introspector }`. Always close `db` via `shutdow
 ### `withProviders([...])` — full Application
 
 Builds a real `Application`, registers the providers you pass, boots them in dependency order, and installs signal handlers for graceful shutdown. Use this whenever your command depends on a facade or service that is wired by a provider — for example `rag.ingest(...)`, `mail.send(...)`, `notification.send(...)`, queued jobs, broadcast channels.
+
+Pass `{ signalHandlers: false }` as a second argument when your command installs its own signal handling and must control shutdown ordering — e.g. a long-running worker that has to drain in-flight work *before* `app.shutdown()` tears providers down. With the option set, call `app.shutdown()` yourself once your loop exits.
 
 ```typescript
 import { withProviders } from '@strav/cli'
