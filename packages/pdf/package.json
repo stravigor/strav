@@ -1,11 +1,21 @@
 {
   "name": "@strav/pdf",
-  "version": "0.4.25",
+  "version": "0.4.26",
   "type": "module",
   "description": "Low-level, zero-dependency PDF generation (write side) and layout-aware text extraction (read side) for the Strav ecosystem",
   "license": "MIT",
-  "keywords": ["bun", "pdf", "typescript", "strav"],
-  "files": ["src/", "README.md", "package.json", "tsconfig.json"],
+  "keywords": [
+    "bun",
+    "pdf",
+    "typescript",
+    "strav"
+  ],
+  "files": [
+    "src/",
+    "README.md",
+    "package.json",
+    "tsconfig.json"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./objects": "./src/objects/index.ts",
