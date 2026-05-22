@@ -71,7 +71,7 @@ ALL_PACKAGES=(
     signal cli
     # Consumer packages
     auth machine
-    brain flag stripe devtools mcp
+    brain flag stripe devtools mcp durable
     oauth2 search social testing rag faker
     audit transit captcha
     # Flagship framework scaffolding
