@@ -8,6 +8,7 @@ import type {
   PromptHandler,
   PromptRegistration,
 } from './types.ts'
+import type { TaskOptions, TaskRegistration } from './tasks.ts'
 
 /**
  * MCP helper — the primary convenience API.
@@ -64,6 +65,26 @@ export const mcp = {
     McpManager.prompt(name, options)
   },
 
+  /**
+   * Register a long-running **task** — a tool the client fires and polls to
+   * completion. The handler runs in the background; its result is stored for
+   * the client to retrieve.
+   *
+   * @example
+   * mcp.task('deploy', {
+   *   description: 'Deploy a milestone',
+   *   input: { milestoneId: z.string() },
+   *   pollInterval: 2000,
+   *   handler: async ({ milestoneId }) => {
+   *     await runDeploy(milestoneId)              // minutes of work
+   *     return { content: [{ type: 'text', text: 'deployed' }] }
+   *   },
+   * })
+   */
+  task<TShape extends ZodRawShape>(name: string, options: TaskOptions<TShape>): void {
+    McpManager.task(name, options)
+  },
+
   /** List all registered tool names. */
   registeredTools(): string[] {
     return McpManager.registeredTools()
@@ -79,6 +100,11 @@ export const mcp = {
     return McpManager.registeredPrompts()
   },
 
+  /** List all registered task names. */
+  registeredTasks(): string[] {
+    return McpManager.registeredTasks()
+  },
+
   /** Get a tool registration by name. */
   getToolRegistration(name: string): ToolRegistration | undefined {
     return McpManager.getToolRegistration(name)
@@ -92,5 +118,10 @@ export const mcp = {
   /** Get a prompt registration by name. */
   getPromptRegistration(name: string): PromptRegistration | undefined {
     return McpManager.getPromptRegistration(name)
+  },
+
+  /** Get a task registration by name. */
+  getTaskRegistration(name: string): TaskRegistration | undefined {
+    return McpManager.getTaskRegistration(name)
   },
 }

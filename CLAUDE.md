@@ -36,7 +36,7 @@ kernel (0 deps)
 - mcp → kernel, http, cli
 - machine → kernel, database
 - oauth2 → kernel, http, database, cli
-- brain → kernel, workflow
+- brain → kernel, workflow, mcp
 - search → kernel, database, cli
 - social → kernel, http, database
 - testing → kernel, http, view, database

@@ -4,7 +4,9 @@ Multi-provider AI module with agents, tool use, structured output, multi-turn th
 
 ## Dependencies
 - @strav/kernel (peer)
-- @strav/workflow (peer)
+- @strav/workflow
+- @strav/mcp — powers `defineMcpToolbox` (remote MCP tools as a brain toolbox)
+- @strav/http (devDependency) — test-only, to boot an MCP gateway in tests
 
 ## Commands
 - bun test
@@ -15,6 +17,7 @@ Multi-provider AI module with agents, tool use, structured output, multi-turn th
 - src/brain_provider.ts — service provider registration
 - src/agent.ts — AI agent abstraction
 - src/tool.ts — tool definitions for AI tool use
+- src/mcp_toolbox.ts — `defineMcpToolbox`: a toolbox backed by a remote MCP server
 - src/workflow.ts — AI workflow orchestration (uses @strav/workflow)
 - src/providers/ — provider implementations (Anthropic, OpenAI, Google, DeepSeek)
 - src/memory/ — conversation memory management (token counting, compaction, semantic facts, persistence)

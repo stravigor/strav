@@ -18,8 +18,12 @@
     "@strav/kernel": "workspace:*"
   },
   "dependencies": {
+    "@strav/mcp": "workspace:*",
     "@strav/workflow": "workspace:*",
     "zod": "^3.25 || ^4.0"
+  },
+  "devDependencies": {
+    "@strav/http": "workspace:*"
   },
   "scripts": {
     "test": "bun test tests/",
