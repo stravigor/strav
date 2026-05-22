@@ -1,6 +1,6 @@
 {
   "name": "@strav/pdf",
-  "version": "0.4.26",
+  "version": "0.4.27",
   "type": "module",
   "description": "Low-level, zero-dependency PDF generation (write side) and layout-aware text extraction (read side) for the Strav ecosystem",
   "license": "MIT",
