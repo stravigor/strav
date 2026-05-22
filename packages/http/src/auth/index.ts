@@ -1,6 +1,7 @@
 export { default as Auth } from './auth.ts'
 export { default as AccessToken } from './access_token.ts'
 export { auth } from './middleware/authenticate.ts'
+export type { AuthOptions, AuthFailureReason } from './middleware/authenticate.ts'
 export { csrf } from './middleware/csrf.ts'
 export type { CsrfOptions, CsrfFailureReason } from './middleware/csrf.ts'
 export { guest } from './middleware/guest.ts'
