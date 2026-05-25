@@ -1,0 +1,43 @@
+{
+  "name": "@strav/payments",
+  "version": "0.4.28",
+  "type": "module",
+  "description": "Gateway-agnostic payment abstraction for the Strav framework — Omise (Opn Payments) and Stripe adapters behind one Gateway interface, with PromptPay support and a LINE-delivered QR helper",
+  "license": "MIT",
+  "keywords": [
+    "bun",
+    "framework",
+    "typescript",
+    "strav",
+    "payments",
+    "stripe",
+    "omise",
+    "opn",
+    "promptpay",
+    "subscriptions",
+    "line"
+  ],
+  "files": [
+    "src/",
+    "package.json",
+    "tsconfig.json",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./gateways": "./src/gateways/index.ts",
+    "./gateways/*": "./src/gateways/*.ts",
+    "./line": "./src/line/index.ts",
+    "./line/*": "./src/line/*.ts",
+    "./providers": "./src/providers/index.ts",
+    "./providers/*": "./src/providers/*.ts"
+  },
+  "peerDependencies": {
+    "@strav/kernel": "workspace:*",
+    "@strav/line": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit"
+  }
+}

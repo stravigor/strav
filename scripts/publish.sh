@@ -80,6 +80,7 @@ ALL_PACKAGES=(
     line
     # depends on line
     publish
+    payments
 )
 
 # Determine which packages to publish
