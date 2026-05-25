@@ -9,6 +9,8 @@ import type {
   CompletionResponse,
   BeforeHook,
   AfterHook,
+  TranscribeRequest,
+  TranscriptionResponse,
 } from './types.ts'
 import type { MemoryConfig, ThreadStore } from './memory/types.ts'
 
@@ -123,6 +125,26 @@ export default class BrainManager {
     const response = await BrainManager.provider(providerName).complete(request)
     for (const hook of BrainManager._afterHooks) await hook(request, response)
     return response
+  }
+
+  /**
+   * Transcribe audio through the named provider. Throws a clear
+   * ConfigurationError if the provider doesn't implement `transcribe()`
+   * (Anthropic, at time of writing). Hooks are not invoked — they're
+   * shaped for chat completions and don't carry an audio analogue.
+   */
+  static async transcribe(
+    providerName: string | undefined,
+    request: TranscribeRequest
+  ): Promise<TranscriptionResponse> {
+    const provider = BrainManager.provider(providerName)
+    if (!provider.transcribe) {
+      throw new ConfigurationError(
+        `AI provider "${provider.name}" does not support transcribe(). ` +
+          `Use the OpenAI or Google providers, or register a custom one via BrainManager.useProvider().`
+      )
+    }
+    return provider.transcribe(request)
   }
 
   /** Clear all providers, hooks, and stores (for testing). */

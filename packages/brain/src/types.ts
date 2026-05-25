@@ -175,6 +175,52 @@ export interface EmbeddingResponse {
   usage: { totalTokens: number }
 }
 
+// ── Transcription (Speech-to-Text) ───────────────────────────────────────────
+
+export interface TranscribeRequest {
+  /** Audio bytes. Most STT endpoints cap at ~25MB; chunk longer recordings. */
+  audio: Uint8Array | Blob
+  /**
+   * MIME type of the audio. Required for providers that infer format from
+   * the multipart filename or rely on it for inline base64 (Gemini).
+   * Examples: 'audio/m4a', 'audio/mpeg', 'audio/wav', 'audio/ogg',
+   * 'audio/webm', 'audio/flac'.
+   */
+  contentType?: string
+  /** Override the provider's default STT model. */
+  model?: string
+  /**
+   * BCP-47 language hint (e.g. 'th', 'en', 'zh'). Whisper accepts ISO-639-1
+   * ('th'); Gemini uses BCP-47. Both improve accuracy when set; omit for
+   * auto-detection.
+   */
+  language?: string
+  /**
+   * Optional priming prompt — gives the model vocabulary or context to
+   * bias toward (proper nouns, brand names, menu items, dialect markers).
+   * Whisper uses this directly; Gemini incorporates it into the system
+   * instruction.
+   */
+  prompt?: string
+  /**
+   * Filename to send in the multipart form (Whisper). Used to derive the
+   * audio format on the server when `contentType` is missing. Defaults to
+   * 'audio.bin' if not provided.
+   */
+  filename?: string
+}
+
+export interface TranscriptionResponse {
+  /** Transcribed text. */
+  text: string
+  /** Detected language, when the provider reports one. */
+  language?: string
+  /** Audio duration in seconds, when the provider reports one. */
+  duration?: number
+  /** Original provider response for callers that need provider-specific fields. */
+  raw: unknown
+}
+
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export interface AIProvider {
@@ -182,6 +228,13 @@ export interface AIProvider {
   complete(request: CompletionRequest): Promise<CompletionResponse>
   stream(request: CompletionRequest): AsyncIterable<StreamChunk>
   embed?(input: string | string[], model?: string): Promise<EmbeddingResponse>
+  /**
+   * Transcribe audio to text. Implemented by providers that expose a
+   * speech-to-text endpoint (OpenAI Whisper, Google Gemini's multimodal
+   * generateContent). Throws or remains undefined for providers without
+   * STT (Anthropic at time of writing).
+   */
+  transcribe?(request: TranscribeRequest): Promise<TranscriptionResponse>
 }
 
 // ── Hooks ────────────────────────────────────────────────────────────────────

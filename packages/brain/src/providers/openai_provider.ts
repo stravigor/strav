@@ -10,6 +10,8 @@ import type {
   ProviderConfig,
   Message,
   ToolCall,
+  TranscribeRequest,
+  TranscriptionResponse,
   Usage,
 } from '../types.ts'
 
@@ -168,6 +170,53 @@ export class OpenAIProvider implements AIProvider {
       embeddings: data.data.map((d: any) => d.embedding),
       model: data.model,
       usage: { totalTokens: data.usage?.total_tokens ?? 0 },
+    }
+  }
+
+  /**
+   * Speech-to-text via the OpenAI Whisper API (/v1/audio/transcriptions).
+   *
+   * Defaults to `whisper-1` — the long-standing, broadly supported model.
+   * Override with `gpt-4o-transcribe` or `gpt-4o-mini-transcribe` for the
+   * newer architecture (better noise/accent robustness, similar pricing).
+   *
+   * Requests `verbose_json` so we can surface `language` and `duration`
+   * on the normalized response without a second round-trip.
+   */
+  async transcribe(request: TranscribeRequest): Promise<TranscriptionResponse> {
+    const filename = request.filename ?? defaultFilename(request.contentType)
+    const contentType = request.contentType ?? 'application/octet-stream'
+    const blob =
+      request.audio instanceof Blob
+        ? request.audio
+        : new Blob([request.audio], { type: contentType })
+
+    const form = new FormData()
+    form.append('file', blob, filename)
+    form.append('model', request.model ?? 'whisper-1')
+    form.append('response_format', 'verbose_json')
+    if (request.language) form.append('language', request.language)
+    if (request.prompt) form.append('prompt', request.prompt)
+
+    const response = await retryableFetch(
+      'OpenAI',
+      `${this.baseUrl}/v1/audio/transcriptions`,
+      {
+        method: 'POST',
+        // Don't set Content-Type — the runtime sets it with the
+        // multipart boundary derived from the FormData body.
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+        body: form,
+      },
+      this.retryOptions
+    )
+
+    const data: any = await response.json()
+    return {
+      text: String(data.text ?? ''),
+      language: typeof data.language === 'string' ? data.language : undefined,
+      duration: typeof data.duration === 'number' ? data.duration : undefined,
+      raw: data,
     }
   }
 
@@ -506,4 +555,15 @@ export class OpenAIProvider implements AIProvider {
 
     return schema
   }
+}
+
+/**
+ * Choose a multipart filename for Whisper based on the content type.
+ * Whisper sniffs the extension when no MIME is supplied; sending a name
+ * that matches the actual format avoids "unsupported file" 400s.
+ */
+function defaultFilename(contentType?: string): string {
+  if (!contentType) return 'audio.bin'
+  const ext = contentType.split('/')[1]?.split(';')[0]?.trim()
+  return ext ? `audio.${ext}` : 'audio.bin'
 }

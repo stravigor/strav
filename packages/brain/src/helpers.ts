@@ -24,6 +24,8 @@ import type {
   SerializedAgentState,
   SuspendedRun,
   ToolCallResult,
+  TranscribeRequest,
+  TranscriptionResponse,
 } from './types.ts'
 
 // ── Shared tool executor ─────────────────────────────────────────────────────
@@ -84,6 +86,16 @@ export interface GenerateResult<T = any> {
 }
 
 export interface EmbedOptions {
+  provider?: string
+  model?: string
+}
+
+export interface TranscribeOptions {
+  audio: Uint8Array | Blob
+  contentType?: string
+  language?: string
+  prompt?: string
+  filename?: string
   provider?: string
   model?: string
 }
@@ -197,6 +209,33 @@ export const brain = {
 
     const result = await provider.embed(input, options.model)
     return result.embeddings
+  },
+
+  /**
+   * Transcribe audio (speech-to-text). Uses the OpenAI Whisper endpoint
+   * by default; pass `provider: 'google'` to use Gemini's multimodal
+   * generateContent endpoint instead. Both accept a `language` hint
+   * (BCP-47) and a `prompt` to bias vocabulary.
+   *
+   * @example
+   *   // Voice note coming off a LINE inbound webhook
+   *   const { bytes, contentType } = await LineManager.client.downloadContent(messageId)
+   *   const { text } = await brain.transcribe({
+   *     audio: bytes,
+   *     contentType,                  // 'audio/m4a' from LINE
+   *     language: 'th',
+   *     prompt: 'Coffee shop menu items, Bangkok area names',
+   *   })
+   */
+  async transcribe(options: TranscribeOptions): Promise<TranscriptionResponse> {
+    return BrainManager.transcribe(options.provider, {
+      audio: options.audio,
+      contentType: options.contentType,
+      model: options.model,
+      language: options.language,
+      prompt: options.prompt,
+      filename: options.filename,
+    })
   },
 
   /** Create a fluent agent runner. */

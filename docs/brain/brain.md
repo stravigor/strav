@@ -163,6 +163,85 @@ const batch = await brain.embed(['Hello', 'World'], { provider: 'openai' })
 const geminiVectors = await brain.embed('Hello world', { provider: 'google' })
 ```
 
+### transcribe
+
+Speech-to-text from raw audio bytes. Returns the transcription plus the provider's detected language and (where available) audio duration.
+
+```typescript
+const { text, language, duration } = await brain.transcribe({
+  audio: bytes,                    // Uint8Array | Blob
+  contentType: 'audio/m4a',        // MIME type — required for accurate routing
+  language: 'th',                  // BCP-47 hint; omit for auto-detection
+  prompt: 'Café menu items, Bangkok neighborhood names',
+  provider: 'openai',              // 'openai' (default) | 'google' | custom
+  model: 'whisper-1',              // optional override (see matrix below)
+})
+```
+
+#### Provider matrix
+
+| Provider | Endpoint | Default model | Override examples |
+|---|---|---|---|
+| OpenAI | `/v1/audio/transcriptions` (Whisper) | `whisper-1` | `gpt-4o-transcribe`, `gpt-4o-mini-transcribe` |
+| Google | `/v1beta/models/<model>:generateContent` (multimodal) | `gemini-2.5-flash` | `gemini-2.5-pro` |
+| Anthropic | _(unsupported)_ | — | throws `ConfigurationError` |
+
+Both providers accept the same `TranscribeOptions` shape. The differences worth knowing:
+
+- **Whisper** is dedicated STT — it returns timestamped segments (in `result.raw`), reports `duration`, and accepts a `prompt` to bias vocabulary directly.
+- **Gemini** runs through the multimodal generateContent endpoint with an inline `audio/*` part and a transcription instruction. Faster end-to-end for short clips because there's no separate STT request shape, but doesn't surface `duration`. Inline audio is capped at ~20 MB per request — chunk longer recordings (or upload via Gemini's Files API and reference it).
+
+#### Pairing with the LINE voice-note flow
+
+Voice notes the user sends to your LINE OA are pulled via `@strav/line`'s message-content download, then handed to `brain.transcribe`:
+
+```typescript
+import { LineInboundParser } from '@strav/signal'
+import { LineManager } from '@strav/line'
+import { brain } from '@strav/brain'
+
+const parser = new LineInboundParser({ channelSecret })
+
+router.post('/webhooks/line', async ctx => {
+  const events = await parser.parse({
+    body: Buffer.from(await ctx.request.arrayBuffer()),
+    headers: ctx.request.headers,
+  })
+
+  for (const event of events) {
+    const audio = event.media.find(m => m.kind === 'audio')
+    if (!audio?.mediaId) continue
+
+    const { bytes, contentType } = await LineManager.client.downloadContent(audio.mediaId)
+    const { text } = await brain.transcribe({
+      audio: bytes,
+      contentType,                       // 'audio/m4a' from LINE
+      language: 'th',
+      prompt: 'Restaurant promos, Thai street food, baht prices',
+    })
+
+    await draftAndPreviewPost(text, event)
+  }
+
+  return ctx.text('OK')
+})
+```
+
+The `prompt` is the high-leverage knob — feeding 1-2 sentences of vocabulary context (cuisine type, brand names, neighborhood spellings) typically removes the most common Thai STT mistakes.
+
+#### Provider selection notes
+
+| Scenario | Pick | Why |
+|---|---|---|
+| Production Thai voice notes from LINE | `openai` (`whisper-1` or `gpt-4o-transcribe`) | Stable, well-documented quality on Thai. Returns duration for billing analytics. |
+| Cheap + fast for short English clips | `google` (`gemini-2.5-flash`) | Lower per-call cost; latency is one round-trip. |
+| Live multi-modal (audio + image + text in one prompt) | `google` | Gemini handles all modalities in one call. |
+| Bulk batch transcription, segment timestamps needed | `openai` (`whisper-1`) | `verbose_json` response includes segments + timestamps in `result.raw`. |
+
+#### Errors
+
+`BrainManager.transcribe(providerName, request)` throws `ConfigurationError` when the provider doesn't implement `transcribe()` (Anthropic at time of writing). Network and 4xx/5xx errors surface as `ExternalServiceError` from the underlying provider — same as `complete()` / `stream()`.
+
 ## Agents
 
 Agents encapsulate instructions, tools, output format, and lifecycle hooks into reusable classes. They are the building blocks for complex AI interactions.

@@ -10,6 +10,8 @@ import type {
   ProviderConfig,
   Message,
   ToolCall,
+  TranscribeRequest,
+  TranscriptionResponse,
   Usage,
 } from '../types.ts'
 
@@ -175,6 +177,65 @@ export class GoogleProvider implements AIProvider {
       embeddings,
       model: embeddingModel,
       usage: { totalTokens: inputs.length * 10 } // Rough estimate, Google doesn't provide token count for embeddings
+    }
+  }
+
+  /**
+   * Speech-to-text via Gemini's multimodal generateContent endpoint.
+   *
+   * Gemini doesn't have a dedicated STT endpoint; instead, audio is
+   * passed as an inline `audio/*` part alongside a text prompt asking
+   * for a transcription. We default to `gemini-2.5-flash` (fast, cheap,
+   * Thai-capable). Override `model` for `gemini-2.5-pro` when accuracy
+   * matters more than latency.
+   *
+   * Inline audio is capped at ~20MB across the whole request. Chunk
+   * longer recordings, or use Gemini's Files API (upload + reference)
+   * which isn't covered here — out of scope for the typical SME
+   * voice-note flow (<=60s clips).
+   */
+  async transcribe(request: TranscribeRequest): Promise<TranscriptionResponse> {
+    const model = request.model ?? 'gemini-2.5-flash'
+    const contentType = request.contentType ?? 'audio/mpeg'
+
+    const bytes =
+      request.audio instanceof Blob
+        ? new Uint8Array(await request.audio.arrayBuffer())
+        : request.audio
+    const base64 = encodeBase64(bytes)
+
+    const instruction = buildTranscriptionInstruction(request)
+
+    const body = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: instruction },
+            { inline_data: { mime_type: contentType, data: base64 } },
+          ],
+        },
+      ],
+      generationConfig: {
+        // Deterministic output for a transcription task.
+        temperature: 0,
+      },
+    }
+
+    const response = await retryableFetch(
+      'Google',
+      `${this.baseUrl}/models/${model}:generateContent`,
+      { method: 'POST', headers: this.buildHeaders(), body: JSON.stringify(body) },
+      this.retryOptions
+    )
+
+    const data: any = await response.json()
+    const text = extractTranscript(data)
+
+    return {
+      text,
+      language: request.language,
+      raw: data,
     }
   }
 
@@ -395,4 +456,41 @@ export class GoogleProvider implements AIProvider {
   private generateResponseId(): string {
     return `resp_${Math.random().toString(36).substring(2, 15)}`
   }
+}
+
+function buildTranscriptionInstruction(request: TranscribeRequest): string {
+  const parts: string[] = [
+    'Transcribe the audio to text. Return only the transcription, without commentary, timestamps, or speaker labels.',
+  ]
+  if (request.language) {
+    parts.push(`The audio is in ${request.language}. Preserve the original language in the output.`)
+  }
+  if (request.prompt) {
+    // Surface the priming hint to bias vocabulary (proper nouns, menu
+    // items, dialect markers). Kept inside the same system-style turn —
+    // Gemini doesn't have a separate "system_instruction" field that
+    // behaves differently for this use.
+    parts.push(`Context to help with vocabulary: ${request.prompt}`)
+  }
+  return parts.join(' ')
+}
+
+function extractTranscript(data: any): string {
+  const candidate = data?.candidates?.[0]
+  if (!candidate?.content?.parts) return ''
+  return candidate.content.parts
+    .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+    .join('')
+    .trim()
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  // Node / Bun: use Buffer; falls back to atob/btoa in pure browser envs
+  // (not used in this codebase, but kept for parity with bun-types).
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes).toString('base64')
+  }
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  return btoa(binary)
 }
