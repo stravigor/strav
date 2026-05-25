@@ -1,0 +1,45 @@
+{
+  "name": "@strav/line",
+  "version": "0.4.28",
+  "type": "module",
+  "description": "LINE Messaging API SDK for the Strav framework — Flex Messages, Rich Menu, Quick Reply, LIFF, and message content download",
+  "license": "MIT",
+  "keywords": [
+    "bun",
+    "framework",
+    "typescript",
+    "strav",
+    "line",
+    "messaging",
+    "flex",
+    "rich-menu",
+    "liff"
+  ],
+  "files": [
+    "src/",
+    "package.json",
+    "tsconfig.json",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./flex": "./src/flex/index.ts",
+    "./flex/*": "./src/flex/*.ts",
+    "./client": "./src/client/index.ts",
+    "./client/*": "./src/client/*.ts",
+    "./rich_menu": "./src/rich_menu/index.ts",
+    "./rich_menu/*": "./src/rich_menu/*.ts",
+    "./liff": "./src/liff/index.ts",
+    "./liff/*": "./src/liff/*.ts",
+    "./providers": "./src/providers/index.ts",
+    "./providers/*": "./src/providers/*.ts"
+  },
+  "peerDependencies": {
+    "@strav/kernel": "workspace:*",
+    "@strav/signal": "workspace:*"
+  },
+  "scripts": {
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit"
+  }
+}

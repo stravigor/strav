@@ -7,6 +7,7 @@ import { GitHubProvider } from './providers/github_provider.ts'
 import { DiscordProvider } from './providers/discord_provider.ts'
 import { FacebookProvider } from './providers/facebook_provider.ts'
 import { LinkedInProvider } from './providers/linkedin_provider.ts'
+import { LineProvider } from './providers/line_provider.ts'
 
 @inject
 export default class SocialManager {
@@ -76,6 +77,8 @@ export default class SocialManager {
         return new FacebookProvider(providerConfig)
       case 'linkedin':
         return new LinkedInProvider(providerConfig)
+      case 'line':
+        return new LineProvider(providerConfig)
       default:
         throw new ConfigurationError(
           `Unknown social driver "${driverName}". Register it with SocialManager.extend().`
