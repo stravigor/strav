@@ -76,6 +76,10 @@ ALL_PACKAGES=(
     audit transit captcha
     # Flagship framework scaffolding
     spring
+    #
+    line
+    # depends on line
+    publish
 )
 
 # Determine which packages to publish
