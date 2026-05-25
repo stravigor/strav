@@ -1,6 +1,6 @@
 {
   "name": "@strav/publish",
-  "version": "0.4.28",
+  "version": "0.4.29",
   "type": "module",
   "description": "Unified multi-channel publisher for the Strav framework — Google Business Profile, Meta (Facebook + Instagram), WordPress, and LINE OA broadcasts behind a single Publisher interface with per-tenant OAuth credentials and auto-refresh",
   "license": "MIT",
