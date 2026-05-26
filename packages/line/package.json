@@ -1,6 +1,6 @@
 {
   "name": "@strav/line",
-  "version": "0.4.30",
+  "version": "0.4.31",
   "type": "module",
   "description": "LINE Messaging API SDK for the Strav framework — Flex Messages, Rich Menu, Quick Reply, LIFF, and message content download",
   "license": "MIT",

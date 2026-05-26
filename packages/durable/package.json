@@ -1,6 +1,6 @@
 {
   "name": "@strav/durable",
-  "version": "0.4.30",
+  "version": "0.4.31",
   "type": "module",
   "description": "Durable, crash-resumable workflow execution for the Strav framework",
   "license": "MIT",
