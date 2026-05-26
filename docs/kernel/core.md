@@ -132,10 +132,12 @@ import {
   SessionProvider, CacheProvider, MailProvider,
   QueueProvider, HttpProvider,
 } from '@strav/kernel'
+import { SchemaProvider } from '@strav/database'
 import User from './app/models/user'
 
 app
   .use(new ConfigProvider())
+  .use(new SchemaProvider())          // required before DatabaseProvider in multi-tenant apps
   .use(new DatabaseProvider())
   .use(new AuthProvider({ resolver: (id) => User.find(id) }))
   .use(new SessionProvider())
@@ -268,6 +270,7 @@ All built-in providers are exported from `@strav/kernel`:
 | Provider | Name | Dependencies | What it does |
 |----------|------|-------------|--------------|
 | `ConfigProvider` | `config` | — | Loads `Configuration` from config directory |
+| `SchemaProvider` | `schema` | `config` | Discovers + validates database schemas (from `@strav/database`). Required before `DatabaseProvider` in multi-tenant apps |
 | `DatabaseProvider` | `database` | `config` | Registers `Database`, closes on shutdown |
 | `EncryptionProvider` | `encryption` | `config` | Registers `EncryptionManager` |
 | `LoggerProvider` | `logger` | `config` | Registers `Logger` |
@@ -318,6 +321,7 @@ import {
   QueueProvider, NotificationProvider, I18nProvider,
   BroadcastProvider, HttpProvider,
 } from '@strav/kernel'
+import { SchemaProvider } from '@strav/database'
 import { SearchProvider } from '@strav/search'
 import { DevtoolsProvider } from '@strav/devtools'
 import { session } from '@strav/http'
@@ -327,6 +331,7 @@ import User from './app/models/user'
 // Register providers
 app
   .use(new ConfigProvider())
+  .use(new SchemaProvider())          // required before DatabaseProvider in multi-tenant apps
   .use(new DatabaseProvider())
   .use(new EncryptionProvider())
   .use(new LoggerProvider())

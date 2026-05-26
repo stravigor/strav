@@ -12,15 +12,27 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const BIGINT_RE = /^-?\d+$/
 
 let currentIdType: TenantIdType = DEFAULT_TENANT_ID_TYPE
+let configured = false
 
 /** Set the tenant ID type for the running process. Called once during Database boot. */
 export function setTenantIdType(idType: TenantIdType): void {
   currentIdType = idType
+  configured = true
 }
 
 /** Read the tenant ID type for the running process. */
 export function getTenantIdType(): TenantIdType {
   return currentIdType
+}
+
+/**
+ * Whether the tenant id type was explicitly set (i.e. a schema with
+ * `tenantRegistry: true` has been registered). `DatabaseProvider` checks
+ * this before running tenant DDL so a missing `SchemaProvider` fails loud
+ * instead of silently emitting RLS casts against the default type.
+ */
+export function isTenantIdTypeConfigured(): boolean {
+  return configured
 }
 
 /**

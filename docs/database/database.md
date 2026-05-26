@@ -16,6 +16,8 @@ app.use(new DatabaseProvider())
 
 The `DatabaseProvider` registers `Database` as a singleton and closes the connection on shutdown. It depends on the `config` provider.
 
+If you have `database.tenant.enabled: true`, add `SchemaProvider` **before** `DatabaseProvider` so that the schema marked `tenantRegistry: true` is discovered before the tenant DDL runs. See [Multi-tenant — Wiring at app boot](./multitenant.md#wiring-at-app-boot).
+
 Or manually:
 
 ```typescript

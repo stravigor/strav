@@ -318,3 +318,29 @@ const representation = registry.buildRepresentation()  // full DB representation
 ```
 
 The registry handles dependency ordering — if `profile` depends on `user`, it ensures `user` is resolved first.
+
+### Discovering schemas at app boot
+
+The CLI bootstrap discovers schemas automatically for migration and generator commands. **At app boot** (anything that goes through `app.useProviders([...])`), add `SchemaProvider` so the same discovery runs before any other provider that needs schema metadata:
+
+```typescript
+// start/providers.ts
+import { ConfigProvider } from '@strav/kernel'
+import { SchemaProvider, DatabaseProvider } from '@strav/database'
+
+export default [
+  new ConfigProvider(),
+  new SchemaProvider(),     // discovers + validates ./database/schemas
+  new DatabaseProvider(),
+]
+```
+
+`SchemaProvider` registers `SchemaRegistry` as a singleton, runs `discover()` + `validate()` during boot, and is required before `DatabaseProvider` in any multi-tenant app — without it, the `tenantRegistry: true` schema's name and PK type never reach the runtime and tenant RLS DDL silently falls back to defaults. See [Multi-tenant — Wiring at app boot](./multitenant.md#wiring-at-app-boot).
+
+The discovery path resolves in this order:
+
+1. Constructor option — `new SchemaProvider({ path: 'src/db/schemas' })`.
+2. `database.schemasPath` config key.
+3. `'./database/schemas'` (framework default).
+
+If you've customised the path in `config/generators.ts`, set `database.schemasPath` to the same value so the runtime and CLI agree on where schemas live.

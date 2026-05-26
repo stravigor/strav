@@ -141,6 +141,37 @@ underscores; cannot start with a digit).
 > `tenantRegistry: true` schema instead — Database now throws a helpful
 > error at boot if either key is set.
 
+## Wiring at app boot
+
+The tenant table name and PK type live in module-level state populated by
+`SchemaRegistry.register()`. The CLI wires this up automatically for
+migration / generator commands, but **at app boot you have to add
+`SchemaProvider` yourself** — otherwise `DatabaseProvider` runs the
+tenant RLS DDL against the framework default (`'bigint'`) and Postgres
+fails the first query with `operator does not exist: uuid = bigint`.
+
+```typescript
+// start/providers.ts
+import { ConfigProvider } from '@strav/kernel'
+import { SchemaProvider, DatabaseProvider } from '@strav/database'
+
+export default [
+  new ConfigProvider(),
+  new SchemaProvider(),     // ← must come before DatabaseProvider
+  new DatabaseProvider(),
+  // …other providers
+]
+```
+
+`SchemaProvider` discovers `./database/schemas` by default. Override via
+constructor option (`new SchemaProvider({ path: 'src/db/schemas' })`) or
+the `database.schemasPath` config key — match whatever you set in
+`config/generators.ts` so the runtime and CLI agree.
+
+If `database.tenant.enabled` is `true` and no schema with
+`tenantRegistry: true` has been registered by the time `DatabaseProvider`
+boots, the provider throws a `ConfigurationError` pointing here.
+
 ## Database Roles
 
 You need two PostgreSQL roles:

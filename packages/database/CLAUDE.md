@@ -17,7 +17,7 @@ Database layer for the Strav framework — query builder, ORM, schema builder, a
   - src/orm/models/tenant.ts — Built-in `Tenant` registry model
 - src/schema/ — Schema builder (field definitions, type builder, associations)
 - src/helpers/ — identity.ts (extractUserId — moved here from kernel because it depends on BaseModel)
-- src/providers/ — DatabaseProvider (also seeds the `tenant` table when `tenant.enabled`)
+- src/providers/ — DatabaseProvider (also seeds the `tenant` table when `tenant.enabled`), SchemaProvider (runtime schema discovery — required before DatabaseProvider in tenant apps), RedisProvider
 
 ## Conventions
 - database and orm are tightly coupled (circular dependency) — they stay together
@@ -25,6 +25,7 @@ Database layer for the Strav framework — query builder, ORM, schema builder, a
 - String helpers (toSnakeCase, toCamelCase) are imported from @strav/kernel/helpers
 
 ## Multi-tenant (RLS) Support
+- Apps with `tenant.enabled: true` must add `SchemaProvider` before `DatabaseProvider` in their providers list. SchemaProvider discovers schemas at boot so the `tenantRegistry: true` schema's name + PK type land in module state before `TenantManager.setup()` emits RLS DDL. Without it, boot throws a clear `ConfigurationError`. The CLI bootstrap has its own discovery path so migrations work without SchemaProvider.
 - One database, one schema, one migrations directory.
 - Tenant-scoped tables carry `<tenantFk> <idType> NOT NULL DEFAULT current_setting('app.tenant_id', true)::<idType> REFERENCES <tenantTable>(id) ON DELETE CASCADE`. The tenant table name and idType are derived from the schema marked `tenantRegistry: true` — its `name` becomes the table name (FK column auto-derives as `<name>_id`); its PK pgType (`serial`/`bigserial`/`smallserial`/`uuid`) maps to a runtime cast (`integer`/`bigint`/`integer`/`uuid`). Built-in default re-exportable from `@strav/database/schemas/default_tenant`. `SchemaRegistry.register()` propagates name + idType into module state on registration; `Database` getters read from there. Threaded through `RepresentationBuilder`, `SqlGenerator`, the policy/seed DDL helpers, and the trigger function (reads `NEW.<TG_ARGV[0]>` dynamically). `database.tenant.idType` and `database.tenant.tableName` config keys are gone — Database throws if either is set.
 - `Database` exposes two pools when `database.tenant.enabled` is true:
