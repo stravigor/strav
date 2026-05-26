@@ -1,6 +1,6 @@
 {
   "name": "@strav/payments",
-  "version": "0.4.29",
+  "version": "0.4.30",
   "type": "module",
   "description": "Gateway-agnostic payment abstraction for the Strav framework — Omise (Opn Payments) and Stripe adapters behind one Gateway interface, with PromptPay support and a LINE-delivered QR helper",
   "license": "MIT",
